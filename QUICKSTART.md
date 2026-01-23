@@ -15,7 +15,7 @@ Get up and running with the SARIMAX Brazilian Soybean Forecasting application in
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/sarimax-brazilian-soybean-forecasting.git
+git clone https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting.git
 cd sarimax-brazilian-soybean-forecasting
 
 # 2. Create virtual environment
@@ -45,7 +45,7 @@ The app will automatically open in your browser at `http://localhost:8501`
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/sarimax-brazilian-soybean-forecasting.git
+git clone https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting.git
 cd sarimax-brazilian-soybean-forecasting
 
 # 2. Set up environment variables
@@ -155,8 +155,8 @@ docker-compose up --build
 ## Support
 
 Need help?
-- Open an [Issue](https://github.com/YOUR_USERNAME/sarimax-brazilian-soybean-forecasting/issues)
-- Check existing [Discussions](https://github.com/YOUR_USERNAME/sarimax-brazilian-soybean-forecasting/discussions)
+- Open an [Issue](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/issues)
+- Check existing [Discussions](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/discussions)
 
 ---
 
