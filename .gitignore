@@ -1,0 +1,212 @@
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv
+timeseries/
+
+# Distribution / Packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# ============================================
+# IDE / Editors
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================
+# Testing
+# ============================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+.cache/
+nosetests.xml
+
+# ============================================
+# Jupyter Notebooks
+# ============================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ============================================
+# Environment Variables (CRITICAL - DO NOT COMMIT)
+# ============================================
+.env
+.env.local
+.env.*.local
+
+# ============================================
+# Logs
+# ============================================
+logs/
+*.log
+*.log.*
+
+# ============================================
+# Data Files (Large Files - Use Git LFS or exclude)
+# ============================================
+# Keep structure but ignore large data files
+data/wasde_files/*.xls
+data/wasde_files/*.xlsx
+data/raw_data/*.csv
+data/raw_data/*.xlsx
+data/processed_data/*.csv
+data/processed_data/*.xlsx
+output/
+
+# Keep example/small data
+!data/raw_data/raw_wasde.csv
+
+# ============================================
+# Model Files (Large Binary Files)
+# ============================================
+models/artifacts/*.joblib
+models/artifacts/*.pkl
+models/artifacts/*.h5
+models/metadata/*.json
+
+# Keep latest models but not all versions
+!models/artifacts/*_latest.joblib
+!models/metadata/*_latest.json
+
+# ============================================
+# Documentation Build
+# ============================================
+docs/_build/
+docs/_static/
+docs/_templates/
+site/
+
+# ============================================
+# OS Files
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================
+# mypy
+# ============================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ============================================
+# Pyre type checker
+# ============================================
+.pyre/
+
+# ============================================
+# pytype static type analyzer
+# ============================================
+.pytype/
+
+# ============================================
+# profiling data
+# ============================================
+.prof
+
+# ============================================
+# Database
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================
+# Temporary Files
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*~.nib
+local_settings.py
+
+# ============================================
+# Docker (exclude local overrides)
+# ============================================
+docker-compose.override.yml
+.dockerignore.local
+
+# ============================================
+# Project Specific
+# ============================================
+# Old README (we have README_NEW.md)
+# Keep both for now, can remove old one later
+
+# Scratch files
+scratch/
+temp/
+tmp/
+
+# Large output files
+*.gif
+*.mp4
+*.avi
+!data/images/forecast_scenarios_animated.gif
+
+# Credentials and API keys
+credentials.json
+service-account.json
+*-key.json
+*.pem
+
+# ============================================
+# GitHub Actions artifacts
+# ============================================
+bandit-report.json
+safety-report.json
+
+# ============================================
+# Streamlit
+# ============================================
+.streamlit/secrets.toml
+.streamlit/config.toml
