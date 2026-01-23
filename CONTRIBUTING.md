@@ -40,7 +40,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/sarimax-brazilian-soybean-forecasting.git
+git clone https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting.git
 cd sarimax-brazilian-soybean-forecasting
 
 # Create virtual environment
@@ -276,7 +276,7 @@ Place new modules in appropriate directories:
 
 ## Questions?
 
-- Open a [Discussion](https://github.com/YOUR_USERNAME/sarimax-brazilian-soybean-forecasting/discussions)
+- Open a [Discussion](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/discussions)
 - Ask in pull request comments
 - Check existing documentation
 
