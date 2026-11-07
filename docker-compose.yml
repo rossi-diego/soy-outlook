@@ -1,33 +1,26 @@
-version: '3.8'
-
+# Full stack with one command:  docker compose up   ->  http://localhost:3000
+#   1. pipeline: downloads the WASDE history, CBOT closes and PTAX, runs the backtest
+#      (about a minute) and writes web/public/data
+#   2. web: builds the static Next.js site from that data and serves it
 services:
-  streamlit-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: sarimax-forecasting
-    ports:
-      - "8501:8501"
+  pipeline:
+    build: .
     volumes:
       - ./data:/app/data
-      - ./logs:/app/logs
-      - ./models:/app/models
-    environment:
-      - WASDE_JWT=${WASDE_JWT}
-      - STREAMLIT_SERVER_PORT=8501
-      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - ./web/public/data:/app/web/public/data
     env_file:
-      - .env
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - sarimax-network
+      - path: .env
+        required: false
 
-networks:
-  sarimax-network:
-    driver: bridge
+  web:
+    image: node:22-alpine
+    working_dir: /web
+    command: ["sh", "-c", "npm ci && npm run build && npx --yes serve@14 out -l 3000"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/web
+      - /web/node_modules
+    depends_on:
+      pipeline:
+        condition: service_completed_successfully
