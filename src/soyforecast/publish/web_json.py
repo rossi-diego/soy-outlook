@@ -38,6 +38,7 @@ from soyforecast.freshness import freshness_block
 from soyforecast.logs import get_logger
 from soyforecast.models.ladder import MODEL_LABELS
 from soyforecast.publish.archive import publish_archive
+from soyforecast.publish.lineage import build_run_manifest
 from soyforecast.units import BUSHELS_PER_TONNE, SACK_KG
 
 if TYPE_CHECKING:
@@ -310,12 +311,14 @@ def build_wasde(a: Artefacts) -> dict[str, Any]:
 
 def publish(a: Artefacts, settings: Settings, now: datetime | None = None) -> None:
     out = settings.web_data_dir
+    now = now or datetime.now(UTC)
     meta = _clean(build_meta(a, now))
     outlook = _clean(build_outlook(a))
     _dump(meta, out / "meta.json")
     _dump(outlook, out / "outlook.json")
     _dump(build_track_record(a), out / "track_record.json")
     _dump(build_wasde(a), out / "wasde.json")
+    _dump(build_run_manifest(a, settings, now), out / "run_manifest.json")
     cols = [
         "report_month",
         "origin",

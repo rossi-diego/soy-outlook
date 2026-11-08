@@ -16,7 +16,7 @@ import pandas as pd
 from soyforecast.config import SOY_TICKER
 from soyforecast.errors import InputDataError
 from soyforecast.freshness import SourceLog
-from soyforecast.ingest._cache import atomic_write_parquet
+from soyforecast.ingest._cache import atomic_write_parquet, write_snapshot
 from soyforecast.logs import get_logger
 
 log = get_logger(__name__)
@@ -98,6 +98,7 @@ def fetch_soy_prices(
     new = new.rename("close_c_bu")
     new.index.name = "date"
     atomic_write_parquet(new.to_frame(), path)
+    write_snapshot(path)
     if sources is not None:
         sources.record("prices", "live", new.index.max())
     log.info(

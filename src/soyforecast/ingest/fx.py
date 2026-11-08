@@ -16,7 +16,7 @@ import pandas as pd
 from soyforecast.config import PTAX_BOUNDS, PTAX_MAX_DAILY_CHANGE, PTAX_URL
 from soyforecast.errors import InputDataError
 from soyforecast.freshness import SourceLog
-from soyforecast.ingest._cache import atomic_write_parquet
+from soyforecast.ingest._cache import atomic_write_parquet, write_snapshot
 from soyforecast.logs import get_logger
 
 log = get_logger(__name__)
@@ -107,6 +107,7 @@ def fetch_ptax(
     s = s.rename("brl_per_usd")
     s.index.name = "date"
     atomic_write_parquet(s.to_frame(), path)
+    write_snapshot(path)
     if sources is not None:
         sources.record("ptax", "live", s.index.max())
     log.info("ptax.ready", rows=len(s), last=str(s.index.max().date()), value=float(s.iloc[-1]))

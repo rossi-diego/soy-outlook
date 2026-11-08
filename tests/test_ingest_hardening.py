@@ -306,3 +306,65 @@ def test_stdlib_logs_are_routed_through_structlog(capsys):
     assert lib["level"] == "warning" and lib["logger"] == "some.library" and "timestamp" in lib
     assert any(x["event"] == "ours" and x["n"] == 1 for x in lines)
     configure_logging("INFO", json=False)
+
+
+# ---------------------------------------------------------------- lineage (P24 part 3)
+
+
+def test_snapshots_are_dated_hashed_deduplicated_and_pruned(tmp_path):
+    from datetime import date
+
+    from soyforecast.ingest._cache import write_snapshot
+
+    f = tmp_path / "zs_daily.parquet"
+    f.write_bytes(b"v1")
+    first = write_snapshot(f, day=date(2026, 11, 2))
+    assert first.name == f"zs_daily_20261102_{_sha(b'v1')[:12]}.parquet"
+    assert write_snapshot(f, day=date(2026, 11, 3)) == first  # same bytes: stored once
+    for i in range(5):
+        f.write_bytes(f"v{i + 2}".encode())
+        write_snapshot(f, day=date(2026, 11, 4 + i), keep=3)
+    names = sorted(p.name for p in (tmp_path / "snapshots").iterdir())
+    assert len(names) == 3 and names[-1].startswith("zs_daily_20261108_")
+
+
+def test_live_fetch_writes_a_snapshot(tmp_path):
+    s = fixtures.synthetic_ptax()
+    s = s[s.index >= "2016-01-01"]
+    fetch_ptax(tmp_path, transport=_ptax_host(s))
+    snaps = list((tmp_path / "snapshots").glob("ptax_daily_*.parquet"))
+    assert len(snaps) == 1
+    assert snaps[0].read_bytes() == (tmp_path / "ptax_daily.parquet").read_bytes()
+
+
+def test_run_manifest_records_inputs_lock_and_code(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from soyforecast.publish import lineage
+
+    settings = _settings(tmp_path)
+    settings.bronze.mkdir(parents=True)
+    full = fixtures.synthetic_wasde()
+    (settings.bronze / "wasde_full.parquet").write_bytes(_parquet(full))
+    write_pin(_pin("t", _parquet(full)), settings.wasde_lock)
+    prices, ptax = fixtures.synthetic_prices(), fixtures.synthetic_ptax()
+    prices.rename("close_c_bu").to_frame().to_parquet(settings.bronze / "zs_daily.parquet")
+    monkeypatch.setenv("GITHUB_SHA", "abc123")
+    a = SimpleNamespace(
+        offline=True,
+        wasde_manifest={"release_tag": "t", "reports": 196},
+        vintages=pd.DataFrame(index=["2026-10"]),
+        prices=prices,
+        ptax=ptax,
+        sources=SourceLog(),
+    )
+    from datetime import UTC, datetime
+
+    m = lineage.build_run_manifest(a, settings, datetime(2026, 11, 6, 21, tzinfo=UTC))
+    w = m["inputs"]["wasde"]
+    assert w["matches_pin"] is True and w["sha256"] == _sha(_parquet(full))
+    assert m["inputs"]["prices"]["last"] == "2026-11-06" and m["inputs"]["prices"]["sha256"]
+    assert m["inputs"]["ptax"]["sha256"] is None  # file not written in this test
+    assert m["git"]["sha"] == "abc123"
+    assert m["packages"]["pandas"] == pd.__version__
+    assert m["lock"]["file"] == "uv.lock"

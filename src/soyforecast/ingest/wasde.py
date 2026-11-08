@@ -29,7 +29,7 @@ import pandas as pd
 from soyforecast.config import WASDE_ASSET, Settings
 from soyforecast.errors import InputDataError
 from soyforecast.freshness import SourceLog
-from soyforecast.ingest._cache import sha256
+from soyforecast.ingest._cache import sha256, write_snapshot
 from soyforecast.logs import get_logger
 
 log = get_logger(__name__)
@@ -275,6 +275,7 @@ def _download(
         return _use_cache(target, problems, sources, "download")
 
     os.replace(tmp, target)
+    write_snapshot(target)
     manifest = _manifest(target, url, str(tag), meta.get("next_release"))
     _write_manifest(settings.bronze, manifest)
     if pin is None or update_pin:

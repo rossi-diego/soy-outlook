@@ -45,6 +45,7 @@ REQUIRED_FILES = (
     "wasde.json",
     "backtest.csv",
     "metrics.csv",
+    "run_manifest.json",
     f"{ARCHIVE_DIR}/{INDEX}",
 )
 QUANTILE_KEYS = ("q025", "q100", "q500", "q900", "q975")
