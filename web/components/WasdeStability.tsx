@@ -25,19 +25,19 @@ export default function WasdeStability({ reaction }: { reaction: Reaction }) {
   const splitSentence = s.broke
     ? s.late.zero
       ? t(
-          `The ${line} effect is concentrated before ${s.breakYear} and is not distinguishable from zero after: ${c2(s.early.b)} ${per} in ${yrs(
+          `The ${line} effect is concentrated before ${s.breakYear} and is not distinguishable from zero after: ${c2(s.early.b)} ± ${f.num(s.early.se, 2)} ${per} in ${yrs(
             s.early.years,
           )} against ${c2(s.late.b)} ± ${f.num(s.late.se, 2)} since ${s.breakYear} (difference p ${pF(s.diffP)}).`,
-          `O efeito de “${line}” se concentra antes de ${s.breakYear} e não é distinguível de zero depois: ${c2(s.early.b)} ${per} em ${yrs(
+          `O efeito de “${line}” se concentra antes de ${s.breakYear} e não é distinguível de zero depois: ${c2(s.early.b)} ± ${f.num(s.early.se, 2)} ${per} em ${yrs(
             s.early.years,
           )} contra ${c2(s.late.b)} ± ${f.num(s.late.se, 2)} desde ${s.breakYear} (p da diferença ${pF(s.diffP)}).`,
         )
       : t(
-          `The ${line} effect changed size at ${s.breakYear}: ${c2(s.early.b)} ${per} in ${yrs(s.early.years)} against ${c2(s.late.b)} ± ${f.num(
+          `The ${line} effect changed size at ${s.breakYear}: ${c2(s.early.b)} ± ${f.num(s.early.se, 2)} ${per} in ${yrs(s.early.years)} against ${c2(s.late.b)} ± ${f.num(
             s.late.se,
             2,
           )} since then (difference p ${pF(s.diffP)}).`,
-          `O efeito de “${line}” mudou de tamanho em ${s.breakYear}: ${c2(s.early.b)} ${per} em ${yrs(s.early.years)} contra ${c2(
+          `O efeito de “${line}” mudou de tamanho em ${s.breakYear}: ${c2(s.early.b)} ± ${f.num(s.early.se, 2)} ${per} em ${yrs(s.early.years)} contra ${c2(
             s.late.b,
           )} ± ${f.num(s.late.se, 2)} desde então (p da diferença ${pF(s.diffP)}).`,
         )
@@ -48,18 +48,27 @@ export default function WasdeStability({ reaction }: { reaction: Reaction }) {
         )}).`,
       );
 
-  const rollSentence = s.roll.jointZero
-    ? t(
-        `Excluding the ${s.roll.nExcluded} release days within ${s.roll.bdays} business days of a contract expiry also removes it (${c2(s.roll.b)} ± ${f.num(
-          s.roll.se,
-          2,
-        )}), and the six revisions together are no longer distinguishable from zero (joint p ${pF(s.roll.jointP)}, ${s.roll.nLeft} reports left).`,
-        `Excluir os ${s.roll.nExcluded} dias de divulgação a até ${s.roll.bdays} dias úteis do vencimento de um contrato também o remove (${c2(
-          s.roll.b,
-        )} ± ${f.num(s.roll.se, 2)}), e as seis revisões juntas deixam de ser distinguíveis de zero (p conjunto ${pF(s.roll.jointP)}, ${
-          s.roll.nLeft
-        } relatórios restantes).`,
-      )
+  // "also" only when the split sentence already said the line vanishes after the break; the
+  // "removes it" wording follows this line's own roll-excluded estimate, the joint clause the joint p.
+  const also = s.broke && s.late.zero;
+  const rollHead = t(
+    `Excluding the ${s.roll.nExcluded} release days within ${s.roll.bdays} business days of a contract expiry ${also ? "also " : ""}removes it (${c2(
+      s.roll.b,
+    )} ± ${f.num(s.roll.se, 2)})`,
+    `Excluir os ${s.roll.nExcluded} dias de divulgação a até ${s.roll.bdays} dias úteis do vencimento de um contrato ${also ? "também " : ""}o remove (${c2(
+      s.roll.b,
+    )} ± ${f.num(s.roll.se, 2)})`,
+  );
+  const rollSentence = s.roll.zero
+    ? s.roll.jointZero
+      ? t(
+          `${rollHead}, and the six revisions together are no longer distinguishable from zero (joint p ${pF(s.roll.jointP)}, ${s.roll.nLeft} reports left).`,
+          `${rollHead}, e as seis revisões juntas deixam de ser distinguíveis de zero (p conjunto ${pF(s.roll.jointP)}, ${s.roll.nLeft} relatórios restantes).`,
+        )
+      : t(
+          `${rollHead}, though the six revisions together still show a joint effect (joint p ${pF(s.roll.jointP)}, ${s.roll.nLeft} reports left).`,
+          `${rollHead}, embora as seis revisões juntas ainda mostrem um efeito conjunto (p conjunto ${pF(s.roll.jointP)}, ${s.roll.nLeft} relatórios restantes).`,
+        )
     : t(
         `Excluding the ${s.roll.nExcluded} release days within ${s.roll.bdays} business days of a contract expiry leaves a joint effect (joint p ${pF(
           s.roll.jointP,
@@ -108,10 +117,15 @@ export default function WasdeStability({ reaction }: { reaction: Reaction }) {
         </p>
         <p>
           {placeboSentence}{" "}
-          {t(
-            `That is why the what-if below opens on the ${yrs(split.late.years)} fit (${split.late.n_reports} reports), with the full sample one click away. This display rule was fixed in config.py on 8 Nov 2026; the coefficients themselves are not re-chosen.`,
-            `Por isso a simulação abaixo abre no ajuste de ${yrs(split.late.years)} (${split.late.n_reports} relatórios), com a amostra toda a um clique. Esta regra de exibição foi fixada no config.py em 8 nov 2026; os coeficientes em si não são reescolhidos.`,
-          )}
+          {reaction.whatif_default_fit === "recent"
+            ? t(
+                `${s.broke ? "That is why the" : "The"} what-if below opens on the ${yrs(split.late.years)} fit (${split.late.n_reports} reports), with the full sample one click away. This display rule was fixed in config.py on 8 Nov 2026; the coefficients themselves are not re-chosen.`,
+                `${s.broke ? "Por isso a" : "A"} simulação abaixo abre no ajuste de ${yrs(split.late.years)} (${split.late.n_reports} relatórios), com a amostra toda a um clique. Esta regra de exibição foi fixada no config.py em 8 nov 2026; os coeficientes em si não são reescolhidos.`,
+              )
+            : t(
+                `The what-if below opens on the full-sample fit (${reaction.n_reports} reports), with the ${yrs(split.late.years)} fit one click away.`,
+                `A simulação abaixo abre no ajuste com a amostra toda (${reaction.n_reports} relatórios), com o ajuste de ${yrs(split.late.years)} a um clique.`,
+              )}
         </p>
       </div>
       <details className="text-sm" data-testid="stability-details">

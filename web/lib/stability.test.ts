@@ -60,6 +60,8 @@ describe("stabilityFacts", () => {
     expect(s.broke).toBe(sp.diff_p < r.alpha);
     expect(s.late.zero).toBe(Math.abs(sp.late_usd_t / sp.late_se_usd_t) < 1.96);
     expect(s.roll.jointZero).toBe(r.robustness.roll_excluded.joint_p >= r.alpha);
+    const ro = r.robustness.roll_excluded.items.find((it) => it.feature === s.feature)!;
+    expect(s.roll.zero).toBe(Math.abs(ro.usd_t_per_unit / ro.se_usd_t) < 1.96);
     expect(s.placebo.clean).toBe(r.robustness.placebo.joint_p >= r.alpha);
     expect(s.breakYear).toBe(Number(r.robustness.split_sample.break.slice(0, 4)));
   });
@@ -72,11 +74,15 @@ describe("stabilityFacts", () => {
     sp.late_usd_t = -4;
     sp.late_se_usd_t = 1;
     r.robustness.roll_excluded.joint_p = 0.001;
+    const ro = r.robustness.roll_excluded.items.find((it) => it.feature === s0.feature)!;
+    ro.usd_t_per_unit = -5;
+    ro.se_usd_t = 1;
     r.robustness.placebo.joint_p = 0.01;
     const s = stabilityFacts(r);
     expect(s.broke).toBe(false);
     expect(s.late.zero).toBe(false);
     expect(s.roll.jointZero).toBe(false);
+    expect(s.roll.zero).toBe(false);
     expect(s.placebo.clean).toBe(false);
   });
 });

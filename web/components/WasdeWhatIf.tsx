@@ -232,7 +232,7 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
         <p className="text-xs leading-relaxed text-ink-2" data-testid="fit-note">
           {fitId === "recent"
             ? t(
-                `Default, by a display rule fixed in config.py on 8 Nov 2026: ${
+                `${reaction.whatif_default_fit === "recent" ? "Default, by a display rule fixed in config.py on 8 Nov 2026" : "The recent fit"}: ${
                   sf.broke ? `the full-sample ${d(sf.label)} reaction is mostly the pre-${recentYear} market` : "the recent reports are the closer guide to today's market"
                 } (see “How stable is this?” above). The interval uses this fit's own HC1 covariance and residual sd (${f.num(
                   recent.residSd,
@@ -240,7 +240,7 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
                 )} USD/t, against ${f.num(fullFit.residSd, 1)} for all reports)${
                   narrower ? "; it is not wider, because release-day moves since " + recentYear + " have been smaller" : ""
                 }.`,
-                `Padrão, por uma regra de exibição fixada no config.py em 8 nov 2026: ${
+                `${reaction.whatif_default_fit === "recent" ? "Padrão, por uma regra de exibição fixada no config.py em 8 nov 2026" : "O ajuste recente"}: ${
                   sf.broke
                     ? `a reação de “${d(sf.label)}” na amostra toda é sobretudo o mercado de antes de ${recentYear}`
                     : "os relatórios recentes são o guia mais próximo do mercado de hoje"
