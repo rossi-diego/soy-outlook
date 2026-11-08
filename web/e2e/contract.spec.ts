@@ -122,6 +122,42 @@ test("a throwing localStorage still lets the user enter a premium", async ({ pag
   await expect(page.getByTestId("headline")).toContainText("(CBOT only, excl. premium)");
 });
 
+test("a failed storage write never resurrects a stale stored premium", async ({ page }) => {
+  // Reads work but writes fail (quota full): the typed value must win over the stale stored one.
+  await page.addInitScript(() => {
+    localStorage.setItem("soy-outlook.premium-c-bu", "80");
+    const boom = () => {
+      throw new Error("quota exceeded");
+    };
+    Storage.prototype.setItem = boom;
+    Storage.prototype.removeItem = boom;
+  });
+  await page.goto("/");
+  const headline = page.getByTestId("headline");
+  await expect(headline).toContainText("your premium +80¢/bu");
+  const input = page.getByLabel(/Paranaguá premium/);
+  await input.fill("50");
+  await input.press("Enter");
+  await expect(headline).toContainText("your premium +50¢/bu");
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(headline).toContainText("(CBOT only, excl. premium)");
+});
+
+test("an invalid premium says which value still applies", async ({ page }) => {
+  await page.goto("/");
+  const input = page.getByLabel(/Paranaguá premium/);
+  const help = page.getByTestId("premium-help");
+  await input.fill("abc");
+  await input.press("Enter");
+  await expect(help).toContainText("Showing CBOT only.");
+  await input.fill("80");
+  await input.press("Enter");
+  await input.fill("999");
+  await input.press("Enter");
+  await expect(help).toContainText("Using +80¢/bu.");
+  await expect(page.getByTestId("headline")).toContainText("your premium +80¢/bu");
+});
+
 test("what-if shows an 80% prediction interval from the published covariance", async ({ page }) => {
   const wasde = await json(page, "wasde.json");
   const r = wasde.reaction;

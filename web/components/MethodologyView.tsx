@@ -199,8 +199,8 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
           <p>
             <strong className="text-ink">Aviso.</strong> Uso apenas para pesquisa e educação; não é recomendação de
             investimento, de operação ou de hedge, nem oferta de compra ou venda de nada. Os preços da CBOT têm atraso, e os
-            valores FOB só aparecem com a cotação de prêmio que você mesmo informar. As faixas descrevem o tamanho dos erros de previsão passados; não são garantia sobre preços
-            futuros. Sem vínculo com o USDA, a CME Group, o Banco Central do Brasil ou qualquer trading.
+            valores FOB só aparecem com a cotação de prêmio que você mesmo informar. As faixas descrevem o tamanho dos erros
+            de previsão passados; não são garantia sobre preços futuros. Sem vínculo com o USDA, a CME Group, o Banco Central do Brasil ou qualquer trading.
           </p>
         </Block>
 
@@ -369,9 +369,8 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
         <p>
           <strong className="text-ink">Disclaimer.</strong> Research and educational use only; not investment, trading or
           hedging advice, and not an offer to buy or sell anything. CBOT prices are delayed, and FOB values appear only with
-          a premium quote you enter yourself. The ranges describe
-          how large past forecast errors were; they are not a guarantee about future prices. No affiliation with USDA,
-          CME Group, Banco Central do Brasil or any trading company.
+          a premium quote you enter yourself. The ranges describe how large past forecast errors were; they are not a
+          guarantee about future prices. No affiliation with USDA, CME Group, Banco Central do Brasil or any trading company.
         </p>
       </Block>
 

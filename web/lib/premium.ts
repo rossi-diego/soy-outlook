@@ -60,8 +60,11 @@ export function writePremium(v: number | null): void {
   try {
     if (v === null) window.localStorage.removeItem(PREMIUM_KEY);
     else window.localStorage.setItem(PREMIUM_KEY, String(v));
+    writeFailed = false;
   } catch {
-    /* storage unavailable: the value still applies in memory for this page view */
+    // Storage unavailable or full: the value still applies in memory for this page view, and the
+    // snapshot must not fall back to a stale stored value that a failed write left behind.
+    writeFailed = true;
   }
   memory = v;
   window.dispatchEvent(new Event(PREMIUM_EVENT));
@@ -69,8 +72,10 @@ export function writePremium(v: number | null): void {
 
 // Fallback when localStorage throws (private mode, blocked site data): the last written value.
 let memory: number | null = null;
+let writeFailed = false;
 
 function snapshot(): number | null {
+  if (writeFailed) return memory;
   try {
     window.localStorage.getItem(PREMIUM_KEY);
   } catch {

@@ -520,7 +520,7 @@ export default function OutlookView({ meta, outlook }: Props) {
         </aside>
       )}
 
-      <section className="flex flex-wrap items-end gap-x-8 gap-y-4">
+      <section className="flex flex-wrap items-start gap-x-6 gap-y-4">
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wide text-muted" id="unit-legend">
             {t("Show prices as", "Mostrar preços em")}
@@ -566,7 +566,11 @@ export default function OutlookView({ meta, outlook }: Props) {
               data-testid="premium-help"
             >
               {premiumError
-                ? premiumError
+                ? `${premiumError} ${
+                    fob
+                      ? t(`Using ${f.signed0(premium)}¢/bu.`, `Usando ${f.signed0(premium)}¢/bu.`)
+                      : t("Showing CBOT only.", "Mostrando só CBOT.")
+                  }`
                 : t(
                     "Enter your broker's Paranaguá premium in ¢/bu vs the named CBOT contract. Empty = CBOT only; kept in this browser only.",
                     "Informe o prêmio de Paranaguá do seu corretor em ¢/bu sobre o contrato CBOT indicado. Vazio = só CBOT; fica salvo só neste navegador.",
@@ -606,7 +610,7 @@ export default function OutlookView({ meta, outlook }: Props) {
           </div>
         )}
         {basisOn && (
-          <div className="w-56 space-y-1">
+          <div className="w-full max-w-sm space-y-1 sm:w-64">
             <label htmlFor="basis" className="text-xs font-medium uppercase tracking-wide text-muted">
               {t("Port-to-interior discount (R$/sack)", "Desconto porto-interior (R$/sc)")}
             </label>

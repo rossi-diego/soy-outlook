@@ -66,7 +66,14 @@ def test_no_premium_data_anywhere_in_the_repo():
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=False
     ).stdout.splitlines()
-    assert not [f for f in tracked if "premium" in f.lower()]
+    # Code may name the user input (web/lib/premium.ts); no premium *data* file may be tracked.
+    data_ext = (".csv", ".parquet", ".json", ".xlsx", ".xls", ".txt")
+    assert not [
+        f
+        for f in tracked
+        if "premium" in f.lower()
+        and (f.startswith(("data/", "web/public/")) or f.lower().endswith(data_ext))
+    ]
     assert not (ROOT / "data" / "seed").exists() or not any((ROOT / "data" / "seed").iterdir())
     ignored = subprocess.run(
         ["git", "check-ignore", "-q", "data/seed/paranagua_premium.csv"],
