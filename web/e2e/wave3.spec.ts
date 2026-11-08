@@ -41,6 +41,14 @@ test("decision panel: downside vs selling today follows the published quantiles 
     await expect(card.locator("circle")).toHaveCount(19);
   }
 
+  // The strip's end labels are the shared scale's limits (worst and best grid P&L over all horizons, and zero).
+  const all = (outlook.horizons as H[]).flatMap((h) => h.grid.c_bu.map((c) => pnlVsToday(c, p0, base)));
+  await expect(panel.getByTestId("decision-1").getByTestId("strip-scale")).toHaveText(
+    moneyAmount(Math.min(0, ...all), "usd") + moneyAmount(Math.max(0, ...all), "usd"),
+  );
+  const rolls = (outlook.horizons as (H & { contract: { crosses_roll: boolean } })[]).filter((h) => h.contract.crosses_roll);
+  await expect(panel.getByTestId("decision-footnote")).toContainText(rolls.length ? "contract roll" : "not a price call");
+
   await panel.getByRole("radio", { name: "Buyer (short)" }).click();
   await expect(panel.getByRole("heading", { name: /downside vs buying today/ })).toBeVisible();
   const h1 = (outlook.horizons as H[])[0];

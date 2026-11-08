@@ -102,6 +102,7 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
   const lo = Math.min(0, ...all);
   const hi = Math.max(0, ...all);
   const usdT = (c: number) => (c / 100) * buPerT;
+  const rolls = horizons.filter((h) => h.contract.crosses_roll).map((h) => horizonLabel(h.h));
 
   return (
     <section className="card space-y-5 p-5" aria-labelledby="decision-title" data-testid="decision-panel">
@@ -228,9 +229,9 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
               </p>
               <div className="mt-auto pt-1">
                 <Strip pts={prof} lo={lo} hi={hi} adverseLevel={side === "producer" ? 0.1 : 0.9} />
-                <p className="flex justify-between text-[0.7rem] text-muted">
-                  <span>worst 5%</span>
-                  <span>best 5%</span>
+                <p className="tabular flex justify-between text-[0.7rem] text-muted" data-testid="strip-scale">
+                  <span>{moneyAmount(lo, currency)}</span>
+                  <span>{moneyAmount(hi, currency)}</span>
                 </p>
               </div>
             </article>
@@ -240,10 +241,13 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
 
       <p className="text-xs leading-relaxed text-muted" data-testid="decision-footnote">
         Each dot is one 5% step of the range (5th to 95th percentile), on one scale for all three horizons; the ringed dot
-        is the 1-in-10 level, the vertical line is {vs} today. Illustrative and range-based, not VaR: CBOT only, with the
+        is the 1-in-10 level, the vertical line is {vs} today, and the end labels are the shared scale&apos;s limits. Illustrative and range-based, not VaR: CBOT only, with the
         premium and the exchange rate held fixed, so the basis is unhedged and the figures ignore freight, margin calls and
         contract rolls. No expected shortfall is shown, because each 95% tail rests on one or two of {horizons[0]?.calibration_n}{" "}
         overlapping past errors; and no chance of reaching a target price, because the ranges are not a price call.
+        {rolls.length > 0
+          ? ` Prices are the continuous front month and ${rolls.length === horizons.length ? "every horizon crosses" : `the ${rolls.join(" and ")} ${rolls.length > 1 ? "horizons cross" : "horizon crosses"}`} a contract roll, so part of the move is a calendar spread that a hedge in today's front contract would not capture.`
+          : ""}
       </p>
     </section>
   );
