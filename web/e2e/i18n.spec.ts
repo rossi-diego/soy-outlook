@@ -5,6 +5,11 @@ import { expect, type Page, test } from "@playwright/test";
 
 const ROUTES = ["/", "/wasde/", "/track-record/", "/methodology/"];
 
+async function openSettings(page: Page) {
+  const settings = page.getByTestId("settings");
+  if (!(await settings.evaluate((el) => (el as HTMLDetailsElement).open))) await settings.locator("summary").click();
+}
+
 async function setLocale(page: Page, loc: "en" | "pt-BR") {
   await page.addInitScript((l) => localStorage.setItem("soy-locale", l), loc);
 }
@@ -60,18 +65,26 @@ test.describe("browser language pt-BR", () => {
   test("first visit follows navigator.language: Portuguese copy, lang, R$/saca default", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("html")).toHaveAttribute("lang", "pt-BR");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("soja brasileira de exportação");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Quanto o preço da soja pode andar até");
     // No premium is shipped, so the R$/saca default is CBOT only, labelled as such.
-    await expect(page.getByRole("radio", { name: "CBOT R$/saca" })).toBeChecked();
+    await expect(page.getByTestId("settings-state")).toHaveText("R$/sc, só CBOT");
     await expect(page.getByTestId("headline")).toContainText("(só CBOT, sem prêmio)");
+    await openSettings(page);
+    await expect(page.getByRole("radio", { name: "CBOT R$/saca" })).toBeChecked();
     await expect(page.getByTestId("premium-help")).toContainText("Informe o prêmio de Paranaguá do seu corretor");
     // pt-BR number and date formatting: "R$ 132,45/sc", "6 nov 2026".
     await expect(page.getByTestId("headline")).toContainText(/R\$ \d{1,3}(\.\d{3})*,\d{2}\/sc/);
+    await expect(page.getByTestId("ticket-price")).toHaveText(/^R\$ \d{1,3}(\.\d{3})*,\d{2}$/);
     await expect(page.getByTestId("as-of")).toContainText(/\d{1,2} (jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez) \d{4}/);
+    // The story calculator follows the unit: reais.
+    await expect(page.getByTestId("calc-1").getByTestId("calc-loss")).toContainText("R$");
     // Port FOB is never called a port price without the fobbing caveat.
     await expect(page.locator("main")).not.toContainText(/preço porto/i);
+    // Analyst fold (Histórico): the FOB note and the decision panel's pt-BR defaults (reais, 60 kg sacks).
+    await page.goto("/track-record/");
+    await page.getByTestId("for-analysts").locator("summary").click();
+    await page.getByTestId("ranges-details").locator("summary").first().click();
     await expect(page.getByTestId("fob-note")).toContainText("fobbing");
-    // Unit B: the decision panel defaults to reais and 60 kg sacks under pt-BR.
     const panel = page.getByTestId("decision-panel");
     await expect(panel.getByRole("radio", { name: "BRL" })).toBeChecked();
     await expect(panel.getByRole("radio", { name: "sacas" })).toBeChecked();
@@ -85,6 +98,7 @@ test.describe("browser language English", () => {
   test("English stays the default, in USD/t", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await openSettings(page);
     await expect(page.getByRole("radio", { name: "CBOT USD/t" })).toBeChecked();
     await expect(page.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -94,7 +108,7 @@ test.describe("browser language English", () => {
     await page.getByRole("button", { name: "Português (Brasil)" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "pt-BR");
     await expect(page.getByRole("button", { name: "Português (Brasil)" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Metodologia" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Método" })).toBeVisible();
     await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Histórico" }).click();
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Algum modelo superou");
     await page.reload();
@@ -121,6 +135,7 @@ test.describe("browser language English", () => {
 
   test("optional port-to-interior discount: 0 by default, user-supplied, shifts R$/sack only", async ({ page }) => {
     await page.goto("/");
+    await openSettings(page);
     await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
     // The discount applies to a FOB price, so it appears only once a premium is entered.
     await expect(page.getByLabel("Port-to-interior discount (R$/sack)")).toHaveCount(0);
@@ -130,16 +145,12 @@ test.describe("browser language English", () => {
     const basis = page.getByLabel("Port-to-interior discount (R$/sack)");
     await expect(basis).toHaveValue("");
     await expect(page.getByText(/there is no sourced regional default/)).toBeVisible();
-    const card = page.getByTestId("horizon-1");
-    const before = await card.locator("p.text-2xl").textContent();
-    const [lo] = (before ?? "").split("–").map((s) => Number(s.trim().replace(/,/g, "")));
+    const price = async () => Number(((await page.getByTestId("ticket-price").textContent()) ?? "").replace(/[^\d.]/g, ""));
+    const before = await price();
     await basis.fill("12.5");
     await basis.press("Enter");
     await expect(page.getByTestId("headline")).toContainText("est. local price");
-    await expect(card.getByTestId("basis-row")).toContainText("12.50");
-    const after = await card.locator("p.text-2xl").textContent();
-    const [lo2] = (after ?? "").split("–").map((s) => Number(s.trim().replace(/,/g, "")));
-    expect(lo2).toBeCloseTo(lo - 12.5, 2);
+    await expect.poll(price).toBeCloseTo(before - 12.5, 2);
     // USD/t is untouched by a reais-per-sack discount.
     await page.getByRole("radio", { name: "FOB USD/t" }).click();
     await expect(page.getByTestId("headline")).toContainText("= FOB");
@@ -156,8 +167,15 @@ for (const route of ROUTES)
       await expect(page.locator("html")).toHaveAttribute("lang", loc);
       // Same unit in both locales, so the comparison is like for like.
       if (route === "/") {
+        await openSettings(page);
         await page.getByRole("radio", { name: "CBOT USD/t" }).click();
-        // The decision panel's pt-BR defaults (BRL, sacks) are set back to USD and 1,000 t.
+      }
+      if (route === "/track-record/") {
+        // The analyst fold's pt-BR defaults (R$/saca; BRL and sacks in the panel) are set back to
+        // CBOT USD/t, USD and 1,000 t.
+        await page.getByTestId("for-analysts").locator("summary").click();
+        await expect(page.getByTestId("analyst-outlook")).toBeVisible({ timeout: 30_000 });
+        await page.getByTestId("analyst-outlook").getByRole("radio", { name: "CBOT USD/t" }).click();
         const panel = page.getByTestId("decision-panel");
         await panel.getByRole("radio", { name: "USD" }).click();
         await panel.getByRole("radio", { name: loc === "en" ? "tonnes" : "toneladas" }).click();

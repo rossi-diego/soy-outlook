@@ -21,10 +21,10 @@ Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 - **Market-risk judgement.** FOB = CBOT + port premium, with the premium a user input only (no unlicensed premium data is shipped), FX an explicit input, and bands labelled "CBOT price risk only" until a joint band is earned.
 - **Statistics checked for multiplicity and stability.** A release-day event study with HC1 errors, a Holm adjustment (nothing survives it), placebo, split-sample and roll-exclusion checks shown on the site, and an 80% prediction interval in the what-if, which opens on the post-2018 fit because the effect is not stable.
 - **Built for both audiences.** English by default (USD/t), with a client-side Portuguese (pt-BR) toggle that follows the browser language and switches to R$/saca, Brazilian number and date formats and an optional, user-supplied port-to-interior discount; numbers and caveats are identical in both, which an end-to-end test checks on every page.
-- **Accessible and mobile-first.** Axe-checked, with AA colour contrast, native radio groups, slider value text and a data table under every chart; an axe gate in CI (zero serious or critical violations on every route, both themes, both locales) and 390 px phone screenshots below.
+- **Accessible and mobile-first.** Axe-checked, with AA colour contrast, native radio groups, slider value text, a text alternative on every chart and a data table under the forecast and track-record charts; an axe gate in CI (zero serious or critical violations on every route, both themes, both locales) and 390 px phone screenshots below.
 - **End-to-end engineering.** Typed Python package (bronze → silver → gold → publish), structured logging, 80%+ test coverage, a static Next.js site with a Playwright contract test that keeps the copy in line with the JSON, CI and Docker.
 
-![Outlook page: three cards with the 80% range for 1, 3 and 6 months in USD per tonne, a no-direction-signal note, unit and premium controls, and a fan chart of the CBOT price](docs/screenshots/outlook-light.png)
+![Outlook page as a story: the question "How far could soybeans move by May?", today's CBOT price ticket and the 1, 3 and 6-month 80% ranges on one shared scale, followed by six chapters (price history with stress episodes, the model contest, the tested ranges, today's outlook, a hedging calculator and the next WASDE)](docs/screenshots/outlook-light.png)
 
 ---
 
@@ -76,24 +76,24 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 
 | Page | Question it answers | What is on it |
 |---|---|---|
-| **Outlook** | How far could CBOT move in 1, 3 and 6 months? | 80% and 95% ranges in ¢/bu, USD/t or R$/sack, each labelled with its measured hit rate. FX is an input; FOB appears only once you type a premium (empty by default, kept in your browser). A decision panel shows downside vs selling today at 1-in-10 and rough 1-in-40 (illustrative, range-based, not VaR). Whisker chart, folded stress replay. |
-| **This WASDE** | How much does CBOT move on release day, and on what? | Release-day band (±4.5 USD/t typical, ±11.6 for 1 report in 10) with its out-of-sample hit rate, the latest revisions, a what-if with an 80% prediction interval (opens on the 2018+ fit), and a *How stable is this?* block. |
-| **Track record** | Did any model beat "no change"? | One-line verdict with the minimum detectable effect, misses by tail, a dot plot of errors vs no change, past forecasts vs prices, published outlooks vs outcomes. Formal tests sit in a **For statisticians** fold. |
-| **Methodology** | How was it built, and what are the limits? | Method, units, limitations and the v1 audit. |
+| **Outlook** | How far could soybeans move by the 6-month target? | A story read top to bottom. The hero answers first: today's price, its 12-month line and the next USDA report on a ticket, and the 1, 3 and 6-month 80% ranges on one shared scale, with a flag where a range held fewer than 8 in 10. Six short chapters follow: the price history with the pre-registered stress episodes, the model contest (validation MAE at 3 months, no model beats "no change"), every past 3-month range against the actual price with the holdout shaded, today's ranges, a calculator for the 1-in-10 bad case vs locking in today's price (seller or buyer, volume, hedged share), and the next WASDE with the typical release-day move. Unit (¢/bu, USD/t, R$/sack), FX and your Paranaguá premium sit in a Settings button; FOB appears only once you type a premium (kept in your browser). |
+| **Report day** | How much does CBOT move on WASDE release day, and on what? | Release-day band (±4.5 USD/t typical, ±11.6 for 1 report in 10) with its out-of-sample hit rate, the latest revisions, a what-if with an 80% prediction interval (opens on the 2018+ fit), and a *How stable is this?* block. |
+| **Track record** | Did any model beat "no change"? | One-line verdict with the minimum detectable effect, misses by tail, a dot plot of errors vs no change, past forecasts vs prices, published outlooks vs outcomes. Formal tests sit in a **For statisticians** fold; today's outlook in full detail (range cards with hedge contracts and rolls, how to read the ranges, the full decision panel with 1-in-40 and the target-price readout, the stress replay) in a **For analysts** fold. |
+| **Method** | How was it built, and what are the limits? | Method, units, limitations and the v1 audit. |
 
-| This WASDE | Track record |
+| Report day | Track record |
 |---|---|
-| ![This WASDE page](docs/screenshots/wasde-light.png) | ![Track record page, dark theme](docs/screenshots/track-record-dark.png) |
+| ![Report day (WASDE) page](docs/screenshots/wasde-light.png) | ![Track record page, dark theme](docs/screenshots/track-record-dark.png) |
 
-On a phone (390 px): cards stack, charts are 260 px high, segmented controls use short labels and the WASDE and test tables become labelled rows.
+On a phone (390 px): the hero stacks above the ranges, the story charts redraw at the column width (numbered episode markers instead of labels), ECharts charts are 260 px high, segmented controls use short labels and the WASDE and test tables become labelled rows.
 
-| Outlook, light | Outlook, dark | This WASDE, light | Track record, dark |
+| Outlook, light | Outlook, dark | Report day, light | Track record, dark |
 |---|---|---|---|
-| ![Outlook page on a 390 px phone, light theme](docs/screenshots/outlook-mobile-light.png) | ![Outlook page on a 390 px phone, dark theme](docs/screenshots/outlook-mobile-dark.png) | ![This WASDE page on a 390 px phone, light theme](docs/screenshots/wasde-mobile-light.png) | ![Track record page on a 390 px phone, dark theme](docs/screenshots/track-record-mobile-dark.png) |
+| ![Outlook page on a 390 px phone, light theme](docs/screenshots/outlook-mobile-light.png) | ![Outlook page on a 390 px phone, dark theme](docs/screenshots/outlook-mobile-dark.png) | ![Report day page on a 390 px phone, light theme](docs/screenshots/wasde-mobile-light.png) | ![Track record page on a 390 px phone, dark theme](docs/screenshots/track-record-mobile-dark.png) |
 
 In Portuguese (pt-BR), the same page defaults to R$/saca with Brazilian number and date formats; every number matches the English page.
 
-| Perspectiva, desktop | Perspectiva, celular (escuro) |
+| Panorama, desktop | Panorama, celular (escuro) |
 |---|---|
 | ![Outlook page in Portuguese, light theme, prices in R$ per sack](docs/screenshots/outlook-pt-light.png) | ![Outlook page in Portuguese on a 390 px phone, dark theme](docs/screenshots/outlook-pt-mobile-dark.png) |
 
@@ -181,7 +181,7 @@ How data reaches the site, in short (details and owner setup in [docs/REFRESH.md
 │   ├── pipeline.py · cli.py · errors.py (exit codes) · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
 ├── tests/            110 tests: no look-ahead, intervals, event study, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
 │   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
-├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
+├── web/              Next.js static site (Outlook, Report day, Track record, Method)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources
 ├── data/wasde.lock.json  WASDE input pin (release tag + sha256), the only committed data; no premium data is shipped
 └── notebooks/archive/  v1 notebooks, kept for the audit trail

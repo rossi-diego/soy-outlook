@@ -58,10 +58,25 @@ test("390 px: WASDE and tests tables stack into labelled rows", async ({ page })
 
 test("390 px: segmented controls use short labels and keep their full names", async ({ page }) => {
   await page.goto("/");
+  await page.getByTestId("settings").locator("summary").click();
   const usd = page.getByRole("radio", { name: "CBOT USD/t" });
   await expect(usd).toBeChecked();
   const label = usd.locator("xpath=..");
   expect((await label.innerText()).trim()).toBe("USD/t");
-  await expect(page.getByTestId("hero-chart").locator('[data-chart="ready"]')).toHaveCount(1, { timeout: 30_000 });
-  expect(Math.round((await page.getByTestId("hero-chart").locator('[data-chart="ready"]').boundingBox())!.height)).toBe(260);
+});
+
+test("390 px: the range ladder and the story charts fit the column", async ({ page }) => {
+  await page.goto("/");
+  const ladder = page.getByTestId("ladder");
+  const box = (await ladder.boundingBox())!;
+  for (const el of await ladder.locator(".lo, .hi").all()) {
+    const b = (await el.boundingBox())!;
+    expect(b.x).toBeGreaterThanOrEqual(box.x - 1);
+    expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width + 1);
+  }
+  for (const id of ["history-chart", "backtest-chart", "outlook-chart", "move-chart"]) {
+    const fig = page.getByTestId(id);
+    await expect(fig.locator("svg")).toBeVisible();
+    expect((await fig.locator("svg").boundingBox())!.width).toBeLessThanOrEqual(390);
+  }
 });

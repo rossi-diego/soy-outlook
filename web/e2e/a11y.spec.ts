@@ -8,13 +8,16 @@ const THEMES = ["light", "dark"] as const;
 const LOCALES = ["en", "pt-BR"] as const;
 
 async function openEverything(page: Page) {
-  // Open every <details> (folds and chart data tables) and wait for lazy content and charts.
-  const n = await page.locator("details").count();
-  for (let i = 0; i < n; i++) {
-    const d = page.locator("details").nth(i);
-    if (!(await d.evaluate((el) => (el as HTMLDetailsElement).open))) await d.locator("summary").first().click();
+  // Open every <details> (folds and chart data tables), including folds that a lazily loaded fold
+  // brings with it ("For analysts" on /track-record/), and wait for lazy content and charts.
+  for (let pass = 0; pass < 4; pass++) {
+    const closed = page.locator("details:not([open])");
+    const n = await closed.count();
+    if (n === 0) break;
+    for (let i = 0; i < n; i++) await closed.first().locator("summary").first().click();
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
+    await page.waitForTimeout(300);
   }
-  await page.waitForTimeout(300);
   const charts = page.locator('[data-chart="loading"]');
   await expect(charts).toHaveCount(0, { timeout: 30_000 });
 }

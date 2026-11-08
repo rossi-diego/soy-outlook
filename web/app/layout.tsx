@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
 import Link from "next/link";
 
 import FreshnessBanner from "@/components/FreshnessBanner";
@@ -10,6 +11,13 @@ import { themeBootScript } from "@/lib/theme";
 import { AUTHOR, OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
 
 import "./globals.css";
+
+// Self-hosted at build time by next/font (no request to Google from the browser). The CSS
+// variables feed the Tailwind font tokens in globals.css: serif for display headings, Plex Sans
+// for body copy, Plex Mono for numbers.
+const serif = Source_Serif_4({ subsets: ["latin"], style: ["normal", "italic"], weight: ["400", "600"], variable: "--font-serif-face", display: "swap" });
+const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans-face", display: "swap" });
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono-face", display: "swap" });
 
 const DESCRIPTION =
   "Price-risk ranges for Brazilian export soybeans 1, 3 and 6 months after each USDA WASDE report, for budgeting and hedging: tested ranges labelled by their hit rate, an honest track record against 'no change', and what each WASDE revision has been worth on release day.";
@@ -42,7 +50,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const meta = getMeta();
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript + localeBootScript }} />
       </head>
