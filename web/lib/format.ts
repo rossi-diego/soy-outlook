@@ -117,3 +117,18 @@ export function ciText(split: CiSplit, level: "80" | "95", withCount = true): st
   const count = n === null || !withCount ? "" : `, about ${Math.round(n)} independent outcomes`;
   return `likely ${pct(lo)}–${pct(hi)}${count}`;
 }
+
+export const FX_MIN = 3;
+export const FX_MAX = 9;
+
+/**
+ * Parse a typed BRL/USD rate ("5.50", "5,50", " 5.5 "). Accepts a comma as the decimal mark,
+ * since R$ users type one; rejects anything outside FX_MIN..FX_MAX with an inline message.
+ */
+export function parseFx(text: string): { ok: true; value: number } | { ok: false; error: string } {
+  const t = text.trim().replace(",", ".");
+  if (!/^\d+(\.\d+)?$/.test(t)) return { ok: false, error: `Enter a number between ${FX_MIN} and ${FX_MAX}.` };
+  const v = Number(t);
+  if (v < FX_MIN || v > FX_MAX) return { ok: false, error: `Use a rate between ${FX_MIN} and ${FX_MAX} BRL per USD.` };
+  return { ok: true, value: Math.round(v * 10000) / 10000 };
+}

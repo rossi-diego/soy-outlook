@@ -39,6 +39,10 @@ export interface Meta {
   };
   champion_alpha: number;
   calibration_window: number;
+  /**
+   * Realized errors needed before a backtest range is drawn.
+   */
+  calib_min: number;
   intervals: Intervals;
   inference_rule: InferenceRule;
   models: {
@@ -660,6 +664,7 @@ export interface Reaction {
    */
   cov_usd_t: number[][];
   resid_sd_usd_t: number;
+  latest_revisions: LatestRevisions;
   release_move: ReleaseMove;
   robustness: Robustness;
 }
@@ -678,6 +683,24 @@ export interface ReactionItem {
   expected_sign: number;
   wrong_sign: boolean;
   weak: boolean;
+  /**
+   * Median absolute revision over the event-study reports, in `unit`.
+   */
+  median_abs_rev: number | null;
+  p90_abs_rev: number | null;
+  /**
+   * The latest report's revision vs the previous report; null in a May report.
+   */
+  latest_rev: number | null;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "LatestRevisions".
+ */
+export interface LatestRevisions {
+  month: string;
+  previous: string | null;
+  may: boolean;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema

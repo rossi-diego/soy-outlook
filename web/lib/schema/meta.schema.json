@@ -535,6 +535,10 @@
     "calibration_window": {
       "type": "integer"
     },
+    "calib_min": {
+      "description": "Realized errors needed before a backtest range is drawn.",
+      "type": "integer"
+    },
     "intervals": {
       "$ref": "#/$defs/Intervals"
     },
@@ -580,6 +584,7 @@
     "champion",
     "champion_alpha",
     "calibration_window",
+    "calib_min",
     "intervals",
     "inference_rule",
     "models",

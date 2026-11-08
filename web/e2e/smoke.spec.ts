@@ -20,7 +20,7 @@ test("wasde what-if responds to a revision", async ({ page }) => {
   await page.keyboard.press("ArrowRight");
   await expect(page.getByText(/Historical average reaction on release day/)).toBeVisible();
   await expect(page.getByTestId("pi80")).not.toHaveText(before ?? "");
-  await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear" })).toBeEnabled();
 });
 
 test("track record and methodology render", async ({ page }) => {

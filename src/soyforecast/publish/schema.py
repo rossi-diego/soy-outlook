@@ -163,6 +163,7 @@ class Meta(Contract):
     champion: dict[str, ModelId]
     champion_alpha: float
     calibration_window: int
+    calib_min: int = Field(description="Realized errors needed before a backtest range is drawn.")
     intervals: Intervals
     inference_rule: InferenceRule
     models: dict[ModelId, str]
@@ -536,6 +537,19 @@ class ReactionItem(CoefCheck):
     expected_sign: int
     wrong_sign: bool
     weak: bool
+    median_abs_rev: float | None = Field(
+        description="Median absolute revision over the event-study reports, in `unit`."
+    )
+    p90_abs_rev: float | None
+    latest_rev: float | None = Field(
+        description="The latest report's revision vs the previous report; null in a May report."
+    )
+
+
+class LatestRevisions(Contract):
+    month: str
+    previous: str | None
+    may: bool
 
 
 class ReleaseMove(Contract):
@@ -603,6 +617,7 @@ class Reaction(Contract):
         description="HC1 covariance of the coefficients, (USD/t per unit) squared, in `features` order."
     )
     resid_sd_usd_t: float
+    latest_revisions: LatestRevisions
     release_move: ReleaseMove
     robustness: Robustness
 

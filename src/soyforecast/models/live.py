@@ -214,6 +214,30 @@ def _split_sample(data: pd.DataFrame, usd_t_now: float) -> dict[str, Any]:
     }
 
 
+def revision_profile(vintages: pd.DataFrame, data: pd.DataFrame) -> dict[str, Any]:
+    """Descriptive sizes of the six revisions, for the what-if sliders (P13).
+
+    `median_abs` and `p90_abs` are over the report rows the event study used (May reports
+    excluded); `latest` is the newest report's revision against the one before it, or None when
+    that report starts a new marketing year. Nothing here is fitted or chosen.
+    """
+    v = vintages.sort_values("release_date")
+    last = v.iloc[-1]
+    is_may = bool(int(last["may_rollover"]))
+    out: dict[str, Any] = {}
+    for f in REACTION_FEATURES:
+        a = np.abs(data[f].astype(float).dropna().to_numpy())
+        val = float(last[f]) if not is_may and pd.notna(last[f]) else None
+        out[f] = {
+            "median_abs": round(float(np.median(a)), 2) if len(a) else None,
+            "p90_abs": round(float(np.quantile(a, 0.9)), 2) if len(a) else None,
+            "latest": None if val is None else round(val, 2),
+        }
+    month = str(v.index[-1])
+    prev = str(v.index[-2]) if len(v) > 1 else None
+    return {"month": month, "previous": prev, "may": is_may, "by_feature": out}
+
+
 def release_day_reaction(
     vintages: pd.DataFrame, prices: pd.Series, p_now_c_bu: float
 ) -> dict[str, Any]:
@@ -230,10 +254,12 @@ def release_day_reaction(
     data = release_day_events(vintages, prices)
     res = _fit(data)
     usd_t_now = c_bu_to_usd_t(p_now_c_bu)
+    profile = revision_profile(vintages, data)
     items = []
     for it in _coef_items(res, usd_t_now):
         f = str(it["feature"])
         label, unit = FEATURE_META[f]
+        rev = profile["by_feature"][f]
         expected = REACTION_EXPECTED_SIGN[f]
         sign = int(np.sign(float(res.params[f])))
         items.append(
@@ -244,6 +270,9 @@ def release_day_reaction(
                 "expected_sign": expected,
                 "wrong_sign": sign not in (0, expected),
                 "weak": bool(it["p_holm"] >= REACTION_ALPHA),
+                "median_abs_rev": rev["median_abs"],
+                "p90_abs_rev": rev["p90_abs"],
+                "latest_rev": rev["latest"],
             }
         )
     surviving = [it for it in items if not it["weak"] and not it["wrong_sign"]]
@@ -267,6 +296,11 @@ def release_day_reaction(
         "features": feats,
         "cov_usd_t": [[round(float(c) * usd_t_now**2, 5) for c in row] for row in cov],
         "resid_sd_usd_t": round(float(np.sqrt(res.scale)) * usd_t_now, 3),
+        "latest_revisions": {
+            "month": profile["month"],
+            "previous": profile["previous"],
+            "may": profile["may"],
+        },
         "release_move": {
             "n": len(abs_r),
             "typical_usd_t": round(float(np.median(abs_r)) * usd_t_now, 1),

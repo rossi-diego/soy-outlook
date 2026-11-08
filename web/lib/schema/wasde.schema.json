@@ -77,6 +77,34 @@
       "title": "ForwardRow",
       "type": "object"
     },
+    "LatestRevisions": {
+      "additionalProperties": false,
+      "properties": {
+        "month": {
+          "type": "string"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "may": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "month",
+        "previous",
+        "may"
+      ],
+      "title": "LatestRevisions",
+      "type": "object"
+    },
     "Placebo": {
       "additionalProperties": false,
       "properties": {
@@ -172,6 +200,9 @@
         "resid_sd_usd_t": {
           "type": "number"
         },
+        "latest_revisions": {
+          "$ref": "#/$defs/LatestRevisions"
+        },
         "release_move": {
           "$ref": "#/$defs/ReleaseMove"
         },
@@ -192,6 +223,7 @@
         "features",
         "cov_usd_t",
         "resid_sd_usd_t",
+        "latest_revisions",
         "release_move",
         "robustness"
       ],
@@ -234,6 +266,38 @@
         },
         "weak": {
           "type": "boolean"
+        },
+        "median_abs_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Median absolute revision over the event-study reports, in `unit`."
+        },
+        "p90_abs_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest report's revision vs the previous report; null in a May report."
         }
       },
       "required": [
@@ -246,7 +310,10 @@
         "unit",
         "expected_sign",
         "wrong_sign",
-        "weak"
+        "weak",
+        "median_abs_rev",
+        "p90_abs_rev",
+        "latest_rev"
       ],
       "title": "ReactionItem",
       "type": "object"

@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "gen:types": "node scripts/gen-types.mjs",
     "check:types": "node scripts/gen-types.mjs --check",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "vitest run",
+    "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {
     "echarts": "6.1.0",
@@ -31,6 +33,7 @@
     "eslint-config-next": "16.4.5",
     "json-schema-to-typescript": "15.0.4",
     "tailwindcss": "4.3.5",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
   }
 }

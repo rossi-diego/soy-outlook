@@ -107,7 +107,11 @@ jobs:
         run: npm run check:types
       - run: npm run lint
       - run: npm run typecheck
+      - name: Unit tests (vitest)
+        run: npm run test:unit
       - run: npm run build
+      - name: Size budget (HTML and first-load JS)
+        run: npm run size
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
         env:

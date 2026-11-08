@@ -999,6 +999,34 @@
       "title": "Intervals",
       "type": "object"
     },
+    "LatestRevisions": {
+      "additionalProperties": false,
+      "properties": {
+        "month": {
+          "type": "string"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "may": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "month",
+        "previous",
+        "may"
+      ],
+      "title": "LatestRevisions",
+      "type": "object"
+    },
     "LatestWasde": {
       "additionalProperties": false,
       "properties": {
@@ -1116,6 +1144,10 @@
         "calibration_window": {
           "type": "integer"
         },
+        "calib_min": {
+          "description": "Realized errors needed before a backtest range is drawn.",
+          "type": "integer"
+        },
         "intervals": {
           "$ref": "#/$defs/Intervals"
         },
@@ -1161,6 +1193,7 @@
         "champion",
         "champion_alpha",
         "calibration_window",
+        "calib_min",
         "intervals",
         "inference_rule",
         "models",
@@ -2328,6 +2361,9 @@
         "resid_sd_usd_t": {
           "type": "number"
         },
+        "latest_revisions": {
+          "$ref": "#/$defs/LatestRevisions"
+        },
         "release_move": {
           "$ref": "#/$defs/ReleaseMove"
         },
@@ -2348,6 +2384,7 @@
         "features",
         "cov_usd_t",
         "resid_sd_usd_t",
+        "latest_revisions",
         "release_move",
         "robustness"
       ],
@@ -2390,6 +2427,38 @@
         },
         "weak": {
           "type": "boolean"
+        },
+        "median_abs_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Median absolute revision over the event-study reports, in `unit`."
+        },
+        "p90_abs_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest report's revision vs the previous report; null in a May report."
         }
       },
       "required": [
@@ -2402,7 +2471,10 @@
         "unit",
         "expected_sign",
         "wrong_sign",
-        "weak"
+        "weak",
+        "median_abs_rev",
+        "p90_abs_rev",
+        "latest_rev"
       ],
       "title": "ReactionItem",
       "type": "object"

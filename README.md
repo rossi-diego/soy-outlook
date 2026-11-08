@@ -74,9 +74,9 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 
 | Page | Question it answers |
 |---|---|
-| **Outlook** | Where could FOB / CBOT / R$ per sack be in 1, 3 and 6 months, within an 80% and a 95% range? Premium and FX are your inputs. |
-| **This WASDE** | What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator. |
-| **Track record** | Did any model beat "no change"? Shows errors by horizon, hit rates, past forecasts against actual prices, and the statistical tests. |
+| **Outlook** | Where could FOB / CBOT / R$ per sack be in 1, 3 and 6 months, within an 80% and a 95% range? Premium and FX are your inputs. The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
+| **This WASDE** | What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. |
+| **Track record** | Did any model beat "no change"? A one-line verdict with the smallest effect the tests could have detected, where the 80% range missed (below vs above), a dot plot of each model's error against no change, and past forecasts against actual prices (holdout shaded, misses and crop-roll windows marked). The DM/CW tests, Kupiec/Christoffersen calibration tests and the range-method comparison sit in a **For statisticians** fold. |
 | **Methodology** | Plain-language method, units, limitations and the audit of v1. |
 
 | This WASDE | Track record |
@@ -145,6 +145,8 @@ make test-fast   # the same without the end-to-end pipeline runs (marked slow), 
 make schema   # after changing publish/schema.py: re-export JSON Schema and regenerate web/lib/types.generated.ts
 make lint     # ruff, mypy, eslint, tsc
 make e2e      # Playwright on desktop and mobile: copy-vs-JSON contract, stale banner (pinned clock), archive, metadata, no horizontal scroll
+cd web && npm run test:unit   # vitest: unit conversion, FX parsing, labels, the slim track-record payload, what-if interval
+cd web && npm run size        # after a build: HTML <= 100 KB per page, first-load JS budget, ECharts never in first-load scripts
 make ci-offline  # the hermetic CI run: offline pipeline on synthetic fixtures, then the validation gate
 ```
 

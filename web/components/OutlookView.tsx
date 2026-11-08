@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
-import EChart, { axisCommon, baseOption, type Tokens } from "@/components/EChart";
+import Chart from "@/components/Chart";
+import StressReplay from "@/components/StressReplay";
+import { axisCommon, baseOption, type Tokens } from "@/lib/chart";
 import {
   type Assumptions,
   ciText,
@@ -16,6 +18,7 @@ import {
   MONTHS,
   monthLabel,
   num,
+  parseFx,
   premiumUsdT,
   rangeLabel,
   type Unit,
@@ -185,13 +188,59 @@ const issuedLabel = (month: string, days: number) =>
     ? `Issued on the ${month} WASDE release day`
     : `Issued from the ${month} WASDE, ${days} day${days === 1 ? "" : "s"} after its release`;
 
+type HistSpan = "18m" | "3y";
+const HIST_MONTHS: Record<HistSpan, number> = { "18m": 18, "3y": 36 };
+
+function MiniToggle<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: [T, string][];
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg border border-line bg-surface p-0.5 text-xs">
+      {options.map(([id, text]) => (
+        <button
+          key={id}
+          type="button"
+          role="radio"
+          aria-checked={value === id}
+          onClick={() => onChange(id)}
+          className={`rounded-md px-2.5 py-1 ${value === id ? "bg-surface-2 font-medium text-ink" : "text-ink-2 hover:text-ink"}`}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const signed0 = (v: number) => (v > 0 ? `+${num(v)}` : v < 0 ? `−${num(Math.abs(v))}` : "0");
 const signedUsd = (v: number) => (v > 0 ? `+${num(v)}` : v < 0 ? `−${num(Math.abs(v))}` : "0");
 
 export default function OutlookView({ meta, outlook }: Props) {
   const [unit, setUnit] = useState<Unit>("usd_t");
   const [premiumOverride, setPremiumOverride] = useState<number | null>(null);
-  const [fx, setFx] = useState<number>(Math.round(meta.fx_default.value * 100) / 100);
+  const fxDefault = Math.round(meta.fx_default.value * 100) / 100;
+  // FX is typed as text and parsed on blur, so a half-typed "5," never snaps back to the default.
+  const [fx, setFx] = useState<number>(fxDefault);
+  const [fxText, setFxText] = useState<string>(fxDefault.toFixed(2));
+  const [fxError, setFxError] = useState<string | null>(null);
+  const commitFx = () => {
+    const r = parseFx(fxText);
+    if (r.ok) {
+      setFx(r.value);
+      setFxText(r.value.toFixed(2));
+      setFxError(null);
+    } else setFxError(r.error);
+  };
+  const [span, setSpan] = useState<HistSpan>("18m");
+  const [chartView, setChartView] = useState<"cbot" | "fob">("cbot");
 
   const last = outlook.last.c_bu;
   const base = { fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg };
@@ -208,80 +257,113 @@ export default function OutlookView({ meta, outlook }: Props) {
   const originNote = `${issued}; ranges are calibrated at release-day closes.`;
   const staleTitle = `Premium source ends ${dateLabel(meta.premium_source.last)}, ${meta.premium_source.days_since_last} days before this forecast (stale after ${meta.premium_source.stale_after_days}).`;
 
-  // Chart: the CBOT leg only (the part that is forecast), in ¢/bu or USD/t.
-  const chartUnit: Unit = unit === "c_bu" ? "c_bu" : "usd_t";
+  // Chart (P21): CBOT ¢/bu by default. The FOB view is the same picture shifted by the one flat
+  // premium (and scaled by FX for R$/sack): a constant shift, never a historical FOB series.
+  const fobView = chartView === "fob" && unit !== "c_bu";
+  const chartUnit: Unit = fobView ? unit : "c_bu";
   const option = useCallback(
     (t: Tokens) => {
-      const zeroPrem: Assumptions = { premium: 0, fx: 1, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg };
-      const cv = (v: number) => Math.round(convert(v, chartUnit, zeroPrem) * 100) / 100;
-      const cutoff = new Date(outlook.as_of_close);
-      cutoff.setFullYear(cutoff.getFullYear() - 3);
-      const hist = outlook.history.filter((p) => new Date(p.date) >= cutoff).map((p) => [p.date, cv(p.c_bu)]);
-      hist.push([outlook.as_of_close, cv(last)]);
-      const xs = [outlook.as_of_close, ...outlook.horizons.map((h) => h.target_date)];
-      const lo95 = [cv(last), ...outlook.horizons.map((h) => cv(h.q025))];
-      const hi95 = [cv(last), ...outlook.horizons.map((h) => cv(h.q975))];
-      const lo80 = [cv(last), ...outlook.horizons.map((h) => cv(h.q100))];
-      const hi80 = [cv(last), ...outlook.horizons.map((h) => cv(h.q900))];
-      const central = [cv(last), ...outlook.horizons.map((h) => cv(h.central))];
-      // The 95% band is drawn lighter with dashed edges: its tails rest on one or two past errors.
-      const band = (name: string, lo: number[], hi: number[], opacity: number, edge: boolean) => {
-        const lineStyle = edge
-          ? { color: t.series1, width: 1, type: "dashed" as const, opacity: 0.55 }
-          : { opacity: 0 };
-        return [
-          {
-            name: `${name} low`,
-            type: "line",
-            data: xs.map((x, i) => [x, lo[i]]),
-            stack: name,
-            symbol: "none",
-            lineStyle,
-            tooltip: { show: false },
-            silent: true,
-          },
-          {
-            name,
-            type: "line",
-            data: xs.map((x, i) => [x, Math.round((hi[i] - lo[i]) * 100) / 100]),
-            stack: name,
-            symbol: "none",
-            lineStyle,
-            areaStyle: { color: t.series1, opacity },
-            tooltip: { show: false },
-            silent: true,
-          },
-        ];
-      };
+      const a: Assumptions = { premium: fobView ? premium : 0, fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg };
+      const d = decimalsFor(chartUnit);
+      const cv = (v: number) => Math.round(convert(v, chartUnit, a) * 100) / 100;
+      const cutoff = new Date(outlook.as_of_close + "T00:00:00Z");
+      cutoff.setUTCMonth(cutoff.getUTCMonth() - HIST_MONTHS[span]);
+      const hist: [string, number][] = outlook.history
+        .filter((p) => new Date(p.date + "T00:00:00Z") >= cutoff)
+        .map((p) => [p.date, cv(p.c_bu)]);
+      if (hist.length === 0 || hist[hist.length - 1][0] !== outlook.as_of_close) hist.push([outlook.as_of_close, cv(last)]);
+      const hs = outlook.horizons;
+      const whisker = (hh: Horizon, lo: number, hi: number, level: "80" | "95") => ({
+        name: `${level}% range ${hh.h}m`,
+        type: "line",
+        data: [
+          [hh.target_date, cv(lo)],
+          [hh.target_date, cv(hi)],
+        ],
+        symbol: "none",
+        silent: true,
+        tooltip: { show: false },
+        z: level === "80" ? 3 : 2,
+        lineStyle:
+          level === "80"
+            ? { color: hh.coverage.warn80 ? t.warn : t.series1, width: 7, opacity: 0.38, cap: "round" }
+            : { color: hh.coverage.warn95 ? t.warn : t.series1, width: 1.5, opacity: 0.75, type: "dashed" },
+      });
+      // Today and the next WASDE are days apart: labels sit above the plot, pushed apart horizontally.
+      const lines: { xAxis: string; name: string; label: { align: "left" | "right"; padding: number[] } }[] = [
+        { xAxis: outlook.as_of_close, name: "today", label: { align: "right", padding: [0, 4, 0, 0] } },
+      ];
+      if (meta.next_wasde && meta.next_wasde > outlook.as_of_close)
+        lines.push({
+          xAxis: meta.next_wasde,
+          name: `next WASDE ${dateLabel(meta.next_wasde)}`,
+          label: { align: "left", padding: [0, 0, 0, 4] },
+        });
+      const fmt = (v: number) => num(v, d);
       return {
         ...baseOption(t),
         legend: { show: false },
-        tooltip: { ...baseOption(t).tooltip, trigger: "axis", valueFormatter: (v: number) => num(v, 0) },
+        grid: { ...baseOption(t).grid, right: 64, top: 48 },
+        tooltip: {
+          ...baseOption(t).tooltip,
+          trigger: "axis",
+          formatter: (ps: { seriesName: string; dataIndex: number; value: [string, number] }[]) => {
+            const f = ps.find((p) => p.seriesName === "Forecast" && p.dataIndex > 0);
+            if (f) {
+              const hh = hs[f.dataIndex - 1];
+              return [
+                `<b>In ${horizonLabel(hh.h)}</b> · ${dateLabel(hh.target_date)}`,
+                `Central (no change): ${fmt(cv(hh.central))}`,
+                `80% range: ${fmt(cv(hh.q100))} – ${fmt(cv(hh.q900))}`,
+                `95% range: ${fmt(cv(hh.q025))} – ${fmt(cv(hh.q975))}`,
+                `<span style="color:${t.muted}">80% ${heldText(hh.coverage, "80")}</span>`,
+              ].join("<br/>");
+            }
+            const c = ps.find((p) => p.seriesName === "Close");
+            return c ? `${dateLabel(c.value[0])}<br/>Close: <b>${fmt(c.value[1])}</b>` : "";
+          },
+        },
         xAxis: { type: "time", ...axisCommon(t), splitLine: { show: false } },
         yAxis: {
           type: "value",
           scale: true,
           ...axisCommon(t),
-          name: chartUnit === "c_bu" ? "¢/bu" : "USD/t",
+          name: UNIT_LABEL[chartUnit],
           nameTextStyle: { color: t.muted },
         },
         series: [
-          ...band("95% range", lo95, hi95, 0.07, true),
-          ...band("80% range", lo80, hi80, 0.22, false),
-          { name: "CBOT close", type: "line", data: hist, symbol: "none", lineStyle: { color: t.ink, width: 1.5 } },
+          ...hs.map((hh) => whisker(hh, hh.q025, hh.q975, "95")),
+          ...hs.map((hh) => whisker(hh, hh.q100, hh.q900, "80")),
           {
-            name: "Central (no change)",
+            name: "Close",
             type: "line",
-            data: xs.map((x, i) => [x, central[i]]),
+            data: hist,
+            symbol: "none",
+            lineStyle: { color: t.ink, width: 1.5 },
+            markLine: {
+              silent: true,
+              symbol: "none",
+              animation: false,
+              lineStyle: { color: t.axis, type: "solid", width: 1 },
+              label: { color: t.muted, fontSize: 11, position: "end", formatter: "{b}" },
+              data: lines,
+            },
+          },
+          {
+            name: "Forecast",
+            type: "line",
+            data: [[outlook.as_of_close, cv(last)], ...hs.map((hh) => [hh.target_date, cv(hh.central)])],
             symbol: "circle",
-            symbolSize: 6,
-            itemStyle: { color: t.series1 },
+            symbolSize: (_: unknown, p: { dataIndex: number }) => (p.dataIndex === 0 ? 0 : 8),
+            itemStyle: { color: t.series1, borderColor: t.surface, borderWidth: 1.5 },
             lineStyle: { color: t.series1, type: "dashed", width: 1.5 },
+            endLabel: { show: true, formatter: "no change", color: t.series1, fontSize: 11, distance: 6 },
+            z: 4,
           },
         ],
       };
     },
-    [chartUnit, outlook, last, meta.consts.bu_per_t, meta.consts.sack_kg],
+    [chartUnit, fobView, premium, fx, span, outlook, last, meta.consts.bu_per_t, meta.consts.sack_kg, meta.next_wasde],
   );
 
   const range = {
@@ -401,15 +483,28 @@ export default function OutlookView({ meta, outlook }: Props) {
             </label>
             <input
               id="fx"
-              type="number"
-              step={0.01}
-              min={3}
-              max={9}
-              value={fx}
-              onChange={(e) => setFx(Number(e.target.value) || meta.fx_default.value)}
-              className="tabular w-full rounded-md border border-line bg-surface px-2 py-1.5"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={fxText}
+              onChange={(e) => setFxText(e.target.value)}
+              onBlur={commitFx}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitFx();
+              }}
+              aria-invalid={fxError !== null}
+              aria-describedby="fx-help"
+              className={`tabular w-full rounded-md border bg-surface px-2 py-1.5 ${fxError ? "border-warn-line" : "border-line"}`}
             />
-            <p className="text-xs text-muted">PTAX {dateLabel(meta.fx_default.date)}: {num(meta.fx_default.value, 4)}</p>
+            {fxError ? (
+              <p id="fx-help" className="text-xs font-medium text-warn" role="alert" data-testid="fx-error">
+                {fxError} Using {num(fx, 2)}.
+              </p>
+            ) : (
+              <p id="fx-help" className="text-xs text-muted">
+                PTAX {dateLabel(meta.fx_default.date)}: {num(meta.fx_default.value, 4)}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -420,21 +515,62 @@ export default function OutlookView({ meta, outlook }: Props) {
         ))}
       </section>
 
-      <section className="card space-y-3 p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold">CBOT soybeans: three years of closes and the tested ranges ahead</h2>
-          <p className="text-xs text-muted">{chartUnit === "c_bu" ? UNIT_LONG.c_bu : "CBOT front month in USD/t, before any premium"}</p>
+      <section className="card space-y-3 p-5" data-testid="hero-chart">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">
+            {fobView ? "FOB view" : "CBOT soybeans"}: recent closes and the tested ranges ahead
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {unit !== "c_bu" && (
+              <MiniToggle
+                label="Chart unit"
+                value={chartView}
+                onChange={setChartView}
+                options={[
+                  ["cbot", "CBOT"],
+                  ["fob", "FOB shift"],
+                ]}
+              />
+            )}
+            <MiniToggle
+              label="History shown"
+              value={span}
+              onChange={setSpan}
+              options={[
+                ["18m", "18 months"],
+                ["3y", "3 years"],
+              ]}
+            />
+          </div>
         </div>
-        <EChart option={option} height={360} ariaLabel="CBOT soybean price history with 80% and 95% forecast ranges for 1, 3 and 6 months" />
-        <p className="text-xs leading-relaxed text-muted">
-          Darker band: nominal 80% range; lighter band with dashed edges: nominal 95% range, whose tails rest on one or two
-          past errors each, so read it as rough. The hit rate each range actually achieved is on the cards above. Ranges
-          come from the errors of the last {meta.calibration_window} out-of-sample forecasts and cover CBOT moves only: the
-          premium and the exchange rate are your inputs above. FOB is (CBOT + premium) × {num(meta.consts.bu_per_t, 4)}{" "}
-          bu/t ÷ 100. Reais per sack are port FOB converted at your exchange rate, not a farm-gate price (no freight or
-          port costs).
+        <Chart
+          option={option}
+          height={360}
+          ariaLabel="CBOT soybean closes with the 80% and 95% forecast ranges at 1, 3 and 6 months as whiskers"
+        />
+        <p className="text-xs leading-relaxed text-muted" data-testid="chart-caption">
+          {fobView ? (
+            <>
+              <strong className="font-medium text-ink-2">FOB view, constant shift:</strong> every point, past and future, is
+              CBOT + the one flat premium you set ({signed0(premium)}¢/bu)
+              {unit === "brl_sack" ? `, converted at ${num(fx, 2)} BRL/USD` : ""}. It is not a historical FOB series, and the
+              ranges still cover CBOT moves only.{" "}
+            </>
+          ) : (
+            <>
+              <strong className="font-medium text-ink-2">{UNIT_LONG.c_bu}</strong>, before any premium or exchange rate.{" "}
+            </>
+          )}
+          Whiskers at 1, 3 and 6 months: thick = nominal 80% range, thin dashed = nominal 95% range, whose tails rest on one
+          or two past errors each, so read it as rough; amber marks a range that held more than 5 points below its nominal
+          level. The dashed &ldquo;no change&rdquo; line is the central forecast. Hover a whisker for its limits; the hit
+          rate each range achieved is on the cards above. Ranges come from the errors of the last{" "}
+          {meta.calibration_window} out-of-sample forecasts. FOB is (CBOT + premium) × {num(meta.consts.bu_per_t, 4)} bu/t ÷
+          100; reais per sack are port FOB at your exchange rate, not a farm-gate price.
         </p>
       </section>
+
+      <StressReplay stress={outlook.stress} buPerT={meta.consts.bu_per_t} />
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="card space-y-2 p-5 text-sm leading-relaxed text-ink-2">
@@ -464,7 +600,7 @@ export default function OutlookView({ meta, outlook }: Props) {
           <p>
             Revisions move the price on release day, and after that they are priced in. The{" "}
             <Link className="underline hover:text-ink" href="/wasde/">
-              This WASDE page
+              WASDE page
             </Link>{" "}
             shows the latest revisions and the historical average reaction to each one, with a calculator for your
             own what-ifs. Next report: {meta.next_wasde ? dateLabel(meta.next_wasde, "long") : "see USDA calendar"}.

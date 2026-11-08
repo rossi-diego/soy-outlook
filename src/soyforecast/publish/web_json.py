@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from soyforecast import __version__
 from soyforecast.config import (
     BOOTSTRAP_DRAWS,
+    CALIB_MIN,
     CALIB_WINDOW,
     CHAMPION_ALPHA,
     COVERAGE_WARN_PP,
@@ -160,6 +161,7 @@ def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
         "champion": {str(h): m for h, m in a.champion.items()},
         "champion_alpha": CHAMPION_ALPHA,
         "calibration_window": CALIB_WINDOW,
+        "calib_min": CALIB_MIN,
         "intervals": {
             "method": RANGE_METHOD_LABELS[a.range_method],
             "range_method": a.range_method,

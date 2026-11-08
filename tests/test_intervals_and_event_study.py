@@ -157,3 +157,27 @@ def test_placebo_window_is_strictly_before_the_release(synthetic_wasde, syntheti
     i = synthetic_prices.index.get_loc(d)
     expected = np.log(synthetic_prices.iloc[i - 5] / synthetic_prices.iloc[i - 6])
     assert placebo["r"].iloc[10] == pytest.approx(expected)
+
+
+def test_revision_profile_is_descriptive_and_uses_the_latest_report(
+    synthetic_wasde, synthetic_prices
+):
+    from soyforecast.models.live import revision_profile
+
+    v = build_vintages(synthetic_wasde)
+    data = release_day_events(v, synthetic_prices)
+    data = data[data["may"] == 0]
+    prof = revision_profile(v, data)
+    last = v.sort_values("release_date").iloc[-1]
+    assert prof["month"] == str(v.sort_values("release_date").index[-1])
+    for f in REACTION_FEATURES:
+        row = prof["by_feature"][f]
+        assert row["median_abs"] == pytest.approx(float(np.median(np.abs(data[f]))), abs=0.01)
+        assert row["p90_abs"] >= row["median_abs"] >= 0
+        if prof["may"]:
+            assert row["latest"] is None
+        else:
+            assert row["latest"] == pytest.approx(float(last[f]), abs=0.01)
+    out = release_day_reaction(v, synthetic_prices, p_now_c_bu=1000)
+    assert out["latest_revisions"]["month"] == prof["month"]
+    assert all("median_abs_rev" in it and "latest_rev" in it for it in out["items"])
