@@ -4,11 +4,39 @@ import { useState } from "react";
 
 import ChartData from "@/components/ChartData";
 import RadioGroup from "@/components/RadioGroup";
-import { adverse, type Currency, moneyAmount, parseTonnes, pnlVsToday, profile, type Side } from "@/lib/decision";
+import {
+  adverse,
+  adverseTail,
+  type Currency,
+  gridAt,
+  moneyAmount,
+  parsePrice,
+  parseVolume,
+  pnlVsToday,
+  profile,
+  type Side,
+  type TargetPosition,
+  targetPosition,
+  toTonnes,
+  type VolumeUnit,
+} from "@/lib/decision";
+import { type Assumptions, convert, type Unit } from "@/lib/format";
 import type { Horizon } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
 
-type Props = { horizons: Horizon[]; p0: number; buPerT: number; fx: number };
+type Props = {
+  horizons: Horizon[];
+  p0: number;
+  buPerT: number;
+  sackKg: number;
+  fx: number;
+  /** The page's price unit and assumptions: the target is typed and placed in this unit. */
+  unit: Unit;
+  a: Assumptions;
+  /** Pre-registered display rules (meta.intervals, config.py). */
+  readoutLevels: number[];
+  tailObsMin: number;
+};
 
 function Tag({ children, warn = false, title }: { children: React.ReactNode; warn?: boolean; title?: string }) {
   return (
@@ -64,22 +92,77 @@ function Strip({
   );
 }
 
-export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
-  const { t, f, loc } = useI18n();
+/** Inline key for the dot strips (unit B): the marks explain themselves next to the strips. */
+function StripLegend({ vs }: { vs: string }) {
+  const { t } = useI18n();
+  const dot = (fill: string, ring = false) => (
+    <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" aria-hidden="true">
+      <circle cx={6} cy={6} r={ring ? 4.5 : 3} fill={fill} stroke={ring ? "var(--ink)" : "none"} strokeWidth={ring ? 1.25 : 0} />
+    </svg>
+  );
+  return (
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-2" data-testid="strip-legend">
+      <li className="inline-flex items-center gap-1.5">
+        {dot("var(--down)")}
+        {t("loss", "perda")}
+      </li>
+      <li className="inline-flex items-center gap-1.5">
+        {dot("var(--up)")}
+        {t("gain", "ganho")}
+      </li>
+      <li className="inline-flex items-center gap-1.5">
+        {dot("var(--down)", true)}
+        {t("1-in-10 adverse level", "nível desfavorável de 1 em 10")}
+      </li>
+      <li className="inline-flex items-center gap-1.5">
+        <svg viewBox="0 0 6 12" className="h-3 w-1.5 shrink-0" aria-hidden="true">
+          <line x1={3} x2={3} y1={0} y2={12} stroke="var(--ink-2)" strokeWidth={1.25} />
+        </svg>
+        {t(`${vs} today`, `${vs} hoje`)}
+      </li>
+      <li className="text-muted">
+        {t(
+          "one dot per 5% step of the range; one scale shared by all three horizons",
+          "um ponto por passo de 5% da faixa; uma escala comum aos três horizontes",
+        )}
+      </li>
+    </ul>
+  );
+}
+
+export default function DecisionPanel({ horizons, p0, buPerT, sackKg, fx, unit, a, readoutLevels, tailObsMin }: Props) {
+  const { t, f, loc, pt } = useI18n();
   const [side, setSide] = useState<Side>("producer");
-  const [currency, setCurrency] = useState<Currency>("usd");
+  // Unit B: under pt-BR the defaults are reais and 60 kg sacks; an explicit choice wins.
+  const [currencyChoice, setCurrency] = useState<Currency | null>(null);
+  const currency: Currency = currencyChoice ?? (pt ? "brl" : "usd");
+  const [volUnitChoice, setVolUnit] = useState<VolumeUnit | null>(null);
+  const volUnit: VolumeUnit = volUnitChoice ?? (pt ? "sc" : "t");
   const [hedgePct, setHedgePct] = useState(0);
-  const [tonnes, setTonnes] = useState(1000);
-  const [tonnesText, setTonnesText] = useState<string | null>(null);
-  const [tonnesError, setTonnesError] = useState<string | null>(null);
-  const tonnesShown = tonnesText ?? f.num(tonnes);
-  const commitTonnes = () => {
-    const r = parseTonnes(tonnesShown, loc);
+  // The physical volume is kept in tonnes, so switching t <-> sacks never changes the exposure.
+  const [tonnesChoice, setTonnes] = useState<number | null>(null);
+  const tonnes = tonnesChoice ?? (pt ? toTonnes(20_000, "sc", sackKg) : 1000);
+  const fromTonnes = (v: number) => (volUnit === "t" ? v : (v * 1000) / sackKg);
+  const [volText, setVolText] = useState<string | null>(null);
+  const [volError, setVolError] = useState<string | null>(null);
+  const volShown = volText ?? f.num(Math.round(fromTonnes(tonnes)));
+  const commitVolume = () => {
+    const r = parseVolume(volShown, loc, volUnit);
     if (r.ok) {
-      setTonnes(r.value);
-      setTonnesText(null);
-      setTonnesError(null);
-    } else setTonnesError(r.error);
+      setTonnes(toTonnes(r.value, volUnit, sackKg));
+      setVolText(null);
+      setVolError(null);
+    } else setVolError(r.error);
+  };
+  const [targetText, setTargetText] = useState("");
+  const [target, setTarget] = useState<number | null>(null);
+  const [targetError, setTargetError] = useState<string | null>(null);
+  const commitTarget = () => {
+    const r = parsePrice(targetText, loc);
+    if (r.ok) {
+      setTarget(r.value);
+      setTargetError(null);
+    } else setTargetError(r.error);
   };
 
   const x = { side, tonnes, hedge: hedgePct / 100, currency, fx, buPerT };
@@ -92,8 +175,19 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
   const usdT = (c: number) => (c / 100) * buPerT;
   const money = (v: number) => moneyAmount(v, currency, loc);
   const rolls = horizons.filter((h) => h.contract.crosses_roll).map((h) => f.horizon(h.h));
-  const open = tonnes * (1 - hedgePct / 100);
+  const open = fromTonnes(tonnes * (1 - hedgePct / 100));
+  const volWord = volUnit === "t" ? "t" : t("sacks", "sc");
   const everyRolls = rolls.length === horizons.length;
+  const p = (l: number) => `p${Math.round(l * 100)}`;
+  const positionText = (pos: TargetPosition) =>
+    pos.kind === "below"
+      ? t(`Your target sits below the ${p(pos.level)} of the tested range`, `Seu alvo fica abaixo do ${p(pos.level)} da faixa testada`)
+      : pos.kind === "above"
+        ? t(`Your target sits above the ${p(pos.level)} of the tested range`, `Seu alvo fica acima do ${p(pos.level)} da faixa testada`)
+        : t(
+            `Your target sits between the ${p(pos.lo)} and ${p(pos.hi)} of the tested range`,
+            `Seu alvo fica entre o ${p(pos.lo)} e o ${p(pos.hi)} da faixa testada`,
+          );
 
   return (
     <section className="card space-y-5 p-5" aria-labelledby="decision-title" data-testid="decision-panel">
@@ -109,12 +203,12 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
         </div>
         <p className="max-w-3xl text-sm leading-relaxed text-ink-2">
           {t(
-            `What the tested ranges above would mean for your volume if CBOT ended at their adverse end: the 1-in-10 level (${
-              producer ? "10th percentile, prices lower" : "90th percentile, prices higher"
-            }) and a rough 1-in-40 level. Hedged tonnes are treated as locked at today's close of ${f.num(p0, 0)}¢/bu.`,
-            `O que as faixas testadas acima significariam para o seu volume se a CBOT terminasse na ponta desfavorável: o nível de 1 em 10 (${
-              producer ? "percentil 10, preços mais baixos" : "percentil 90, preços mais altos"
-            }) e um nível aproximado de 1 em 40. As toneladas com hedge são tratadas como travadas no fechamento de hoje, ${f.num(p0, 0)}¢/bu.`,
+            `What the tested ranges would mean for your volume if CBOT ended at their adverse end (${
+              producer ? "prices lower" : "prices higher"
+            }). Hedged volume is treated as locked at today's close of ${f.num(p0, 0)}¢/bu.`,
+            `O que as faixas testadas significariam para o seu volume se a CBOT terminasse na ponta desfavorável (${
+              producer ? "preços mais baixos" : "preços mais altos"
+            }). O volume com hedge é tratado como travado no fechamento de hoje, ${f.num(p0, 0)}¢/bu.`,
           )}
         </p>
       </div>
@@ -132,34 +226,54 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
             ]}
           />
         </div>
-        <div className="w-40 space-y-1">
+        <div className="space-y-1">
           <label htmlFor="tonnes" className="text-xs font-medium uppercase tracking-wide text-muted">
-            {t("Tonnes", "Toneladas")}
+            {t("Volume", "Volume")}
           </label>
-          <input
-            id="tonnes"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            value={tonnesShown}
-            onChange={(e) => setTonnesText(e.target.value)}
-            onBlur={commitTonnes}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitTonnes();
-            }}
-            aria-invalid={tonnesError !== null}
-            aria-describedby="tonnes-help"
-            className={`tabular w-full rounded-md border bg-surface px-2 py-1.5 ${tonnesError ? "border-warn-line" : "border-line"}`}
-          />
-          <p id="tonnes-help" className={`text-xs ${tonnesError ? "font-medium text-warn" : "text-muted"}`} role={tonnesError ? "alert" : undefined}>
-            {tonnesError ? `${tonnesError} ${t("Using", "Usando")} ${f.num(tonnes)}.` : t("Physical volume exposed", "Volume físico exposto")}
+          <div className="flex items-center gap-2">
+            <input
+              id="tonnes"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={volShown}
+              onChange={(e) => setVolText(e.target.value)}
+              onBlur={commitVolume}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitVolume();
+              }}
+              aria-invalid={volError !== null}
+              aria-describedby="tonnes-help"
+              className={`tabular w-32 rounded-md border bg-surface px-2 py-1.5 ${volError ? "border-warn-line" : "border-line"}`}
+            />
+            <RadioGroup
+              size="sm"
+              legend={t("Volume unit", "Unidade de volume")}
+              value={volUnit}
+              onChange={(u) => {
+                setVolUnit(u);
+                setVolText(null);
+                setVolError(null);
+              }}
+              options={[
+                { id: "t", label: t("tonnes", "toneladas") },
+                { id: "sc", label: t("sacks", "sacas") },
+              ]}
+            />
+          </div>
+          <p id="tonnes-help" className={`text-xs ${volError ? "font-medium text-warn" : "text-muted"}`} role={volError ? "alert" : undefined}>
+            {volError
+              ? `${volError} ${t("Using", "Usando")} ${f.num(Math.round(fromTonnes(tonnes)))}.`
+              : volUnit === "sc"
+                ? t(`Physical volume exposed, 60 kg sacks (${f.num(tonnes)} t)`, `Volume físico exposto, sacas de 60 kg (${f.num(tonnes)} t)`)
+                : t("Physical volume exposed", "Volume físico exposto")}
           </p>
         </div>
         <div className="min-w-56 flex-1 space-y-1">
           <label htmlFor="hedge" className="flex justify-between text-xs font-medium uppercase tracking-wide text-muted">
             <span>{t("Hedge ratio", "Percentual com hedge")}</span>
             <span className="tabular normal-case text-ink" data-testid="hedge-value">
-              {hedgePct}% {t("hedged", "com hedge")} · {f.num(open)} t {t("open", "em aberto")}
+              {hedgePct}% {t("hedged", "com hedge")} · {f.num(Math.round(open))} {volWord} {t("open", "em aberto")}
             </span>
           </label>
           <input
@@ -169,7 +283,10 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
             max={100}
             step={5}
             value={hedgePct}
-            aria-valuetext={t(`${hedgePct}% hedged, ${f.num(open)} tonnes open`, `${hedgePct}% com hedge, ${f.num(open)} toneladas em aberto`)}
+            aria-valuetext={t(
+              `${hedgePct}% hedged, ${f.num(Math.round(open))} ${volUnit === "t" ? "tonnes" : "sacks"} open`,
+              `${hedgePct}% com hedge, ${f.num(Math.round(open))} ${volUnit === "t" ? "toneladas" : "sacas"} em aberto`,
+            )}
             onChange={(e) => setHedgePct(Number(e.target.value))}
             className="w-full accent-[var(--accent)]"
           />
@@ -192,13 +309,46 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
             {currency === "brl" ? t(`at ${f.num(fx, 2)} BRL/USD, held fixed`, `a ${f.num(fx, 2)} BRL/USD, fixo`) : " "}
           </p>
         </div>
+        <div className="w-full max-w-xs space-y-1 sm:w-56">
+          <label htmlFor="target" className="text-xs font-medium uppercase tracking-wide text-muted">
+            {t(`Target price, ${f.unit(unit)}`, `Preço-alvo, ${f.unit(unit)}`)}
+          </label>
+          <input
+            id="target"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            value={targetText}
+            onChange={(e) => setTargetText(e.target.value)}
+            onBlur={commitTarget}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitTarget();
+            }}
+            aria-invalid={targetError !== null}
+            aria-describedby="target-help"
+            className={`tabular w-full rounded-md border bg-surface px-2 py-1.5 ${targetError ? "border-warn-line" : "border-line"}`}
+          />
+          <p id="target-help" className={`text-xs ${targetError ? "font-medium text-warn" : "text-muted"}`} role={targetError ? "alert" : undefined}>
+            {targetError ?? t("Shows where it sits in each range; not a chance of reaching it.", "Mostra onde ele fica em cada faixa; não é a chance de atingi-lo.")}
+          </p>
+        </div>
       </div>
+
+      <StripLegend vs={vs} />
 
       <div className="grid gap-4 md:grid-cols-3">
         {rows.map(({ h, adv, prof }) => {
-          const cov = h.coverage;
+          const tail = adverseTail(h.coverage, side);
           const tenth = pnlVsToday(adv.oneInTen, p0, x);
           const fortieth = pnlVsToday(adv.oneInForty, p0, x);
+          const weak = h.tail_obs_95 < tailObsMin;
+          const pos =
+            target === null
+              ? null
+              : targetPosition(target, readoutLevels, (l) => {
+                  const c = gridAt(h.grid, l);
+                  return c === null ? null : convert(c, unit, a);
+                });
           return (
             <article key={h.h} className="flex flex-col gap-2 rounded-lg border border-line p-4" data-testid={`decision-${h.h}`}>
               <header className="flex items-baseline justify-between gap-2">
@@ -215,36 +365,43 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
                 <span className="tabular">{f.num(adv.oneInTen, 0)}¢/bu</span> ({f.signed(usdT(adv.oneInTen) - usdT(p0), 1)} USD/t{" "}
                 {t("vs today", "contra hoje")})
               </p>
-              {cov.warn80 && (
+              {tail.warn && tail.miss !== null && (
                 <p className="text-xs font-medium text-warn" data-testid="decision-warn">
                   <Tag
                     warn
                     title={t(
-                      "Validation hit rate more than 5 percentage points below the nominal 80%",
-                      "Taxa de acerto na validação mais de 5 pontos percentuais abaixo dos 80% nominais",
+                      "Validation miss rate on this side more than 5 percentage points above the 10% one-tail nominal",
+                      "Taxa de erro deste lado na validação mais de 5 pontos percentuais acima dos 10% nominais por cauda",
                     )}
                   >
-                    {t("below 80%", "abaixo de 80%")}
+                    {t("tail above 10%", "cauda acima de 10%")}
                   </Tag>{" "}
-                  {t(
-                    `80% range ${f.held(cov, "80")}: this downside is likely understated.`,
-                    `Faixa de 80%: ${f.held(cov, "80")}; esta perda provavelmente está subestimada.`,
-                  )}
+                  {producer
+                    ? t(
+                        `Prices fell below this range in ${f.pct(tail.miss)} of tested reports (10% nominal): this downside is likely understated.`,
+                        `Os preços caíram abaixo desta faixa em ${f.pct(tail.miss)} dos relatórios testados (10% nominal): esta perda provavelmente está subestimada.`,
+                      )
+                    : t(
+                        `Prices rose above this range in ${f.pct(tail.miss)} of tested reports (10% nominal): this downside is likely understated.`,
+                        `Os preços subiram acima desta faixa em ${f.pct(tail.miss)} dos relatórios testados (10% nominal): esta perda provavelmente está subestimada.`,
+                      )}
                 </p>
               )}
-              <p className="text-sm text-ink-2" data-testid="downside40">
-                {t("Rough 1 in 40:", "Aprox. 1 em 40:")} <span className="tabular font-medium text-ink">{money(fortieth)}</span>
+              <p className={weak ? "text-xs text-muted" : "text-sm text-ink-2"} data-testid="downside40" data-weak={weak ? "true" : "false"}>
+                {t("Rough 1 in 40:", "Aprox. 1 em 40:")}{" "}
+                <span className={`tabular ${weak ? "" : "font-medium text-ink"}`}>{money(fortieth)}</span>
                 <span className="block text-xs text-muted">
                   {t(
-                    `at ${f.num(adv.oneInForty, 0)}¢/bu; each tail rests on about ${f.num(h.tail_obs_95, 1)} past errors${
-                      cov.warn95 ? `, and the 95% range ${f.held(cov, "95")}` : ""
-                    }`,
-                    `a ${f.num(adv.oneInForty, 0)}¢/bu; cada cauda se apoia em cerca de ${f.num(h.tail_obs_95, 1)} erros passados${
-                      cov.warn95 ? `, e a faixa de 95% ${f.held(cov, "95")}` : ""
-                    }`,
+                    `at ${f.num(adv.oneInForty, 0)}¢/bu; each tail rests on about ${f.num(h.tail_obs_95, 1)} past errors${weak ? ", so read it as a rough guide" : ""}`,
+                    `a ${f.num(adv.oneInForty, 0)}¢/bu; cada cauda se apoia em cerca de ${f.num(h.tail_obs_95, 1)} erros passados${weak ? ", então use só como referência" : ""}`,
                   )}
                 </span>
               </p>
+              {pos && (
+                <p className="text-xs text-ink-2" data-testid="target-pos">
+                  {positionText(pos)}.
+                </p>
+              )}
               <div className="mt-auto pt-1">
                 <Strip
                   pts={prof}
@@ -278,12 +435,11 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
       <p className="text-xs leading-relaxed text-muted" data-testid="decision-footnote">
         {t(
           <>
-            Each dot is one 5% step of the range (5th to 95th percentile), on one scale for all three horizons; the ringed dot
-            is the 1-in-10 level, the vertical line is {vs} today, and the end labels are the shared scale&apos;s limits.
-            Illustrative and range-based, not VaR: CBOT only, excl. premium, with the exchange rate held fixed, so the basis
-            is unhedged and the figures ignore freight, margin calls and contract rolls. No expected shortfall is shown,
-            because each 95% tail rests on one or two of {horizons[0]?.calibration_n} overlapping past errors; and no chance
-            of reaching a target price, because the ranges are not a price call.
+            Illustrative and range-based, not VaR: CBOT only, excl. premium, with the exchange rate held fixed, so the basis is unhedged and
+            the figures ignore freight, margin calls and contract rolls. The tail flag compares the misses on your side of the 80% range with
+            the 10% each tail should have. No expected shortfall is shown, because each 95% tail rests on one or two of{" "}
+            {horizons[0]?.calibration_n} overlapping past errors. The target readout is where your price sits within the tested range, not a
+            chance of reaching it, because the ranges are not a price call.
             {rolls.length > 0
               ? ` Prices are the continuous front month and ${
                   everyRolls ? "every horizon crosses" : `the ${rolls.join(" and ")} ${rolls.length > 1 ? "horizons cross" : "horizon crosses"}`
@@ -291,12 +447,11 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
               : ""}
           </>,
           <>
-            Cada ponto é um passo de 5% da faixa (do percentil 5 ao 95), numa escala única para os três horizontes; o ponto
-            com anel é o nível de 1 em 10, a linha vertical é {vs} hoje e os rótulos das pontas são os limites da escala
-            comum. Ilustrativo e baseado em faixas, não é VaR: só CBOT, sem prêmio, com câmbio fixo, então a base fica sem
-            hedge e os números ignoram frete, chamadas de margem e rolagens de contrato. Não mostramos expected shortfall,
-            porque cada cauda de 95% se apoia em um ou dois dos {horizons[0]?.calibration_n} erros passados sobrepostos; nem
-            a chance de atingir um preço-alvo, porque as faixas não são uma aposta de preço.
+            Ilustrativo e baseado em faixas, não é VaR: só CBOT, sem prêmio, com câmbio fixo, então a base fica sem hedge e os números ignoram
+            frete, chamadas de margem e rolagens de contrato. O alerta de cauda compara os erros do seu lado da faixa de 80% com os 10% que
+            cada cauda deveria ter. Não mostramos expected shortfall, porque cada cauda de 95% se apoia em um ou dois dos{" "}
+            {horizons[0]?.calibration_n} erros passados sobrepostos. A leitura do alvo mostra onde o seu preço fica dentro da faixa testada,
+            não a chance de atingi-lo, porque as faixas não são uma aposta de preço.
             {rolls.length > 0
               ? ` Os preços são do primeiro vencimento contínuo e ${
                   everyRolls ? "todos os horizontes cruzam" : `${rolls.length > 1 ? "os horizontes de" : "o horizonte de"} ${rolls.join(" e ")} ${rolls.length > 1 ? "cruzam" : "cruza"}`

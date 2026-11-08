@@ -9,7 +9,7 @@ const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
 
 type Metric = { subset: string; split: string; model: string; h: number; mase: number; mde_mae: number; miss_lo80: number; miss_hi80: number };
 
-test("hero chart: CBOT by default, 18-month/3-year toggle, labelled FOB shift (P21)", async ({ page }) => {
+test("hero chart: follows the unit, CBOT quote toggle, 18-month/3-year toggle, labelled FOB shift (P21, unit B)", async ({ page }) => {
   await page.goto("/");
   const chart = page.getByTestId("hero-chart");
   await expect(chart.locator('[data-chart="ready"] svg')).toBeVisible({ timeout: 30_000 });
@@ -17,6 +17,8 @@ test("hero chart: CBOT by default, 18-month/3-year toggle, labelled FOB shift (P
   await chart.getByRole("radio", { name: "3 years" }).click();
   await expect(chart.getByRole("radio", { name: "3 years" })).toBeChecked();
   const caption = page.getByTestId("chart-caption");
+  await expect(caption).toContainText("CBOT soybeans in US dollars per tonne, CBOT only, excl. premium");
+  await chart.getByRole("radio", { name: "CBOT quote" }).click();
   await expect(caption).toContainText("CBOT soybeans, US cents per bushel");
   await expect(chart.locator("svg").getByText("no change")).toBeVisible();
   await expect(chart.locator("svg").getByText("today")).toBeVisible();
@@ -24,12 +26,13 @@ test("hero chart: CBOT by default, 18-month/3-year toggle, labelled FOB shift (P
   if ([1, 3, 6].every((h) => meta.champion[String(h)] === "rw")) {
     await expect(page.getByTestId("validation-start")).toHaveText(meta.splits.validation[0].slice(0, 4));
   }
-  // No premium entered: no FOB view at all. Typing one adds the labelled FOB shift.
-  await expect(chart.getByRole("radio", { name: "FOB shift" })).toHaveCount(0);
+  // No premium entered: no FOB view at all. Typing one makes "Your unit" the labelled FOB shift.
+  await expect(caption).not.toContainText(/constant shift/i);
   await page.getByLabel(/Paranaguá premium/).fill("80");
   await page.getByLabel(/Paranaguá premium/).press("Enter");
-  await chart.getByRole("radio", { name: "FOB shift" }).click();
-  await expect(caption).toContainText("constant shift");
+  await chart.getByRole("radio", { name: "Your unit" }).click();
+  await expect(chart.getByRole("heading", { level: 2 })).toContainText("FOB USD/t");
+  await expect(caption).toContainText("Constant shift");
   await expect(caption).toContainText("not a historical FOB series");
 });
 

@@ -43,6 +43,9 @@ from soyforecast.config import (
     RANGE_METHODS,
     RV_WINDOW,
     SECONDARY_LOSS,
+    TAIL_NOMINAL_80,
+    TAIL_OBS_MIN_95,
+    TARGET_READOUT_LEVELS,
     VALIDATION_END,
     VALIDATION_START,
     Settings,
@@ -160,6 +163,9 @@ def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
             ),
             "nominal_levels": list(NOMINAL_LEVELS),
             "coverage_warn_pp": COVERAGE_WARN_PP,
+            "tail_nominal_80": TAIL_NOMINAL_80,
+            "tail_obs_min_95": TAIL_OBS_MIN_95,
+            "target_readout_levels": list(TARGET_READOUT_LEVELS),
         },
         "inference_rule": {
             "version": INFERENCE_RULE_VERSION,
@@ -215,10 +221,16 @@ def _coverage(a: Artefacts, model: str, h: int) -> dict[str, Any]:
             "ci95": [_r(r["cover95_ci_lo"], 3), _r(r["cover95_ci_hi"], 3)],
             "n_eff80": _r(r["cover80_n_eff"], 0),
             "n_eff95": _r(r["cover95_n_eff"], 0),
+            # Unit B: the per-side tail split, for the side-aware decision-panel warning
+            "miss_lo80": _r(r.get("miss_lo80", np.nan), 3),
+            "miss_hi80": _r(r.get("miss_hi80", np.nan), 3),
         }
     val = out.get("validation")
     out["warn80"] = bool(val and val["cover80"] < NOMINAL_LEVELS[0] - COVERAGE_WARN_PP)
     out["warn95"] = bool(val and val["cover95"] < NOMINAL_LEVELS[1] - COVERAGE_WARN_PP)
+    tail_bar = TAIL_NOMINAL_80 + COVERAGE_WARN_PP
+    out["tail_warn_lo80"] = bool(val and (val["miss_lo80"] or 0.0) > tail_bar)
+    out["tail_warn_hi80"] = bool(val and (val["miss_hi80"] or 0.0) > tail_bar)
     return out
 
 

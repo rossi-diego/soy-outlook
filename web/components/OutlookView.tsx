@@ -31,18 +31,24 @@ function Badge({ children, title, warn = false }: { children: React.ReactNode; t
   );
 }
 
+/** The validation-era split alone: the one hit rate a card shows up front. */
+const validationOnly = (cov: Horizon["coverage"]) => ({ ...cov, holdout: null });
+
+/**
+ * One horizon, progressive disclosure (unit B): the 80% range, one measured-hit-rate pill, the
+ * central value and the hedge contract. Everything else is in the shared "How to read these
+ * ranges" fold under the cards.
+ */
 function HorizonCard({
   h,
   unit,
   a,
-  origin,
   local,
   fob,
 }: {
   h: Horizon;
   unit: Unit;
   a: Assumptions;
-  origin: string;
   /** A port-to-interior discount is applied: the R$ value is an estimate at the user's location. */
   local: boolean;
   /** The user entered a premium, so USD/t and R$/sack are FOB; otherwise they are CBOT only. */
@@ -53,8 +59,6 @@ function HorizonCard({
   const isRw = h.model === "rw";
   const cov = h.coverage;
   const usdT = (v: number) => premiumUsdT(v, a.buPerT);
-  const ci80 = f.ci(cov.validation, "80");
-  const ci95 = f.ci(cov.validation, "95", false);
   const ct = h.contract;
   const dec = decimalsFor(unit);
   return (
@@ -66,62 +70,38 @@ function HorizonCard({
         <span className="text-xs text-muted">{f.date(h.target_date)}</span>
       </header>
       <div>
-        <p className={`text-xs ${cov.warn80 ? "font-medium text-warn" : "text-muted"}`} data-testid="label80">
-          {f.range(cov, "80")}, {f.unit(unit)}
-          {cov.warn80 && (
-            <Badge
-              warn
-              title={t(
-                "Validation hit rate more than 5 percentage points below the nominal 80%",
-                "Taxa de acerto na validação mais de 5 pontos percentuais abaixo dos 80% nominais",
-              )}
-            >
-              {t("below 80%", "abaixo de 80%")}
-            </Badge>
-          )}
+        <p className="text-xs text-muted" data-testid="label80">
+          {t(`${f.pct(cov.nominal["80"])} range`, `Faixa de ${f.pct(cov.nominal["80"])}`)}, {f.unit(unit)}
         </p>
-        {ci80 && (
-          <p className="text-xs text-muted" data-testid="ci80">
-            {cov.validation?.years}: {ci80}
-          </p>
-        )}
-        <p className="tabular text-2xl font-semibold tracking-tight">
+        <p className="tabular text-2xl font-semibold tracking-tight lg:text-3xl">
           {f.num(c(h.q100), dec)} – {f.num(c(h.q900), dec)}
         </p>
+        <p className="mt-1.5">
+          <span
+            data-testid="hit80"
+            title={t(
+              "Share of past forecasts whose outcome landed inside the 80% range, validation reports",
+              "Parcela das previsões passadas cujo resultado caiu dentro da faixa de 80%, relatórios de validação",
+            )}
+            className={`inline-block rounded-full border px-2 py-px text-xs font-medium leading-5 ${
+              cov.warn80 ? "border-warn-line bg-warn-soft text-warn" : "border-line bg-surface-2 text-ink-2"
+            }`}
+          >
+            {f.held(validationOnly(cov), "80")}
+            {cov.warn80 && <span>, {t("below 80%", "abaixo de 80%")}</span>}
+          </span>
+        </p>
         {unit !== "c_bu" && (
-          <p className="mt-0.5 text-xs text-muted" data-testid="basis-label">
+          <p className="mt-1.5 text-xs text-muted" data-testid="basis-label">
             {basisNote(t, unit, fob)}
           </p>
         )}
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+      <dl className="mt-auto grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 border-t border-line pt-3 text-sm">
         <dt className="text-ink-2">{t("Central", "Central")}</dt>
         <dd className="tabular text-right">
           {f.money(c(h.central), unit)}
           {isRw && <span className="ml-1 text-xs text-muted">{t("(CBOT unchanged)", "(CBOT sem variação)")}</span>}
-        </dd>
-        <dt className="text-ink-2">{t("95% range", "Faixa de 95%")}</dt>
-        <dd className="tabular text-right text-ink-2">
-          {f.num(c(h.q025), dec)} – {f.num(c(h.q975), dec)}
-          <span className={`block text-xs ${cov.warn95 ? "text-warn" : "text-muted"}`} data-testid="held95">
-            {f.held(cov, "95")}
-          </span>
-          {ci95 && (
-            <span className="block text-xs text-muted" data-testid="ci95">
-              {ci95}
-            </span>
-          )}
-          {cov.warn95 && (
-            <Badge
-              warn
-              title={t(
-                "Validation hit rate more than 5 percentage points below the nominal 95%",
-                "Taxa de acerto na validação mais de 5 pontos percentuais abaixo dos 95% nominais",
-              )}
-            >
-              {t("below 95%", "abaixo de 95%")}
-            </Badge>
-          )}
         </dd>
         <dt className="text-ink-2">{t("Hedge contract", "Contrato de hedge")}</dt>
         <dd className="tabular text-right" data-testid="contract">
@@ -136,13 +116,6 @@ function HorizonCard({
               {t("crosses a roll", "cruza uma rolagem")}
             </Badge>
           )}
-          <span className="block text-xs text-muted">
-            {ct.crosses_roll
-              ? `${t("price series rolls", "a série de preços passa de")} ${ct.front_at_origin} → ${ct.front_at_target}${
-                  ct.crosses_crop_roll ? t(", old to new crop", ", safra velha para safra nova") : ""
-                }`
-              : `${t("price series stays on", "a série de preços fica em")} ${ct.front_at_origin}`}
-          </span>
         </dd>
         {unit !== "c_bu" && fob && (
           <>
@@ -150,7 +123,10 @@ function HorizonCard({
             <dd className="tabular text-right text-ink-2" data-testid="premium-row">
               {f.signed0(a.premium)}¢/bu
               <span className="block text-xs text-muted">
-                {f.signed0(usdT(a.premium))} USD/t{t(", your input, held flat", ", informado por você, mantido constante")}
+                {t(
+                  `FOB = CBOT + your premium (${f.signed0(usdT(a.premium))} USD/t), held flat`,
+                  `FOB = CBOT + o seu prêmio (${f.signed0(usdT(a.premium))} USD/t), constante`,
+                )}
               </span>
             </dd>
             {unit === "brl_sack" && local && (
@@ -158,30 +134,199 @@ function HorizonCard({
                 <dt className="text-ink-2">{t("Your discount", "Seu desconto")}</dt>
                 <dd className="tabular text-right text-ink-2" data-testid="basis-row">
                   −R$ {f.num(a.basis ?? 0, 2)}/sc
-                  <span className="block text-xs text-muted">{t("your input, not a sourced value", "informado por você, não é dado de fonte")}</span>
                 </dd>
               </>
             )}
           </>
         )}
       </dl>
-      {unit !== "c_bu" && fob && <p className="text-xs leading-relaxed text-ink-2">{fobBridge(t)}</p>}
-      <p className="mt-auto border-t border-line pt-3 text-xs leading-relaxed text-muted">
-        {t(
-          <>
-            Hit rates on {cov.validation?.n ?? "—"} validation and {cov.holdout?.n ?? "—"} later reports. Each 95% tail rests on
-            about {f.num(h.tail_obs_95, 1)} of the {h.calibration_n} past errors behind the range (about{" "}
-            {f.num(h.calibration_n_eff, 0)} non-overlapping).
-          </>,
-          <>
-            Taxas de acerto em {cov.validation?.n ?? "—"} relatórios de validação e {cov.holdout?.n ?? "—"} posteriores. Cada cauda
-            de 95% se apoia em cerca de {f.num(h.tail_obs_95, 1)} dos {h.calibration_n} erros passados por trás da faixa (cerca de{" "}
-            {f.num(h.calibration_n_eff, 0)} sem sobreposição).
-          </>,
-        )}{" "}
-        {origin}
-      </p>
     </article>
+  );
+}
+
+/**
+ * The one shared fold under the cards (unit B): the 95% range, both eras' hit rates and their
+ * uncertainty, n_eff, the tail split and counts, the roll details, and every footnote.
+ */
+function RangeDetails({
+  meta,
+  outlook,
+  unit,
+  a,
+  fob,
+  issued,
+}: {
+  meta: Meta;
+  outlook: Outlook;
+  unit: Unit;
+  a: Assumptions;
+  fob: boolean;
+  issued: string;
+}) {
+  const { t, f } = useI18n();
+  const dec = decimalsFor(unit);
+  const c = (v: number) => f.num(convert(v, unit, a), dec);
+  const championAllRw = outlook.horizons.every((h) => h.model === "rw");
+  const tailNominal = f.pct(meta.intervals.tail_nominal_80);
+  return (
+    <details className="card p-5 text-sm leading-relaxed text-ink-2" data-testid="ranges-details">
+      <summary className="cursor-pointer select-none font-medium text-ink">
+        {t("How to read these ranges", "Como ler estas faixas")}
+        <span className="ml-2 text-xs font-normal text-muted">
+          {t("95% range, hit-rate uncertainty, tails, rolls and notes", "faixa de 95%, incerteza das taxas de acerto, caudas, rolagens e notas")}
+        </span>
+      </summary>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        {outlook.horizons.map((h) => {
+          const cov = h.coverage;
+          const v = cov.validation;
+          const ci80 = f.ci(v, "80");
+          const ci95 = f.ci(v, "95", false);
+          const ct = h.contract;
+          return (
+            <div key={h.h} className="space-y-2 rounded-lg border border-line p-3 text-xs" data-testid={`detail-${h.h}`}>
+              <p className="text-sm font-medium text-ink">
+                {t("In", "Em")} {f.horizon(h.h)}
+              </p>
+              <p>
+                <span className="font-medium text-ink-2">{f.range(cov, "80")}</span>
+                {ci80 && (
+                  <span className="block text-muted" data-testid="ci80">
+                    {v?.years}: {ci80}
+                  </span>
+                )}
+              </p>
+              <p>
+                <span className="font-medium text-ink-2">
+                  {t("95% range", "Faixa de 95%")}:{" "}
+                  <span className="tabular" data-testid="range95">
+                    {c(h.q025)} – {c(h.q975)}
+                  </span>{" "}
+                  {f.unit(unit)}
+                </span>
+                {cov.warn95 && (
+                  <Badge
+                    warn
+                    title={t(
+                      "Validation hit rate more than 5 percentage points below the nominal 95%",
+                      "Taxa de acerto na validação mais de 5 pontos percentuais abaixo dos 95% nominais",
+                    )}
+                  >
+                    {t("below 95%", "abaixo de 95%")}
+                  </Badge>
+                )}
+                <span className={`block ${cov.warn95 ? "text-warn" : "text-muted"}`} data-testid="held95">
+                  {f.held(cov, "95")}
+                </span>
+                {ci95 && (
+                  <span className="block text-muted" data-testid="ci95">
+                    {ci95}
+                  </span>
+                )}
+              </p>
+              {v && v.miss_lo80 != null && v.miss_hi80 != null && (
+                <p data-testid="tail-split">
+                  {t(
+                    `Outside the 80% range, ${v.years}: ${f.pct(v.miss_lo80)} below, ${f.pct(v.miss_hi80)} above (${tailNominal} each nominal).`,
+                    `Fora da faixa de 80%, ${v.years}: ${f.pct(v.miss_lo80)} abaixo, ${f.pct(v.miss_hi80)} acima (${tailNominal} cada, nominal).`,
+                  )}
+                </p>
+              )}
+              <p className="text-muted">
+                {t(
+                  `Hit rates on ${v?.n ?? "—"} validation and ${cov.holdout?.n ?? "—"} later reports. Each 95% tail rests on about ${f.num(h.tail_obs_95, 1)} of the ${h.calibration_n} past errors behind the range (about ${f.num(h.calibration_n_eff, 0)} non-overlapping).`,
+                  `Taxas de acerto em ${v?.n ?? "—"} relatórios de validação e ${cov.holdout?.n ?? "—"} posteriores. Cada cauda de 95% se apoia em cerca de ${f.num(h.tail_obs_95, 1)} dos ${h.calibration_n} erros passados por trás da faixa (cerca de ${f.num(h.calibration_n_eff, 0)} sem sobreposição).`,
+                )}
+              </p>
+              <p className="text-muted" data-testid="roll-detail">
+                {ct.reference.code}:{" "}
+                {ct.crosses_roll
+                  ? `${t("price series rolls", "a série de preços passa de")} ${ct.front_at_origin} → ${ct.front_at_target}${
+                      ct.crosses_crop_roll ? t(", old to new crop", ", safra velha para safra nova") : ""
+                    }`
+                  : `${t("price series stays on", "a série de preços fica em")} ${ct.front_at_origin}`}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 space-y-2 text-xs">
+        <p>
+          {t(
+            <>
+              <strong className="font-medium text-ink">The pill</strong> is the share of validation reports ({meta.splits.validation[0].slice(0, 4)}
+              –{meta.splits.validation[1].slice(0, 4)}) whose outcome landed inside the 80% range; amber marks one that held more than{" "}
+              {f.num(meta.intervals.coverage_warn_pp * 100, 0)} points below its nominal level. The later reports above were never used to
+              build or choose anything. Ranges come from the errors of the last {meta.calibration_window} out-of-sample forecasts, so the 95%
+              range, whose tails rest on one or two past errors each, is rough.
+            </>,
+            <>
+              <strong className="font-medium text-ink">O selo</strong> é a parcela dos relatórios de validação ({meta.splits.validation[0].slice(0, 4)}
+              –{meta.splits.validation[1].slice(0, 4)}) cujo resultado caiu dentro da faixa de 80%; âmbar marca uma faixa que acertou mais de{" "}
+              {f.num(meta.intervals.coverage_warn_pp * 100, 0)} pontos abaixo do nível nominal. Os relatórios posteriores acima nunca foram usados
+              para construir ou escolher nada. As faixas vêm dos erros das últimas {meta.calibration_window} previsões fora da amostra, então a
+              faixa de 95%, cujas caudas se apoiam em um ou dois erros passados cada, é aproximada.
+            </>,
+          )}
+        </p>
+        {championAllRw && (
+          <p>
+            {t(
+              <>
+                <strong className="font-medium text-ink">Why the central value is today&apos;s price.</strong> Tested on every WASDE since{" "}
+                <span data-testid="validation-start">{meta.splits.validation[0].slice(0, 4)}</span>, no model (including one built on WASDE
+                revisions) predicted CBOT soybeans better than &ldquo;no change&rdquo;. What this page adds is a tested range labelled with the
+                hit rate it actually achieved.
+              </>,
+              <>
+                <strong className="font-medium text-ink">Por que o valor central é o preço de hoje.</strong> Testado em todos os WASDE desde{" "}
+                <span data-testid="validation-start">{meta.splits.validation[0].slice(0, 4)}</span>, nenhum modelo (nem um construído com as
+                revisões do WASDE) previu a soja na CBOT melhor do que &ldquo;sem variação&rdquo;. O que esta página acrescenta é uma faixa
+                testada, rotulada com a taxa de acerto que ela de fato teve.
+              </>,
+            )}
+          </p>
+        )}
+        <p>
+          {issued}.{" "}
+          {t(
+            `The ranges are calibrated on forecasts made at the close of WASDE release days, so treat them as approximate ${
+              meta.days_since_report > 0 ? "this far from one" : "between reports"
+            }.`,
+            `As faixas são calibradas em previsões feitas no fechamento dos dias de divulgação do WASDE; trate-as como aproximadas ${
+              meta.days_since_report > 0 ? "a esta distância de um deles" : "entre relatórios"
+            }.`,
+          )}
+        </p>
+        <p>
+          {t(
+            <>
+              Prices are the continuous front month; the hedge contract is the first whose first notice day falls after the target date. A
+              window that crosses a roll includes a calendar spread that a hedge in today&apos;s front contract would not capture.
+            </>,
+            <>
+              Os preços são do primeiro vencimento contínuo; o contrato de hedge é o primeiro cujo primeiro dia de aviso cai depois da data-alvo.
+              Uma janela que cruza uma rolagem inclui um spread entre vencimentos que um hedge no contrato de hoje não capturaria.
+            </>,
+          )}
+        </p>
+        <p data-testid="fob-note">
+          {t(
+            <>
+              FOB is (CBOT + your premium) × {f.num(meta.consts.bu_per_t, 4)} bu/t ÷ 100; with no premium entered, USD/t and R$/sack are the CBOT
+              price alone. The ranges cover CBOT price risk only: {fob ? "your premium" : "a premium"} and the exchange rate are held fixed.
+              Reais per sack use your exchange rate; with a premium they are port FOB (which includes fobbing, the port loading cost), not a
+              farm-gate price.
+            </>,
+            <>
+              FOB = (CBOT + o seu prêmio) × {f.num(meta.consts.bu_per_t, 4)} bu/t ÷ 100; sem prêmio informado, USD/t e R$/saca são só o preço da
+              CBOT. As faixas cobrem só o risco de preço da CBOT: {fob ? "o seu prêmio" : "um prêmio"} e o câmbio ficam fixos. Reais por saca
+              usam o seu câmbio; com prêmio, são valor FOB no porto (que inclui o fobbing, custo de embarque no porto), não preço na fazenda.
+            </>,
+          )}
+        </p>
+      </div>
+    </details>
   );
 }
 
@@ -195,11 +340,6 @@ const basisNote = (t: T, unit: Unit, fob: boolean) =>
     : unit === "brl_sack"
       ? t("CBOT only, excl. premium; BRL held fixed", "Só CBOT, sem prêmio; câmbio fixo")
       : t("CBOT only, excl. premium", "Só CBOT, sem prêmio");
-const fobBridge = (t: T) =>
-  t(
-    "FOB = CBOT + your premium; CBOT unchanged, FOB changes only through the premium you enter.",
-    "FOB = CBOT + o seu prêmio; com a CBOT sem variação, o FOB só muda pelo prêmio que você informar.",
-  );
 
 // P15: how far the live forecast is from the release-day origins the ranges were tested on.
 const issuedLabel = (t: T, month: string, days: number) =>
@@ -226,7 +366,7 @@ function useUnitOptions(fob: boolean): { id: Unit; label: string; short: string 
 }
 
 export default function OutlookView({ meta, outlook }: Props) {
-  const { t, f, d, pt } = useI18n();
+  const { t, f, pt } = useI18n();
   // R$/sack is the default unit only under pt-BR (P20); an explicit choice wins in either locale.
   const [unitChoice, setUnitChoice] = useState<Unit | null>(null);
   const unit: Unit = unitChoice ?? (pt ? "brl_sack" : "usd_t");
@@ -273,7 +413,8 @@ export default function OutlookView({ meta, outlook }: Props) {
     } else setBasisError(r.error);
   };
   const [span, setSpan] = useState<HistSpan>("18m");
-  const [chartView, setChartView] = useState<"cbot" | "fob">("cbot");
+  // Unit B: the chart follows the selected unit; "CBOT quote" shows the raw ¢/bu instead.
+  const [chartBasis, setChartBasis] = useState<"unit" | "cbot">("unit");
 
   const last = outlook.last.c_bu;
   // The port-to-interior discount only makes sense on a FOB price, so it needs a premium too.
@@ -281,19 +422,17 @@ export default function OutlookView({ meta, outlook }: Props) {
   const local = basisOn && basis > 0;
   const base = { fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg, basis: basisOn ? basis : 0 };
   // One premium for the headline and every horizon: with CBOT unchanged, FOB is unchanged.
-  const championAllRw = outlook.horizons.every((h) => h.model === "rw");
   const h3 = outlook.horizons.find((h) => h.h === 3) ?? outlook.horizons[0];
   const todayA: Assumptions = { ...base, premium };
   const issued = issuedLabel(t, f.monthAbbr(Number(meta.latest_wasde.month.slice(5, 7))), meta.days_since_report);
-  const originNote = `${issued}${t("; ranges are calibrated at release-day closes.", "; as faixas são calibradas nos fechamentos dos dias de divulgação.")}`;
   const fobWord = local ? t("est. local price", "preço estimado na sua praça") : "FOB";
 
-  // Chart (P21): CBOT ¢/bu by default. The FOB view is the same picture shifted by the one flat
-  // premium the user typed (and scaled by FX for R$/sack): a constant shift, never a historical
-  // FOB series. Without a premium there is no FOB view.
-  const fobView = chartView === "fob" && unit !== "c_bu" && fob;
-  const chartUnit: Unit = fobView ? unit : "c_bu";
-  const chartA: Assumptions = { premium: fobView ? premium : 0, fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg, basis: fobView ? base.basis : 0 };
+  // Chart (P21, unit B): in the selected unit. With a premium, USD/t and R$/sack are the CBOT
+  // picture shifted by the one flat premium the user typed (and scaled by FX): a constant shift,
+  // never a historical FOB series. Without one they are CBOT converted, nothing added.
+  const chartUnit: Unit = chartBasis === "cbot" ? "c_bu" : unit;
+  const fobView = chartUnit !== "c_bu" && fob;
+  const chartA: Assumptions = chartUnit === "c_bu" ? { ...base, premium: 0, basis: 0 } : todayA;
   const option = useCallback(
     (tk: Tokens) => {
       const dec = decimalsFor(chartUnit);
@@ -305,6 +444,8 @@ export default function OutlookView({ meta, outlook }: Props) {
         .map((p) => [p.date, cv(p.c_bu)]);
       if (hist.length === 0 || hist[hist.length - 1][0] !== outlook.as_of_close) hist.push([outlook.as_of_close, cv(last)]);
       const hs = outlook.horizons;
+      // Unit B: the 80% bar is the strongest mark (wide, near-opaque); the 95% is a thin solid
+      // line at lower opacity. Both answer the hover with the horizon's limits.
       const whisker = (hh: Horizon, lo: number, hi: number, level: "80" | "95") => ({
         name: `${level}% range ${hh.h}m`,
         type: "line",
@@ -313,13 +454,12 @@ export default function OutlookView({ meta, outlook }: Props) {
           [hh.target_date, cv(hi)],
         ],
         symbol: "none",
-        silent: true,
-        tooltip: { show: false },
         z: level === "80" ? 3 : 2,
+        emphasis: { disabled: true },
         lineStyle:
           level === "80"
-            ? { color: hh.coverage.warn80 ? tk.warn : tk.series1, width: 7, opacity: 0.38, cap: "round" }
-            : { color: hh.coverage.warn95 ? tk.warn : tk.series1, width: 1.5, opacity: 0.75, type: "dashed" },
+            ? { color: hh.coverage.warn80 ? tk.warn : tk.series1, width: 11, opacity: 0.72, cap: "butt" }
+            : { color: hh.coverage.warn95 ? tk.warn : tk.series1, width: 2.5, opacity: 0.45, type: "solid" },
       });
       // Today and the next WASDE are days apart: labels sit above the plot, pushed apart horizontally.
       const lines: { xAxis: string; name: string; label: { align: "left" | "right"; padding: number[] } }[] = [
@@ -337,6 +477,14 @@ export default function OutlookView({ meta, outlook }: Props) {
           label: { align: "left", padding: [0, 0, 0, 4] },
         });
       const fm = (v: number) => f.num(v, dec);
+      const horizonTip = (hh: Horizon) =>
+        [
+          `<b>${t("In", "Em")} ${f.horizon(hh.h)}</b> · ${f.date(hh.target_date)}`,
+          `${t("80% range", "Faixa de 80%")}: <b>${fm(cv(hh.q100))} – ${fm(cv(hh.q900))}</b>`,
+          `<span style="color:${tk.muted}">${f.held(validationOnly(hh.coverage), "80")}</span>`,
+          `${t("95% range", "Faixa de 95%")}: ${fm(cv(hh.q025))} – ${fm(cv(hh.q975))}`,
+          `${t("Central (no change)", "Central (sem variação)")}: ${fm(cv(hh.central))}`,
+        ].join("<br/>");
       return {
         ...baseOption(tk),
         legend: { show: false },
@@ -345,18 +493,13 @@ export default function OutlookView({ meta, outlook }: Props) {
         tooltip: {
           ...baseOption(tk).tooltip,
           trigger: "axis",
+          axisPointer: { type: "line", snap: true, lineStyle: { color: tk.axis } },
           formatter: (ps: { seriesName: string; dataIndex: number; value: [string, number] }[]) => {
+            // A whisker or a forecast dot under the pointer names its horizon.
+            const w = ps.find((p) => /^(80|95)% range \d+m$/.test(p.seriesName));
             const fc = ps.find((p) => p.seriesName === "Forecast" && p.dataIndex > 0);
-            if (fc) {
-              const hh = hs[fc.dataIndex - 1];
-              return [
-                `<b>${t("In", "Em")} ${f.horizon(hh.h)}</b> · ${f.date(hh.target_date)}`,
-                `${t("Central (no change)", "Central (sem variação)")}: ${fm(cv(hh.central))}`,
-                `${t("80% range", "Faixa de 80%")}: ${fm(cv(hh.q100))} – ${fm(cv(hh.q900))}`,
-                `${t("95% range", "Faixa de 95%")}: ${fm(cv(hh.q025))} – ${fm(cv(hh.q975))}`,
-                `<span style="color:${tk.muted}">80% ${f.held(hh.coverage, "80")}</span>`,
-              ].join("<br/>");
-            }
+            const hh = w ? hs.find((x) => w.seriesName.endsWith(` ${x.h}m`)) : fc ? hs[fc.dataIndex - 1] : undefined;
+            if (hh) return horizonTip(hh);
             const c = ps.find((p) => p.seriesName === "Close");
             return c ? `${f.date(c.value[0])}<br/>${t("Close", "Fechamento")}: <b>${fm(c.value[1])}</b>` : "";
           },
@@ -394,7 +537,7 @@ export default function OutlookView({ meta, outlook }: Props) {
             data: [[outlook.as_of_close, cv(last)], ...hs.map((hh) => [hh.target_date, cv(hh.central)])],
             symbol: "circle",
             symbolSize: (_: unknown, p: { dataIndex: number }) => (p.dataIndex === 0 ? 0 : 8),
-            itemStyle: { color: tk.series1, borderColor: tk.surface, borderWidth: 1.5 },
+            itemStyle: { color: tk.surface, borderColor: tk.series1, borderWidth: 2 },
             lineStyle: { color: tk.series1, type: "dashed", width: 1.5 },
             endLabel: { show: true, formatter: t("no change", "sem variação"), color: tk.series1, fontSize: 11, distance: 6 },
             z: 4,
@@ -413,13 +556,13 @@ export default function OutlookView({ meta, outlook }: Props) {
   };
   const chartDec = decimalsFor(chartUnit);
   const cvTable = (v: number) => f.num(convert(v, chartUnit, chartA), chartDec);
+  const unitName = unitOptions.find((o) => o.id === chartUnit)?.label ?? f.unit(chartUnit);
 
   return (
     <div className="space-y-8">
       <section className="space-y-3">
         <p className="text-sm font-medium text-brand">
-          {t("After the", "Depois do WASDE de")} {f.month(meta.latest_wasde.month)}
-          {t(" WASDE", "")} · {t("CBOT close", "fechamento CBOT")} {f.date(outlook.as_of_close)}
+          {issued} · {t("CBOT close", "fechamento CBOT")} {f.date(outlook.as_of_close)}
         </p>
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
           {t(
@@ -429,96 +572,61 @@ export default function OutlookView({ meta, outlook }: Props) {
         </h1>
         <p className="max-w-3xl text-base leading-relaxed text-ink-2" data-testid="hero-framing">
           {t(
-            "For budgeting and hedging: how far CBOT soybeans could move from today, in ranges labelled by the hit rate they actually achieved. A risk range, not a price call.",
-            "Para orçamento e hedge: quanto a soja na CBOT pode se mover a partir de hoje, em faixas rotuladas com a taxa de acerto que de fato tiveram. Uma faixa de risco, não uma aposta de preço.",
+            "For budgeting and hedging: tested ranges labelled by the hit rate they actually achieved. A risk range, not a price call.",
+            "Para orçamento e hedge: faixas testadas, rotuladas com a taxa de acerto que de fato tiveram. Uma faixa de risco, não uma aposta de preço.",
           )}
         </p>
-        <p className="max-w-3xl text-lg leading-relaxed text-ink-2" data-testid="headline">
-          {unit === "c_bu" ? (
-            <>
-              {t("CBOT soybeans closed at", "A soja na CBOT fechou a")} <strong className="text-ink">{f.money(last, "c_bu")}</strong>.
-            </>
-          ) : !fob ? (
-            <>
-              {t("CBOT soybeans closed at", "A soja na CBOT fechou a")} <strong className="text-ink">{f.money(last, "c_bu")}</strong>{" "}
-              = <strong className="text-ink">{f.money(convert(last, unit, todayA), unit)}</strong>
-              {unit === "brl_sack" && (
-                <span className="text-base">
-                  {" "}
-                  {t("at", "a")} {f.num(fx, 2)} BRL/USD
-                </span>
-              )}{" "}
-              <span className="text-base">({t("CBOT only, excl. premium", "só CBOT, sem prêmio")})</span>.
-            </>
-          ) : (
-            <>
-              CBOT <strong className="text-ink">{f.money(last, "c_bu")}</strong> + {t("your premium", "seu prêmio")}{" "}
-              <strong className="text-ink">{f.signed0(premium)}¢/bu</strong>
-              {local && (
-                <>
-                  {" "}
-                  − {t("your discount", "seu desconto")} <strong className="text-ink">R$ {f.num(basis, 2)}/sc</strong>
-                </>
-              )}{" "}
-              = {fobWord} <strong className="text-ink">{f.money(convert(last, unit, todayA), unit)}</strong>
-              {unit === "brl_sack" && (
-                <span className="text-base">
-                  {" "}
-                  {t("at", "a")} {f.num(fx, 2)} BRL/USD
-                </span>
-              )}
-              .
-            </>
-          )}{" "}
+        <p className="max-w-3xl text-lg leading-relaxed text-ink-2" data-testid="hero-sentence">
           {t(`By ${range.date}, the 3-month`, `Até ${range.date}, no horizonte de 3 meses, a`)}{" "}
           <span className={h3.coverage.warn80 ? "text-warn" : undefined} data-testid="hero-range-label">
             {f.range(h3.coverage, "80")}
           </span>{" "}
           {t("is", "vai de")} <strong className="text-ink">{range.lo}</strong> {t("to", "a")}{" "}
-          <strong className="text-ink">{range.hi}</strong>
-          {unit !== "c_bu" && fob && <span className="text-base"> ({basisNote(t, unit, fob)})</span>}.
+          <strong className="text-ink">{range.hi}</strong>.{" "}
+          <Link className="text-base underline hover:text-ink" href="/track-record/">
+            {t("See how it was tested", "Veja como foi testada")}
+          </Link>
         </p>
-        <p className="max-w-3xl text-sm text-muted">
-          {issued}.{" "}
-          {t(
-            `The ranges are calibrated on forecasts made at the close of WASDE release days, so treat them as approximate ${
-              meta.days_since_report > 0 ? "this far from one" : "between reports"
-            }.`,
-            `As faixas são calibradas em previsões feitas no fechamento dos dias de divulgação do WASDE; trate-as como aproximadas ${
-              meta.days_since_report > 0 ? "a esta distância de um deles" : "entre relatórios"
-            }.`,
+        <p className="max-w-3xl text-sm text-muted" data-testid="headline">
+          {t("Today:", "Hoje:")}{" "}
+          {unit === "c_bu" ? (
+            <>
+              {t("CBOT soybeans closed at", "a soja na CBOT fechou a")} <strong className="text-ink-2">{f.money(last, "c_bu")}</strong>.
+            </>
+          ) : !fob ? (
+            <>
+              {t("CBOT soybeans closed at", "a soja na CBOT fechou a")} <strong className="text-ink-2">{f.money(last, "c_bu")}</strong> ={" "}
+              <strong className="text-ink-2">{f.money(convert(last, unit, todayA), unit)}</strong>
+              {unit === "brl_sack" && (
+                <>
+                  {" "}
+                  {t("at", "a")} {f.num(fx, 2)} BRL/USD
+                </>
+              )}{" "}
+              ({t("CBOT only, excl. premium", "só CBOT, sem prêmio")}).
+            </>
+          ) : (
+            <>
+              CBOT <strong className="text-ink-2">{f.money(last, "c_bu")}</strong> + {t("your premium", "seu prêmio")}{" "}
+              <strong className="text-ink-2">{f.signed0(premium)}¢/bu</strong>
+              {local && (
+                <>
+                  {" "}
+                  − {t("your discount", "seu desconto")} <strong className="text-ink-2">R$ {f.num(basis, 2)}/sc</strong>
+                </>
+              )}{" "}
+              = {fobWord} <strong className="text-ink-2">{f.money(convert(last, unit, todayA), unit)}</strong>
+              {unit === "brl_sack" && (
+                <>
+                  {" "}
+                  {t("at", "a")} {f.num(fx, 2)} BRL/USD
+                </>
+              )}
+              .
+            </>
           )}
         </p>
       </section>
-
-      {championAllRw && (
-        <aside className="card border-l-4 p-4 text-sm leading-relaxed text-ink-2" style={{ borderLeftColor: "var(--accent)" }}>
-          {t(
-            <>
-              <strong className="text-ink">No reliable direction signal.</strong> Tested on every WASDE since{" "}
-              <span data-testid="validation-start">{meta.splits.validation[0].slice(0, 4)}</span>, no model (including one
-              built on WASDE revisions) predicted CBOT soybeans better than &ldquo;no change&rdquo;. So the central line is
-              today&apos;s price, and what this page adds is a <em>tested range</em> labelled with the hit rate it actually
-              achieved.{" "}
-              <Link className="underline hover:text-ink" href="/track-record/">
-                See the track record
-              </Link>
-              .
-            </>,
-            <>
-              <strong className="text-ink">Nenhum sinal confiável de direção.</strong> Testado em todos os WASDE desde{" "}
-              <span data-testid="validation-start">{meta.splits.validation[0].slice(0, 4)}</span>, nenhum modelo (nem um
-              construído com as revisões do WASDE) previu a soja na CBOT melhor do que &ldquo;sem variação&rdquo;. Por isso a
-              linha central é o preço de hoje, e o que esta página acrescenta é uma <em>faixa testada</em>, rotulada com a
-              taxa de acerto que ela de fato teve.{" "}
-              <Link className="underline hover:text-ink" href="/track-record/">
-                Veja o histórico
-              </Link>
-              .
-            </>,
-          )}
-        </aside>
-      )}
 
       <section className="flex flex-wrap items-start gap-x-6 gap-y-4">
         <div className="space-y-1">
@@ -642,30 +750,31 @@ export default function OutlookView({ meta, outlook }: Props) {
         )}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3" aria-label={t("Forecast by horizon", "Previsão por horizonte")}>
-        {outlook.horizons.map((h) => (
-          <HorizonCard key={h.h} h={h} unit={unit} a={todayA} origin={originNote} local={local} fob={fob} />
-        ))}
-      </section>
-
-      <DecisionPanel horizons={outlook.horizons} p0={last} buPerT={meta.consts.bu_per_t} fx={fx} />
+      <div className="space-y-4">
+        <section className="grid gap-4 md:grid-cols-3" aria-label={t("Forecast by horizon", "Previsão por horizonte")}>
+          {outlook.horizons.map((h) => (
+            <HorizonCard key={h.h} h={h} unit={unit} a={todayA} local={local} fob={fob} />
+          ))}
+        </section>
+        <RangeDetails meta={meta} outlook={outlook} unit={unit} a={todayA} fob={fob} issued={issued} />
+      </div>
 
       <section className="card space-y-3 p-5" data-testid="hero-chart">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">
-            {fobView ? t("FOB view", "Visão FOB") : t("CBOT soybeans", "Soja na CBOT")}
+            {unitName}
             {t(": recent closes and the tested ranges ahead", ": fechamentos recentes e as faixas testadas à frente")}
           </h2>
           <div className="flex flex-wrap gap-2">
-            {unit !== "c_bu" && fob && (
+            {unit !== "c_bu" && (
               <RadioGroup
                 size="sm"
                 legend={t("Chart unit", "Unidade do gráfico")}
-                value={chartView}
-                onChange={setChartView}
+                value={chartBasis}
+                onChange={setChartBasis}
                 options={[
-                  { id: "cbot", label: "CBOT" },
-                  { id: "fob", label: t("FOB shift", "Deslocamento FOB") },
+                  { id: "unit", label: t("Your unit", "Sua unidade") },
+                  { id: "cbot", label: t("CBOT quote", "Cotação CBOT") },
                 ]}
               />
             )}
@@ -685,8 +794,8 @@ export default function OutlookView({ meta, outlook }: Props) {
           option={option}
           height={360}
           ariaLabel={t(
-            "CBOT soybean closes with the 80% and 95% forecast ranges at 1, 3 and 6 months as whiskers",
-            "Fechamentos da soja na CBOT com as faixas de previsão de 80% e 95% em 1, 3 e 6 meses",
+            `${unitName} closes with the 80% and 95% forecast ranges at 1, 3 and 6 months as bars`,
+            `Fechamentos em ${unitName} com as faixas de previsão de 80% e 95% em 1, 3 e 6 meses como barras`,
           )}
         />
         <ChartData
@@ -713,53 +822,35 @@ export default function OutlookView({ meta, outlook }: Props) {
           ]}
         />
         <p className="text-xs leading-relaxed text-muted" data-testid="chart-caption">
-          {fobView ? (
-            t(
-              <>
-                <strong className="font-medium text-ink-2">FOB view, constant shift:</strong> every point, past and future, is
-                CBOT + the one flat premium you set ({f.signed0(premium)}¢/bu)
-                {unit === "brl_sack" ? `, converted at ${f.num(fx, 2)} BRL/USD` : ""}
-                {local ? `, minus your R$ ${f.num(basis, 2)}/sack discount` : ""}. It is not a historical FOB series, and the
-                ranges still cover CBOT moves only.{" "}
-              </>,
-              <>
-                <strong className="font-medium text-ink-2">Visão FOB, deslocamento constante:</strong> cada ponto, passado e
-                futuro, é a CBOT + o único prêmio constante que você definiu ({f.signed0(premium)}¢/bu)
-                {unit === "brl_sack" ? `, convertido a ${f.num(fx, 2)} BRL/USD` : ""}
-                {local ? `, menos o seu desconto de R$ ${f.num(basis, 2)}/sc` : ""}. Não é uma série histórica de FOB, e as
-                faixas continuam cobrindo só os movimentos da CBOT.{" "}
-              </>,
-            )
-          ) : (
-            <>
-              <strong className="font-medium text-ink-2">{f.unitLong("c_bu")}</strong>
-              {t(", before any premium or exchange rate. ", ", antes de qualquer prêmio ou câmbio. ")}
-            </>
-          )}
+          <strong className="font-medium text-ink-2">{f.unitLong(chartUnit, fob)}</strong>
+          {fobView
+            ? t(
+                `. Constant shift: every point, past and future, is CBOT + the one flat premium you set (${f.signed0(premium)}¢/bu)${
+                  chartUnit === "brl_sack" ? `, converted at ${f.num(fx, 2)} BRL/USD` : ""
+                }${local && chartUnit === "brl_sack" ? `, minus your R$ ${f.num(basis, 2)}/sack discount` : ""}; it is not a historical FOB series. `,
+                `. Deslocamento constante: cada ponto, passado e futuro, é a CBOT + o único prêmio constante que você definiu (${f.signed0(premium)}¢/bu)${
+                  chartUnit === "brl_sack" ? `, convertido a ${f.num(fx, 2)} BRL/USD` : ""
+                }${local && chartUnit === "brl_sack" ? `, menos o seu desconto de R$ ${f.num(basis, 2)}/sc` : ""}; não é uma série histórica de FOB. `,
+              )
+            : ". "}
           {t(
-            <>
-              Whiskers at 1, 3 and 6 months: thick = nominal 80% range, thin dashed = nominal 95% range, whose tails rest on
-              one or two past errors each, so read it as rough; amber marks a range that held more than 5 points below its
-              nominal level. The dashed &ldquo;no change&rdquo; line is the central forecast. Hover a whisker for its limits;
-              the hit rate each range achieved is on the cards above. Ranges come from the errors of the last{" "}
-              {meta.calibration_window} out-of-sample forecasts. FOB is (CBOT + your premium) × {f.num(meta.consts.bu_per_t, 4)}{" "}
-              bu/t ÷ 100; with no premium entered, USD/t and R$/sack are the CBOT price alone. Reais per sack use your
-              exchange rate; with a premium they are port FOB (which includes fobbing, the port loading cost), not a farm-gate
-              price.
-            </>,
-            <>
-              Marcas em 1, 3 e 6 meses: grossa = faixa nominal de 80%, fina tracejada = faixa nominal de 95%, cujas caudas se
-              apoiam em um ou dois erros passados cada, então leia-a como aproximada; âmbar marca uma faixa que acertou mais de
-              5 pontos abaixo do seu nível nominal. A linha tracejada &ldquo;sem variação&rdquo; é a previsão central. Passe o
-              cursor sobre uma marca para ver os limites; a taxa de acerto de cada faixa está nos cartões acima. As faixas vêm
-              dos erros das últimas {meta.calibration_window} previsões fora da amostra. FOB = (CBOT + o seu prêmio) ×{" "}
-              {f.num(meta.consts.bu_per_t, 4)} bu/t ÷ 100; sem prêmio informado, USD/t e R$/saca são só o preço da CBOT. Reais
-              por saca usam o seu câmbio; com prêmio, são valor FOB no porto (que inclui o fobbing, custo de embarque no
-              porto), não preço na fazenda.
-            </>,
+            "Wide bar = 80% range, thin line = 95% range (rough), amber = held more than 5 points below nominal; the dashed “no change” line is the central forecast. Hover a bar for its limits.",
+            "Barra larga = faixa de 80%, linha fina = faixa de 95% (aproximada), âmbar = acertou mais de 5 pontos abaixo do nominal; a linha tracejada “sem variação” é a previsão central. Passe o cursor sobre uma barra para ver os limites.",
           )}
         </p>
       </section>
+
+      <DecisionPanel
+        horizons={outlook.horizons}
+        p0={last}
+        buPerT={meta.consts.bu_per_t}
+        sackKg={meta.consts.sack_kg}
+        fx={fx}
+        unit={unit}
+        a={todayA}
+        readoutLevels={meta.intervals.target_readout_levels}
+        tailObsMin={meta.intervals.tail_obs_min_95}
+      />
 
       <StressReplay stress={outlook.stress} buPerT={meta.consts.bu_per_t} />
 
@@ -786,4 +877,3 @@ export default function OutlookView({ meta, outlook }: Props) {
     </div>
   );
 }
-

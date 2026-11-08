@@ -110,6 +110,13 @@ class Intervals(Contract):
     rule: str
     nominal_levels: list[float]
     coverage_warn_pp: float
+    tail_nominal_80: float = Field(description="One-tail nominal miss rate of the 80% range.")
+    tail_obs_min_95: float = Field(
+        description="Below this many past errors per 95% tail, the 1-in-40 figure is muted."
+    )
+    target_readout_levels: list[float] = Field(
+        description="Range levels a user-typed target is placed between (a position, not odds)."
+    )
 
 
 class InferenceRule(Contract):
@@ -181,6 +188,12 @@ class CoverageSplit(Contract):
     ci95: tuple[Probability | None, Probability | None]
     n_eff80: float | None = Field(description="Approximate number of independent outcomes.")
     n_eff95: float | None
+    miss_lo80: Probability | None = Field(
+        default=None, description="Share of outcomes below the 80% range (one-tail nominal 10%)."
+    )
+    miss_hi80: Probability | None = Field(
+        default=None, description="Share of outcomes above the 80% range (one-tail nominal 10%)."
+    )
 
 
 class Coverage(Contract):
@@ -189,6 +202,14 @@ class Coverage(Contract):
     holdout: CoverageSplit | None
     warn80: bool = Field(description="Validation hit rate more than coverage_warn_pp below 80%.")
     warn95: bool = Field(description="Validation hit rate more than coverage_warn_pp below 95%.")
+    tail_warn_lo80: bool = Field(
+        default=False,
+        description="Validation lower-tail miss rate more than coverage_warn_pp above 10%.",
+    )
+    tail_warn_hi80: bool = Field(
+        default=False,
+        description="Validation upper-tail miss rate more than coverage_warn_pp above 10%.",
+    )
 
 
 QUANTILE_FIELDS = ("q025", "q100", "q500", "q900", "q975")

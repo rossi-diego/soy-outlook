@@ -298,6 +298,16 @@
         "warn95": {
           "description": "Validation hit rate more than coverage_warn_pp below 95%.",
           "type": "boolean"
+        },
+        "tail_warn_lo80": {
+          "default": false,
+          "description": "Validation lower-tail miss rate more than coverage_warn_pp above 10%.",
+          "type": "boolean"
+        },
+        "tail_warn_hi80": {
+          "default": false,
+          "description": "Validation upper-tail miss rate more than coverage_warn_pp above 10%.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -305,7 +315,9 @@
         "validation",
         "holdout",
         "warn80",
-        "warn95"
+        "warn95",
+        "tail_warn_lo80",
+        "tail_warn_hi80"
       ],
       "title": "Coverage",
       "type": "object"
@@ -422,6 +434,34 @@
               "type": "null"
             }
           ]
+        },
+        "miss_lo80": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of outcomes below the 80% range (one-tail nominal 10%)."
+        },
+        "miss_hi80": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of outcomes above the 80% range (one-tail nominal 10%)."
         }
       },
       "required": [
@@ -433,7 +473,9 @@
         "ci80",
         "ci95",
         "n_eff80",
-        "n_eff95"
+        "n_eff95",
+        "miss_lo80",
+        "miss_hi80"
       ],
       "title": "CoverageSplit",
       "type": "object"
@@ -895,6 +937,21 @@
         },
         "coverage_warn_pp": {
           "type": "number"
+        },
+        "tail_nominal_80": {
+          "description": "One-tail nominal miss rate of the 80% range.",
+          "type": "number"
+        },
+        "tail_obs_min_95": {
+          "description": "Below this many past errors per 95% tail, the 1-in-40 figure is muted.",
+          "type": "number"
+        },
+        "target_readout_levels": {
+          "description": "Range levels a user-typed target is placed between (a position, not odds).",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -909,7 +966,10 @@
         "baseline",
         "rule",
         "nominal_levels",
-        "coverage_warn_pp"
+        "coverage_warn_pp",
+        "tail_nominal_80",
+        "tail_obs_min_95",
+        "target_readout_levels"
       ],
       "title": "Intervals",
       "type": "object"

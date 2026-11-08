@@ -23,12 +23,16 @@ test("range labels carry the published hit rates, never a fixed '8 in 10'", asyn
   await page.goto("/");
   await expect(page.getByText(/8 in 10/)).toHaveCount(0);
   for (const h of outlook.horizons as { h: number; coverage: Cov }[]) {
+    // Unit B: the card shows one pill, the validation hit rate; both eras sit in the shared fold.
     const card = page.getByTestId(`horizon-${h.h}`);
-    const label80 = `${pct(h.coverage.nominal["80"])} range (${held(h.coverage, "cover80")})`;
-    await expect(card.getByTestId("label80")).toContainText(label80);
-    await expect(card.getByTestId("held95")).toHaveText(held(h.coverage, "cover95"));
+    const v = h.coverage.validation!;
+    await expect(card.getByTestId("label80")).toContainText(`${pct(h.coverage.nominal["80"])} range`);
+    await expect(card.getByTestId("hit80")).toHaveText(`held ${pct(v.cover80)} in ${v.years}${h.coverage.warn80 ? ", below 80%" : ""}`);
     await expect(card.getByText("below 80%")).toHaveCount(h.coverage.warn80 ? 1 : 0);
-    await expect(card.getByText("below 95%")).toHaveCount(h.coverage.warn95 ? 1 : 0);
+    const detail = page.getByTestId(`detail-${h.h}`);
+    await expect(detail).toContainText(`${pct(h.coverage.nominal["80"])} range (${held(h.coverage, "cover80")})`);
+    await expect(detail.getByTestId("held95")).toHaveText(held(h.coverage, "cover95"));
+    await expect(detail.getByText("below 95%")).toHaveCount(h.coverage.warn95 ? 1 : 0);
   }
   const h3 = (outlook.horizons as { h: number; coverage: Cov }[]).find((h) => h.h === 3)!;
   await expect(page.getByTestId("hero-range-label")).toHaveText(
@@ -72,7 +76,10 @@ test("no premium is shipped: CBOT-only units until the user types a premium, whi
   await expect(page.getByText(/assumed premium|historical median/i)).toHaveCount(0);
   await expect(page.getByText("stale", { exact: true })).toHaveCount(0);
   // No FOB chart view without a premium; the decision panel and stress replay still render.
-  await expect(page.getByTestId("hero-chart").getByRole("radio", { name: "FOB shift" })).toHaveCount(0);
+  // The chart follows the unit: CBOT in USD/t, nothing added, never a FOB view without a premium.
+  await expect(page.getByTestId("hero-chart").getByRole("radio", { name: "Your unit" })).toBeChecked();
+  await expect(page.getByTestId("chart-caption")).toContainText("CBOT only, excl. premium");
+  await expect(page.getByTestId("chart-caption")).not.toContainText(/constant shift/i);
   await expect(page.getByTestId("decision-footnote")).toBeVisible();
   await expect(page.getByTestId("stress-replay")).toBeVisible();
 
@@ -85,10 +92,11 @@ test("no premium is shipped: CBOT-only units until the user types a premium, whi
   await expect(page.getByRole("radio", { name: "FOB USD/t" })).toBeChecked();
   await expect(headline).toContainText("your premium +80¢/bu");
   await expect(headline).toContainText(`= FOB $${toUsdT(outlook.last.c_bu + 80)}/t`);
-  await expect(headline).toContainText("CBOT price risk only; your premium held fixed");
+  await expect(page.getByTestId("horizon-1").getByTestId("basis-label")).toHaveText("CBOT price risk only; your premium held fixed");
   await expect(page.getByText(/^FOB = CBOT \+ your premium/)).toHaveCount(outlook.horizons.length);
   await expect(page.getByTestId("horizon-1").getByTestId("premium-row")).toContainText("+80¢/bu");
-  await expect(page.getByTestId("hero-chart").getByRole("radio", { name: "FOB shift" })).toBeVisible();
+  await expect(page.getByTestId("chart-caption")).toContainText("Constant shift");
+  await expect(page.getByTestId("chart-caption")).toContainText("not a historical FOB series");
 
   // Remembered per viewer across a reload; Clear goes back to CBOT only and forgets it.
   await page.reload();
@@ -204,14 +212,18 @@ test("cards carry the hit-rate CI, the hedge contract and the roll flag from the
   await page.goto("/");
   for (const h of outlook.horizons) {
     const card = page.getByTestId(`horizon-${h.h}`);
+    const detail = page.getByTestId(`detail-${h.h}`);
     const v = h.coverage.validation;
-    await expect(card.getByTestId("ci80")).toHaveText(
+    await expect(detail.getByTestId("ci80")).toHaveText(
       `${v.years}: likely ${pct(v.ci80[0])}–${pct(v.ci80[1])}, about ${Math.round(v.n_eff80)} independent outcomes`,
     );
-    await expect(card.getByTestId("ci95")).toHaveText(`likely ${pct(v.ci95[0])}–${pct(v.ci95[1])}`);
+    await expect(detail.getByTestId("ci95")).toHaveText(`likely ${pct(v.ci95[0])}–${pct(v.ci95[1])}`);
     const contract = card.getByTestId("contract");
     await expect(contract).toContainText(h.contract.reference.code);
     await expect(contract.getByText("crosses a roll")).toHaveCount(h.contract.crosses_roll ? 1 : 0);
+    await expect(detail.getByTestId("roll-detail")).toContainText(h.contract.crosses_roll ? "price series rolls" : "price series stays on");
+    // The per-side tail split behind the decision panel's flag (unit B display rule).
+    await expect(detail.getByTestId("tail-split")).toContainText(`${pct(v.miss_lo80)} below, ${pct(v.miss_hi80)} above`);
   }
 });
 

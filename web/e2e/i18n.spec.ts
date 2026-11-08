@@ -70,7 +70,12 @@ test.describe("browser language pt-BR", () => {
     await expect(page.getByTestId("as-of")).toContainText(/\d{1,2} (jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez) \d{4}/);
     // Port FOB is never called a port price without the fobbing caveat.
     await expect(page.locator("main")).not.toContainText(/preço porto/i);
-    await expect(page.getByTestId("chart-caption")).toContainText("fobbing");
+    await expect(page.getByTestId("fob-note")).toContainText("fobbing");
+    // Unit B: the decision panel defaults to reais and 60 kg sacks under pt-BR.
+    const panel = page.getByTestId("decision-panel");
+    await expect(panel.getByRole("radio", { name: "BRL" })).toBeChecked();
+    await expect(panel.getByRole("radio", { name: "sacas" })).toBeChecked();
+    await expect(panel.getByTestId("downside10").first()).toContainText("R$");
   });
 });
 
@@ -150,7 +155,15 @@ for (const route of ROUTES)
       await page.goto(route);
       await expect(page.locator("html")).toHaveAttribute("lang", loc);
       // Same unit in both locales, so the comparison is like for like.
-      if (route === "/") await page.getByRole("radio", { name: "CBOT USD/t" }).click();
+      if (route === "/") {
+        await page.getByRole("radio", { name: "CBOT USD/t" }).click();
+        // The decision panel's pt-BR defaults (BRL, sacks) are set back to USD and 1,000 t.
+        const panel = page.getByTestId("decision-panel");
+        await panel.getByRole("radio", { name: "USD" }).click();
+        await panel.getByRole("radio", { name: loc === "en" ? "tonnes" : "toneladas" }).click();
+        await panel.getByLabel("Volume", { exact: true }).fill(loc === "en" ? "1,000" : "1.000");
+        await panel.getByLabel("Volume", { exact: true }).press("Enter");
+      }
       await openFolds(page);
       const out = await numbers(page, loc);
       await ctx.close();

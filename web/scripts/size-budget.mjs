@@ -1,7 +1,8 @@
 // Size budget for the static export (P28). Run after `next build`: `npm run size`.
 //
 // For every page in out/ it measures the HTML and the JavaScript the page loads up front (the
-// <script src> chunks in the HTML), gzipped, and fails when a budget is exceeded. It also checks
+// <script src> chunks in the HTML, minus noModule polyfills), gzipped, and fails when a budget is
+// exceeded. It also checks
 // that ECharts is not in any page's first-load scripts: charts are loaded with next/dynamic.
 // This stands in for a bundle analyzer that works with the Turbopack build.
 import fs from "node:fs";
@@ -12,7 +13,9 @@ const OUT = path.join(process.cwd(), "out");
 const KB = 1024;
 const BUDGET = {
   htmlRaw: { "track-record/index.html": 100 * KB, default: 100 * KB },
-  firstLoadJsGzip: 200 * KB,
+  // Measured without the noModule polyfill (unit B, 2026-11-08): 143-162 KB gzip per page.
+  // The budget leaves ~8% headroom over the heaviest page (/), so real growth trips it.
+  firstLoadJsGzip: 175 * KB,
 };
 
 if (!fs.existsSync(OUT)) {
@@ -35,7 +38,13 @@ const failures = [];
 const rows = [];
 for (const page of pages.sort()) {
   const html = fs.readFileSync(path.join(OUT, page));
-  const srcs = [...html.toString("utf-8").matchAll(/<script[^>]+src="([^"]+\.js)"/g)].map((m) => m[1]);
+  // noModule scripts (Next's core-js polyfill chunk) are skipped: browsers that run modules,
+  // i.e. every browser the site supports, never download them.
+  const srcs = [...html.toString("utf-8").matchAll(/<script\b[^>]*>/gi)]
+    .map((m) => m[0])
+    .filter((tag) => !/\bnomodule\b/i.test(tag))
+    .map((tag) => tag.match(/\bsrc="([^"]+\.js)"/)?.[1])
+    .filter(Boolean);
   let js = 0;
   let echartsUpFront = false;
   for (const src of new Set(srcs)) {

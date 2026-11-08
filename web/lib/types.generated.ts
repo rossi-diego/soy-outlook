@@ -147,6 +147,18 @@ export interface Intervals {
   rule: string;
   nominal_levels: number[];
   coverage_warn_pp: number;
+  /**
+   * One-tail nominal miss rate of the 80% range.
+   */
+  tail_nominal_80: number;
+  /**
+   * Below this many past errors per 95% tail, the 1-in-40 figure is muted.
+   */
+  tail_obs_min_95: number;
+  /**
+   * Range levels a user-typed target is placed between (a position, not odds).
+   */
+  target_readout_levels: number[];
 }
 /**
  * The versioned, pre-registered test and champion rule (P16).
@@ -266,6 +278,14 @@ export interface Coverage {
    * Validation hit rate more than coverage_warn_pp below 95%.
    */
   warn95: boolean;
+  /**
+   * Validation lower-tail miss rate more than coverage_warn_pp above 10%.
+   */
+  tail_warn_lo80: boolean;
+  /**
+   * Validation upper-tail miss rate more than coverage_warn_pp above 10%.
+   */
+  tail_warn_hi80: boolean;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -302,6 +322,14 @@ export interface CoverageSplit {
    */
   n_eff80: number | null;
   n_eff95: number | null;
+  /**
+   * Share of outcomes below the 80% range (one-tail nominal 10%).
+   */
+  miss_lo80: number | null;
+  /**
+   * Share of outcomes above the 80% range (one-tail nominal 10%).
+   */
+  miss_hi80: number | null;
 }
 /**
  * The published range method on a finer grid of levels (P18), US cents per bushel.

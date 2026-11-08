@@ -245,6 +245,21 @@
         },
         "coverage_warn_pp": {
           "type": "number"
+        },
+        "tail_nominal_80": {
+          "description": "One-tail nominal miss rate of the 80% range.",
+          "type": "number"
+        },
+        "tail_obs_min_95": {
+          "description": "Below this many past errors per 95% tail, the 1-in-40 figure is muted.",
+          "type": "number"
+        },
+        "target_readout_levels": {
+          "description": "Range levels a user-typed target is placed between (a position, not odds).",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -259,7 +274,10 @@
         "baseline",
         "rule",
         "nominal_levels",
-        "coverage_warn_pp"
+        "coverage_warn_pp",
+        "tail_nominal_80",
+        "tail_obs_min_95",
+        "target_readout_levels"
       ],
       "title": "Intervals",
       "type": "object"

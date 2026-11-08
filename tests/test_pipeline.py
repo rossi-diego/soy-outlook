@@ -61,6 +61,12 @@ def test_pipeline_publishes_the_site_contract(
         assert cov["nominal"] == {"80": 0.8, "95": 0.95}
         assert 0 <= cov["validation"]["cover80"] <= 1
         assert cov["warn80"] == (cov["validation"]["cover80"] < 0.75)
+        # Unit B display rule: a side's 80% tail is flagged above 10% one-tail nominal + 5 pp
+        val = cov["validation"]
+        assert 0 <= val["miss_lo80"] + val["miss_hi80"] <= 1
+        assert abs(val["miss_lo80"] + val["miss_hi80"] + val["cover80"] - 1) < 0.01
+        assert cov["tail_warn_lo80"] == (val["miss_lo80"] > 0.15)
+        assert cov["tail_warn_hi80"] == (val["miss_hi80"] > 0.15)
     assert outlook["last"]["date"] == "2026-11-06"
     assert not any("premium" in k for k in outlook)
     assert "premium" not in json.dumps(outlook["stress"]["horizons"])
