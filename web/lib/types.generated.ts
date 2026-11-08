@@ -631,6 +631,10 @@ export interface Reaction {
    */
   cov_usd_t: number[][];
   resid_sd_usd_t: number;
+  /**
+   * Display rule (config.WHATIF_DEFAULT_FIT): which fit the what-if opens on.
+   */
+  whatif_default_fit: "recent" | "full";
   latest_revisions: LatestRevisions;
   release_move: ReleaseMove;
   robustness: Robustness;
@@ -760,7 +764,7 @@ export interface CoefCheck {
 export interface SplitSample {
   break: string;
   early: SubSample;
-  late: SubSample;
+  late: RecentFit;
   items: SplitItem[];
 }
 /**
@@ -770,6 +774,29 @@ export interface SplitSample {
 export interface SubSample {
   years: string;
   n_reports: number;
+  r2: number;
+  joint_p: number;
+}
+/**
+ * The split sample's late half, refitted on its own: the what-if's default fit (unit D).
+ *
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "RecentFit".
+ */
+export interface RecentFit {
+  years: string;
+  n_reports: number;
+  r2: number;
+  joint_p: number;
+  /**
+   * Coefficients, Holm-adjusted within this fit.
+   */
+  items: CoefCheck[];
+  /**
+   * HC1 covariance of this fit's coefficients, (USD/t per unit) squared, in `items` order.
+   */
+  cov_usd_t: number[][];
+  resid_sd_usd_t: number;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema

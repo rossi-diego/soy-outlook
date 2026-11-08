@@ -3,8 +3,10 @@
 import { useState } from "react";
 
 import Delta from "@/components/Delta";
+import RadioGroup from "@/components/RadioGroup";
 import { num } from "@/lib/format";
 import type { Locale } from "@/lib/i18n";
+import { type FitId, stabilityFacts, whatIfFit } from "@/lib/stability";
 import type { Wasde } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
 
@@ -123,14 +125,22 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
   const { t, f, d, loc } = useI18n();
   const [moves, setMoves] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState(false);
-  const byFeature = Object.fromEntries(reaction.items.map((it) => [it.feature, it]));
-  const b = reaction.features.map((f) => byFeature[f]?.usd_t_per_unit ?? 0);
+  // Display rule (config.WHATIF_DEFAULT_FIT, fixed 2026-11-08): open on the recent fit.
+  const [fitId, setFitId] = useState<FitId>(reaction.whatif_default_fit);
+  const fit = whatIfFit(reaction, fitId);
+  const fullFit = whatIfFit(reaction, "full");
+  const fitByFeature = Object.fromEntries(fit.items.map((it) => [it.feature, it]));
   const m = reaction.features.map((f) => moves[f] ?? 0);
   // Every coefficient stays in the total, flagged or not: dropping weak ones would be post-hoc selection.
-  const pi = predictionInterval(b, reaction.cov_usd_t, reaction.resid_sd_usd_t, m);
+  const pi = predictionInterval(fit.b, fit.cov, fit.residSd, m);
   const anyMove = m.some((v) => v !== 0);
   const unclear = pi.lo < 0 && pi.hi > 0;
-  const flagged = reaction.items.filter((it) => it.weak || it.wrong_sign).length;
+  const flagged = fit.items.filter((it) => it.weak || it.wrong_sign).length;
+  const yrs = (y: string) => y.replace("-", "–");
+  const recent = fitId === "recent" ? fit : whatIfFit(reaction, "recent");
+  const recentYear = recent.years.slice(0, 4);
+  const narrower = recent.residSd < fullFit.residSd;
+  const sf = stabilityFacts(reaction);
   const lr = reaction.latest_revisions;
   const canLoad = !lr.may && reaction.items.some((it) => it.latest_rev !== null);
   // Portuguese month names are lower case ("outubro contra setembro"); English ones are capitalised.
@@ -195,8 +205,65 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
           </>,
         )}
       </p>
+      <div className="space-y-2 rounded-lg border border-line bg-surface-2 p-3" data-testid="fit-choice">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-sm font-medium text-ink" aria-hidden>
+            {t("Average reaction from", "Reação média de")}
+          </span>
+          <RadioGroup<FitId>
+            legend={t("Average reaction from", "Reação média de")}
+            value={fitId}
+            onChange={setFitId}
+            size="sm"
+            options={[
+              {
+                id: "recent",
+                label: t(`Reports since ${recentYear} (${recent.nReports})`, `Relatórios desde ${recentYear} (${recent.nReports})`),
+                short: t(`Since ${recentYear}`, `Desde ${recentYear}`),
+              },
+              {
+                id: "full",
+                label: t(`All reports ${yrs(fullFit.years)} (${fullFit.nReports})`, `Todos os relatórios ${yrs(fullFit.years)} (${fullFit.nReports})`),
+                short: t("All", "Todos"),
+              },
+            ]}
+          />
+        </div>
+        <p className="text-xs leading-relaxed text-ink-2" data-testid="fit-note">
+          {fitId === "recent"
+            ? t(
+                `Default, by a display rule fixed in config.py on 8 Nov 2026: ${
+                  sf.broke ? `the full-sample ${d(sf.label)} reaction is mostly the pre-${recentYear} market` : "the recent reports are the closer guide to today's market"
+                } (see “How stable is this?” above). The interval uses this fit's own HC1 covariance and residual sd (${f.num(
+                  recent.residSd,
+                  1,
+                )} USD/t, against ${f.num(fullFit.residSd, 1)} for all reports)${
+                  narrower ? "; it is not wider, because release-day moves since " + recentYear + " have been smaller" : ""
+                }.`,
+                `Padrão, por uma regra de exibição fixada no config.py em 8 nov 2026: ${
+                  sf.broke
+                    ? `a reação de “${d(sf.label)}” na amostra toda é sobretudo o mercado de antes de ${recentYear}`
+                    : "os relatórios recentes são o guia mais próximo do mercado de hoje"
+                } (veja “Quão estável é isso?” acima). O intervalo usa a covariância HC1 e o desvio-padrão residual deste ajuste (${f.num(
+                  recent.residSd,
+                  1,
+                )} USD/t, contra ${f.num(fullFit.residSd, 1)} com todos os relatórios)${
+                  narrower ? "; ele não é mais largo porque os movimentos no dia da divulgação desde " + recentYear + " foram menores" : ""
+                }.`,
+              )
+            : t(
+                `The full-sample fit is the reference for every published test${
+                  sf.broke ? `, but its ${d(sf.label)} effect comes mostly from before ${recentYear}; read it as history, not as today's market` : ""
+                }.`,
+                `O ajuste com a amostra toda é a referência de todos os testes publicados${
+                  sf.broke ? `, mas o seu efeito de “${d(sf.label)}” vem sobretudo de antes de ${recentYear}; leia-o como história, não como o mercado de hoje` : ""
+                }.`,
+              )}
+        </p>
+      </div>
       <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
-        {reaction.items.map((it) => {
+        {reaction.items.map((row) => {
+          const it = { ...row, ...fitByFeature[row.feature] };
           const v = moves[it.feature] ?? 0;
           const grey = it.weak || it.wrong_sign;
           const r = sliderRange(it.unit, it.p90_abs_rev, it.latest_rev);
@@ -282,20 +349,20 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
       </div>
       <p className="text-xs leading-relaxed text-muted">
         {t(
-          `Average past reaction from close to close on ${reaction.n_reports} release days (excluding May reports, where the new marketing year starts), estimated jointly and scaled to today's price. The interval adds the estimation uncertainty of the coefficients (HC1 covariance) to the release-day noise they do not explain (residual sd ${f.num(
-            reaction.resid_sd_usd_t,
+          `Average past reaction from close to close on ${fit.nReports} release days (${yrs(fit.years)}; excluding May reports, where the new marketing year starts), estimated jointly and scaled to today's price. The interval adds the estimation uncertainty of the coefficients (HC1 covariance) to the release-day noise they do not explain (residual sd ${f.num(
+            fit.residSd,
             1,
-          )} USD/t); the revisions explain ${f.num(reaction.r2 * 100, 0)}% of release-day moves. Typical revision: the median absolute revision over the same ${
+          )} USD/t); the revisions explain ${f.num(fit.r2 * 100, 0)}% of release-day moves. Typical revision: the median absolute revision over all ${
             reaction.n_reports
           } reports (“usually unchanged” when most of them left the line as it was).${
             flagged > 0
               ? ` ${flagged} of ${reaction.items.length} coefficients are greyed because they do not survive the Holm adjustment or have an unexpected sign. They stay in the total: dropping them after seeing the results would be selection.`
               : ""
           } No new regressors are added here: any would be a pre-registered change tested under Holm.`,
-          `Reação média passada, de fechamento a fechamento, em ${reaction.n_reports} dias de divulgação (excluídos os relatórios de maio, quando começa o novo ano-safra), estimada em conjunto e escalada ao preço de hoje. O intervalo soma a incerteza de estimação dos coeficientes (covariância HC1) ao ruído do dia da divulgação que eles não explicam (desvio-padrão residual de ${f.num(
-            reaction.resid_sd_usd_t,
+          `Reação média passada, de fechamento a fechamento, em ${fit.nReports} dias de divulgação (${yrs(fit.years)}; excluídos os relatórios de maio, quando começa o novo ano-safra), estimada em conjunto e escalada ao preço de hoje. O intervalo soma a incerteza de estimação dos coeficientes (covariância HC1) ao ruído do dia da divulgação que eles não explicam (desvio-padrão residual de ${f.num(
+            fit.residSd,
             1,
-          )} USD/t); as revisões explicam ${f.num(reaction.r2 * 100, 0)}% dos movimentos no dia da divulgação. Revisão típica: a mediana da revisão absoluta nos mesmos ${
+          )} USD/t); as revisões explicam ${f.num(fit.r2 * 100, 0)}% dos movimentos no dia da divulgação. Revisão típica: a mediana da revisão absoluta em todos os ${
             reaction.n_reports
           } relatórios (“normalmente sem mudança” quando a maioria deles deixou a linha como estava).${
             flagged > 0

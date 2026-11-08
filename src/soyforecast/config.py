@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 
@@ -174,6 +175,21 @@ PLACEBO_LAG_SESSIONS = 5
 SPLIT_SAMPLE_BREAK = pd.Timestamp("2018-01-01")
 ROLL_EXCLUSION_BDAYS = 3
 SOY_CONTRACT_MONTHS: tuple[int, ...] = (1, 3, 5, 7, 8, 9, 11)
+
+# What-if display rule (v2.1 polish unit D, fixed 2026-11-08 before the recent-subsample
+# covariance, residual sd or any what-if interval from them was computed). This is a DISPLAY
+# rule, not a model choice. It reacts to a result already published in wasde.json and the
+# round-2 review: the split-sample check shows the US soybean stocks-to-use effect is
+# concentrated before SPLIT_SAMPLE_BREAK (diff p 0.001). Rule:
+#  - The /wasde what-if opens on the "recent" fit: the same six-revision OLS/HC1 regression on
+#    reports from SPLIT_SAMPLE_BREAK on (the split sample's late half). Its 80% prediction
+#    interval uses that fit's own HC1 covariance and residual sd, sqrt(m'V_late m + sd_late^2),
+#    so the smaller sample is carried into the width. Nothing extra is added or tuned.
+#  - A toggle switches to the full-sample fit, which stays the reference for every published
+#    test (Holm, joint p, placebo, roll exclusion). Both fits are always exported and shown.
+#  - No coefficient is dropped or selected in either fit, and nothing is scored on the holdout:
+#    the late half (2018+) is a pre-registered robustness split, not the 2024+ holdout.
+WHATIF_DEFAULT_FIT: Literal["recent", "full"] = "recent"
 
 # Release-day move band (v2.1, P14, pre-registered 2026-11-08 before its hit rate was
 # computed). The band is the empirical quantile of |release-day log return| over every usable

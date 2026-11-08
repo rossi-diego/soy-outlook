@@ -1,6 +1,7 @@
 "use client";
 
 import ReleaseMoveBand from "@/components/ReleaseMoveBand";
+import WasdeStability from "@/components/WasdeStability";
 import WasdeWhatIf from "@/components/WasdeWhatIf";
 import type { Wasde } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
@@ -93,6 +94,8 @@ export default function WasdeView({ w, p0UsdT, buPerT }: { w: Wasde; p0UsdT: num
           .
         </p>
       </section>
+
+      <WasdeStability reaction={w.reaction} />
 
       <WasdeWhatIf reaction={w.reaction} buPerT={buPerT} />
 

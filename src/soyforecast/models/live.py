@@ -29,6 +29,7 @@ from soyforecast.config import (
     SPLIT_SAMPLE_BREAK,
     VALIDATION_END,
     VALIDATION_START,
+    WHATIF_DEFAULT_FIT,
 )
 from soyforecast.evaluation.backtest import eligible, interval_offsets
 from soyforecast.evaluation.stats import holm
@@ -197,6 +198,17 @@ def _coef_items(res: Any, usd_t_now: float) -> list[dict[str, Any]]:
     ]
 
 
+def _cov_usd_t(res: Any, usd_t_now: float) -> list[list[float]]:
+    """HC1 covariance of the six revision coefficients, (USD/t per unit) squared."""
+    feats = list(REACTION_FEATURES)
+    cov = res.cov_params().loc[feats, feats].to_numpy()
+    return [[round(float(c) * usd_t_now**2, 5) for c in row] for row in cov]
+
+
+def _resid_sd_usd_t(res: Any, usd_t_now: float) -> float:
+    return round(float(np.sqrt(res.scale)) * usd_t_now, 3)
+
+
 def _years(d: pd.DataFrame) -> str:
     return f"{d['release_date'].min().year}-{d['release_date'].max().year}"
 
@@ -221,8 +233,23 @@ def _split_sample(data: pd.DataFrame, usd_t_now: float) -> dict[str, Any]:
         )
     return {
         "break": SPLIT_SAMPLE_BREAK,
-        "early": {"years": _years(early_data), "n_reports": int(early.nobs)},
-        "late": {"years": _years(late_data), "n_reports": int(late.nobs)},
+        "early": {
+            "years": _years(early_data),
+            "n_reports": int(early.nobs),
+            "r2": round(float(early.rsquared), 3),
+            "joint_p": round_p(_joint_p(early)),
+        },
+        "late": {
+            "years": _years(late_data),
+            "n_reports": int(late.nobs),
+            "r2": round(float(late.rsquared), 3),
+            "joint_p": round_p(_joint_p(late)),
+            # The "recent" fit of the what-if display rule (config.WHATIF_DEFAULT_FIT): its own
+            # coefficients (Holm within this fit), HC1 covariance and residual sd.
+            "items": _coef_items(late, usd_t_now),
+            "cov_usd_t": _cov_usd_t(late, usd_t_now),
+            "resid_sd_usd_t": _resid_sd_usd_t(late, usd_t_now),
+        },
         "items": items,
     }
 
@@ -291,7 +318,6 @@ def release_day_reaction(
     surviving = [it for it in items if not it["weak"] and not it["wrong_sign"]]
     headline = min(surviving, key=lambda it: it["p_holm"])["feature"] if surviving else None
     feats = list(REACTION_FEATURES)
-    cov = res.cov_params().loc[feats, feats].to_numpy()
     abs_r = np.abs(data["r"].to_numpy())
 
     placebo = _fit(release_day_events(vintages, prices, PLACEBO_LAG_SESSIONS))
@@ -307,8 +333,9 @@ def release_day_reaction(
         "headline_feature": headline,
         "items": items,
         "features": feats,
-        "cov_usd_t": [[round(float(c) * usd_t_now**2, 5) for c in row] for row in cov],
-        "resid_sd_usd_t": round(float(np.sqrt(res.scale)) * usd_t_now, 3),
+        "cov_usd_t": _cov_usd_t(res, usd_t_now),
+        "resid_sd_usd_t": _resid_sd_usd_t(res, usd_t_now),
+        "whatif_default_fit": WHATIF_DEFAULT_FIT,
         "latest_revisions": {
             "month": profile["month"],
             "previous": profile["previous"],

@@ -317,6 +317,14 @@
         "resid_sd_usd_t": {
           "type": "number"
         },
+        "whatif_default_fit": {
+          "description": "Display rule (config.WHATIF_DEFAULT_FIT): which fit the what-if opens on.",
+          "enum": [
+            "recent",
+            "full"
+          ],
+          "type": "string"
+        },
         "latest_revisions": {
           "$ref": "#/$defs/LatestRevisions"
         },
@@ -340,6 +348,7 @@
         "features",
         "cov_usd_t",
         "resid_sd_usd_t",
+        "whatif_default_fit",
         "latest_revisions",
         "release_move",
         "robustness"
@@ -433,6 +442,58 @@
         "latest_rev"
       ],
       "title": "ReactionItem",
+      "type": "object"
+    },
+    "RecentFit": {
+      "additionalProperties": false,
+      "description": "The split sample's late half, refitted on its own: the what-if's default fit (unit D).",
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "items": {
+          "description": "Coefficients, Holm-adjusted within this fit.",
+          "items": {
+            "$ref": "#/$defs/CoefCheck"
+          },
+          "type": "array"
+        },
+        "cov_usd_t": {
+          "description": "HC1 covariance of this fit's coefficients, (USD/t per unit) squared, in `items` order.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "resid_sd_usd_t": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "years",
+        "n_reports",
+        "r2",
+        "joint_p",
+        "items",
+        "cov_usd_t",
+        "resid_sd_usd_t"
+      ],
+      "title": "RecentFit",
       "type": "object"
     },
     "ReleaseMove": {
@@ -597,7 +658,7 @@
           "$ref": "#/$defs/SubSample"
         },
         "late": {
-          "$ref": "#/$defs/SubSample"
+          "$ref": "#/$defs/RecentFit"
         },
         "items": {
           "items": {
@@ -623,11 +684,21 @@
         },
         "n_reports": {
           "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
         }
       },
       "required": [
         "years",
-        "n_reports"
+        "n_reports",
+        "r2",
+        "joint_p"
       ],
       "title": "SubSample",
       "type": "object"

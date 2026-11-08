@@ -595,6 +595,28 @@ class Placebo(Contract):
 class SubSample(Contract):
     years: str
     n_reports: int
+    r2: float
+    joint_p: Probability
+
+
+def _check_square(cov: list[list[float]], k: int, name: str) -> None:
+    if len(cov) != k or any(len(r) != k for r in cov):
+        raise ValueError(f"{name} is not {k}x{k}")
+
+
+class RecentFit(SubSample):
+    """The split sample's late half, refitted on its own: the what-if's default fit (unit D)."""
+
+    items: list[CoefCheck] = Field(description="Coefficients, Holm-adjusted within this fit.")
+    cov_usd_t: list[list[float]] = Field(
+        description="HC1 covariance of this fit's coefficients, (USD/t per unit) squared, in `items` order."
+    )
+    resid_sd_usd_t: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _square_cov(self) -> RecentFit:
+        _check_square(self.cov_usd_t, len(self.items), "split_sample.late.cov_usd_t")
+        return self
 
 
 class SplitItem(Contract):
@@ -609,7 +631,7 @@ class SplitItem(Contract):
 class SplitSample(Contract):
     break_: IsoDate = Field(alias="break")
     early: SubSample
-    late: SubSample
+    late: RecentFit
     items: list[SplitItem]
 
 
@@ -643,15 +665,19 @@ class Reaction(Contract):
         description="HC1 covariance of the coefficients, (USD/t per unit) squared, in `features` order."
     )
     resid_sd_usd_t: float
+    whatif_default_fit: Literal["recent", "full"] = Field(
+        description="Display rule (config.WHATIF_DEFAULT_FIT): which fit the what-if opens on."
+    )
     latest_revisions: LatestRevisions
     release_move: ReleaseMove
     robustness: Robustness
 
     @model_validator(mode="after")
     def _square_cov(self) -> Reaction:
-        k = len(self.features)
-        if len(self.cov_usd_t) != k or any(len(r) != k for r in self.cov_usd_t):
-            raise ValueError(f"cov_usd_t is not {k}x{k}")
+        _check_square(self.cov_usd_t, len(self.features), "cov_usd_t")
+        late = self.robustness.split_sample.late
+        if [it.feature for it in late.items] != self.features:
+            raise ValueError("split_sample.late items are not in `features` order")
         return self
 
 

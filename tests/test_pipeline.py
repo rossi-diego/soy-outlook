@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from soyforecast import pipeline
-from soyforecast.config import HORIZONS, Settings
+from soyforecast.config import HORIZONS, WHATIF_DEFAULT_FIT, Settings
 from soyforecast.publish.web_json import SCHEMA_VERSION, publish
 
 
@@ -88,6 +88,14 @@ def test_pipeline_publishes_the_site_contract(
     assert reaction["resid_sd_usd_t"] > 0
     assert all(it["p_holm"] >= it["p_value"] for it in reaction["items"])
     assert set(reaction["robustness"]) == {"placebo", "split_sample", "roll_excluded"}
+    # Display rule (unit D): the what-if's recent fit carries its own covariance and residual sd.
+    assert reaction["whatif_default_fit"] == WHATIF_DEFAULT_FIT
+    late = reaction["robustness"]["split_sample"]["late"]
+    assert [it["feature"] for it in late["items"]] == reaction["features"]
+    assert len(late["cov_usd_t"]) == k and all(len(r) == k for r in late["cov_usd_t"])
+    assert late["resid_sd_usd_t"] > 0
+    assert all(late["cov_usd_t"][i][i] >= 0 for i in range(k))
+    assert 0 <= reaction["robustness"]["split_sample"]["early"]["joint_p"] <= 1
     assert wasde["next_release"] == "2026-11-10"
     assert (out / "backtest.csv").exists()
     run = json.loads((out / "run_manifest.json").read_text(encoding="utf-8"))

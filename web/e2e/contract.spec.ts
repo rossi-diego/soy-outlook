@@ -169,23 +169,62 @@ test("an invalid premium says which value still applies", async ({ page }) => {
 test("what-if shows an 80% prediction interval from the published covariance", async ({ page }) => {
   const wasde = await json(page, "wasde.json");
   const r = wasde.reaction;
+  const late = r.robustness.split_sample.late;
   await page.goto("/wasde/");
-  // With no surprise entered, the interval is the residual noise alone: ±1.2816 × resid sd.
-  const half = (1.2815515655446004 * r.resid_sd_usd_t).toFixed(1);
+  // Display rule (config.WHATIF_DEFAULT_FIT): the what-if opens on the recent fit, whose
+  // interval with no surprise entered is its own residual noise alone: ±1.2816 × resid sd.
+  expect(r.whatif_default_fit).toBe("recent");
+  const half = (1.2815515655446004 * late.resid_sd_usd_t).toFixed(1);
   const pi = page.getByTestId("pi80");
   await expect(pi).toContainText(`−${half} to +${half} USD/t`);
   await expect(pi).toContainText("direction unclear");
+  await expect(page.getByRole("radio", { name: new RegExp(`^Reports since ${late.years.slice(0, 4)}`) })).toBeChecked();
+  // The per-line coefficients are the recent fit's.
+  const soyLate = late.items.find((it: { feature: string }) => it.feature === "rev_us_soy_stu");
+  await expect(page.getByTestId("slider-rev_us_soy_stu")).toContainText(`${Math.abs(soyLate.usd_t_per_unit).toFixed(2)} ± ${soyLate.se_usd_t.toFixed(2)} USD/t`);
+  // The toggle switches to the full-sample fit and its own residual sd.
+  await page.getByRole("radio", { name: /^All reports/ }).check();
+  const fullHalf = (1.2815515655446004 * r.resid_sd_usd_t).toFixed(1);
+  await expect(pi).toContainText(`−${fullHalf} to +${fullHalf} USD/t`);
+  await page.getByRole("radio", { name: /^Reports since/ }).check();
   // The central value is in the interval's unit, never a bare "unch." next to a USD/t range,
   // and the same move in ¢/bu never prints a negative zero.
   await expect(page.getByTestId("whatif-central")).toHaveText("0.0 USD/t");
   await expect(page.getByTestId("whatif-cbot")).toHaveText("(same move in CBOT: 0.0¢/bu)");
   await expect(pi).not.toContainText("unch.");
-  const flagged = r.items.filter((it: { weak: boolean; wrong_sign: boolean }) => it.weak || it.wrong_sign).length;
+  // Flags of the recent fit: weak = Holm p at or above alpha; wrong sign against the expectation.
+  type Late = { feature: string; usd_t_per_unit: number; p_holm: number };
+  const expected = Object.fromEntries(r.items.map((it: { feature: string; expected_sign: number }) => [it.feature, it.expected_sign]));
+  const wrong = (it: Late) => Math.sign(it.usd_t_per_unit) !== 0 && Math.sign(it.usd_t_per_unit) !== expected[it.feature];
+  const flagged = late.items.filter((it: Late) => it.p_holm >= r.alpha || wrong(it)).length;
   await expect(page.locator('[data-flagged="true"]')).toHaveCount(flagged);
-  await expect(page.getByText("unexpected sign", { exact: true })).toHaveCount(
-    r.items.filter((it: { wrong_sign: boolean }) => it.wrong_sign).length,
-  );
+  await expect(page.getByText("unexpected sign", { exact: true })).toHaveCount(late.items.filter(wrong).length);
   await expect(page.getByText("Historical average reaction on release day")).toBeVisible();
+});
+
+test("'How stable is this?' states the split-sample break, roll exclusion and placebo from the data", async ({ page }) => {
+  const wasde = await json(page, "wasde.json");
+  const r = wasde.reaction;
+  const rob = r.robustness;
+  await page.goto("/wasde/");
+  const box = page.getByTestId("stability");
+  await expect(box.getByRole("heading", { name: "How stable is this?" })).toBeVisible();
+  const summary = box.getByTestId("stability-summary");
+  const soy = rob.split_sample.items.find((it: { feature: string }) => it.feature === "rev_us_soy_stu");
+  const pF = (v: number) => (v < 0.001 ? "<0.001" : v.toFixed(3));
+  // The published numbers behind the sentence (this data: a break at 2018 that leaves nothing after).
+  expect(soy.diff_p).toBeLessThan(r.alpha);
+  await expect(summary).toContainText("is concentrated before 2018 and is not distinguishable from zero after");
+  await expect(summary).toContainText(`difference p ${pF(soy.diff_p)}`);
+  await expect(summary).toContainText(`${rob.roll_excluded.n_excluded} release days`);
+  await expect(summary).toContainText(`joint p ${pF(rob.roll_excluded.joint_p)}`);
+  await expect(summary).toContainText(`joint p ${pF(rob.placebo.joint_p)}`);
+  // The full table sits behind one fold: six lines plus the joint-p row.
+  await box.getByText("All six revisions, every check").click();
+  const table = box.getByTestId("stability-table");
+  await expect(table.locator("tbody tr")).toHaveCount(r.features.length + 1);
+  await expect(table.locator('[data-feature="rev_us_soy_stu"]')).toContainText(`${pF(soy.diff_p)}`);
+  await expect(box.getByTestId("stability-joint")).toContainText(pF(rob.split_sample.late.joint_p));
 });
 
 test("sharing metadata, icons, robots and sitemap are published", async ({ page }) => {
