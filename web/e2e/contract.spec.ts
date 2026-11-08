@@ -175,9 +175,11 @@ test("what-if shows an 80% prediction interval from the published covariance", a
   const pi = page.getByTestId("pi80");
   await expect(pi).toContainText(`−${half} to +${half} USD/t`);
   await expect(pi).toContainText("direction unclear");
-  // The central value is in the interval's unit, never a bare "unch." next to a USD/t range.
-  await expect(pi).toContainText("(central 0.0 USD/t)");
+  // The central value is in the interval's unit, never a bare "unch." next to a USD/t range,
+  // and the same move in ¢/bu never prints a negative zero.
   await expect(page.getByTestId("whatif-central")).toHaveText("0.0 USD/t");
+  await expect(page.getByTestId("whatif-cbot")).toHaveText("(same move in CBOT: 0.0¢/bu)");
+  await expect(pi).not.toContainText("unch.");
   const flagged = r.items.filter((it: { weak: boolean; wrong_sign: boolean }) => it.weak || it.wrong_sign).length;
   await expect(page.locator('[data-flagged="true"]')).toHaveCount(flagged);
   await expect(page.getByText("unexpected sign", { exact: true })).toHaveCount(

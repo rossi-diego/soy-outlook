@@ -205,6 +205,11 @@ body {
   table.stack-sm tr {
     padding: 0.5rem 0;
   }
+  /* A caption would otherwise shrink to a one-word column once the table is a block. */
+  table.stack-sm caption {
+    display: block;
+    width: 100%;
+  }
   table.stack-sm td {
     display: flex;
     justify-content: space-between;

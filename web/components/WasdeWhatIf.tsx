@@ -15,8 +15,11 @@ const BASE_RANGE: Record<string, number> = { pp: 1, Mt: 3 };
 const STEP: Record<string, number> = { pp: 0.01, Mt: 0.01 };
 /** Two-sided 80% normal quantile. */
 const Z80 = 1.2815515655446004;
-/** One decimal with a true minus sign. */
-const fmt1 = (v: number, loc: Locale = "en") => (v < 0 ? `−${num(-v, 1, loc)}` : v > 0 ? `+${num(v, 1, loc)}` : num(v, 1, loc));
+/** Signed, one decimal; anything that rounds to zero prints as a plain "0.0" (never "−0.0"). */
+const fmt1 = (v: number, loc: Locale = "en") => {
+  const r = (Math.sign(v) * Math.round(Math.abs(v) * 10)) / 10;
+  return r < 0 ? `−${num(-r, 1, loc)}` : r > 0 ? `+${num(r, 1, loc)}` : num(0, 1, loc);
+};
 const fmtRev = (v: number, unit: string, loc: Locale = "en") => {
   const d = Math.abs(v * 10 - Math.round(v * 10)) > 1e-9 || unit === "pp" ? 2 : 1;
   const s = num(Math.abs(v), d, loc);
@@ -257,13 +260,12 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
           <span className="text-2xl font-semibold" data-testid="whatif-central">
             <Delta value={pi.mean} digits={1} suffix=" USD/t" loc={loc} zeroAsNumber />
           </span>
-          <span className="tabular text-sm text-muted">
-            ({t("same move in CBOT", "o mesmo movimento na CBOT")}: {fmt1(Math.round((pi.mean / buPerT) * 1000) / 10, loc)}¢/bu)
+          <span className="tabular text-sm text-muted" data-testid="whatif-cbot">
+            ({t("same move in CBOT", "o mesmo movimento na CBOT")}: {fmt1((pi.mean / buPerT) * 100, loc)}¢/bu)
           </span>
         </div>
         <p className="tabular text-sm text-ink-2" data-testid="pi80">
-          {t("80% prediction interval", "Intervalo de predição de 80%")}: {fmt1(pi.lo, loc)} {t("to", "a")} {fmt1(pi.hi, loc)} USD/t{" "}
-          ({t("central", "central")} {fmt1(Math.round(pi.mean * 10) / 10, loc)} USD/t)
+          {t("80% prediction interval", "Intervalo de predição de 80%")}: {fmt1(pi.lo, loc)} {t("to", "a")} {fmt1(pi.hi, loc)} USD/t
           {unclear ? (
             <span className="ml-1.5 font-medium text-ink">· {t("direction unclear", "direção incerta")}</span>
           ) : (

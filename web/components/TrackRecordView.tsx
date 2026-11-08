@@ -132,8 +132,8 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
           <table className="stack-sm w-full min-w-[40rem] text-sm" data-testid="archive-table">
             <caption className="pb-2 text-left text-xs text-muted" data-testid="archive-unit">
               {t(
-                `Prices in ${unit} (the archive stores CBOT ¢/bu); once you type a premium on the Outlook page, its FOB numbers sit higher by that premium.`,
-                `Preços em ${unit} (o arquivo guarda CBOT em ¢/bu); depois que você digita um prêmio na página Perspectiva, os números FOB dela ficam mais altos nesse valor.`,
+                `All prices in ${unit}; FOB prices on the Outlook page add the premium you type.`,
+                `Todos os preços em ${unit}; os preços FOB da página Perspectiva somam o prêmio que você digita.`,
               )}
             </caption>
             <thead>
@@ -206,8 +206,8 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
       )}
       <p className="text-xs text-muted">
         {t(
-          "CBOT front month in USD/t, excluding the Paranaguá premium; the outcome is the last close on or before the target date. If the data vendor later revises a close, the site republishes and the change is added as a new revision record next to the original, never written over it. The archive files are published at",
-          "Primeiro vencimento da CBOT em USD/t, sem o prêmio de Paranaguá; o resultado é o último fechamento até a data-alvo. Se o fornecedor depois revisar um fechamento, o site republica e a mudança entra como um novo registro de revisão ao lado do original, nunca por cima dele. Os arquivos ficam em",
+          "CBOT front month, stored in ¢/bu and shown converted to USD/t, without the Paranaguá premium; the outcome is the last close on or before the target date. If the data vendor later revises a close, the site republishes and the change is added as a new revision record next to the original, never written over it. The archive files are published at",
+          "Primeiro vencimento da CBOT, guardado em ¢/bu e mostrado convertido para USD/t, sem o prêmio de Paranaguá; o resultado é o último fechamento até a data-alvo. Se o fornecedor depois revisar um fechamento, o site republica e a mudança entra como um novo registro de revisão ao lado do original, nunca por cima dele. Os arquivos ficam em",
         )}{" "}
         <a className="underline hover:text-ink" href="/data/archive/index.json">
           /data/archive/

@@ -11,7 +11,8 @@ Four kinds of check, each returning human-readable problems (an empty list passe
   archive   - an outlook built within ARCHIVE_MAX_LAG_BDAYS of its close is on record, so
               every timely outlook the site shows can be scored later, and the newest
               archived record of the outlook on the site matches outlook.json (a revised
-              close is a new `.r<N>` record, never a silent difference).
+              close is a new `.r<N>` record, never a silent difference, and each `.r<N>`
+              follows revision N-1 of the same outlook).
 """
 
 from __future__ import annotations
@@ -34,10 +35,12 @@ from soyforecast.publish.archive import (
     ARCHIVE_DIR,
     INDEX,
     NAME_RE,
+    REVISION_RE,
     build_lag_bdays,
     differences,
     load_archive,
     records_for,
+    revision_of,
     snapshot,
 )
 from soyforecast.publish.schema import FILES, validate_payload
@@ -143,6 +146,37 @@ def check_deltas(data: Path, baseline: Path) -> list[str]:
     return problems
 
 
+def check_revision_chain(data: Path) -> list[str]:
+    """Every `.r<N>` record says it is revision N and follows revision N-1 of the same outlook.
+
+    The tally scores revision 1 only, so a revision file whose content claimed `revision: 1`
+    (or a broken `revises` link) would be scored twice or detached from its original.
+    """
+    records = load_archive(data)
+    by_file = {r["file"]: r for r in records}
+    problems = []
+    for r in records:
+        m = REVISION_RE.search(r["file"])
+        n = int(m.group(1)) if m else 1
+        if revision_of(r) != n:
+            problems.append(f"archive {r['file']}: revision {revision_of(r)}, file name says {n}")
+            continue
+        if n == 1:
+            continue
+        prev = by_file.get(r.get("revises") or "")
+        if (
+            prev is None
+            or revision_of(prev) != n - 1
+            or prev["as_of_close"] != r["as_of_close"]
+            or prev["latest_wasde"]["month"] != r["latest_wasde"]["month"]
+        ):
+            problems.append(
+                f"archive {r['file']}: revises {r.get('revises')!r}, "
+                f"not revision {n - 1} of the same outlook"
+            )
+    return problems
+
+
 def check_archived(data: Path, meta: dict[str, Any]) -> list[str]:
     """The outlook on the site is on record, and its newest record shows the same numbers.
 
@@ -150,6 +184,9 @@ def check_archived(data: Path, meta: dict[str, Any]) -> list[str]:
     outlook is archived, timely or not, its newest record must match outlook.json: a revised
     close is written as a new revision, so the site never silently differs from the record.
     """
+    chain = check_revision_chain(data)
+    if chain:
+        return chain
     as_of, month = meta["as_of_close"], meta["latest_wasde"]["month"]
     records = records_for(load_archive(data), as_of, month)
     if not records:

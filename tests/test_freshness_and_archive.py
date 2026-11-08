@@ -23,7 +23,7 @@ from soyforecast.freshness import (
 from soyforecast.ingest.prices import fetch_soy_prices
 from soyforecast.publish.archive import load_archive, publish_archive, score
 from soyforecast.publish.schema import SCHEMA_VERSION, validate_payload
-from soyforecast.publish.validate import validate
+from soyforecast.publish.validate import check_revision_chain, validate
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bronze"
 
@@ -296,6 +296,23 @@ def test_gate_requires_the_newest_record_to_match_the_live_outlook(published, tm
     (data / "outlook.json").write_text(json.dumps(outlook), encoding="utf-8")
     problems = validate(data, meta["schema_version"], now=now).problems
     assert len(problems) == 1 and "differs from outlook.json: p0" in problems[0]
+
+
+def test_gate_rejects_a_broken_revision_chain(tmp_path):
+    prices = pd.Series(1000.0, index=pd.bdate_range("2025-12-01", "2026-01-30"))
+    publish_archive(*_meta_outlook("2026-01-09", p0=1189.0), prices, tmp_path)
+    publish_archive(*_meta_outlook("2026-01-09", p0=1193.75), prices, tmp_path)
+    assert check_revision_chain(tmp_path) == []
+    rev = tmp_path / "archive" / "2026-01-09.r2.json"
+    body = json.loads(rev.read_text(encoding="utf-8"))
+
+    # A revision file that claims to be the first record would be scored twice.
+    rev.write_text(json.dumps({**body, "revision": 1}), encoding="utf-8")
+    assert "file name says 2" in check_revision_chain(tmp_path)[0]
+
+    # A revision must follow the previous revision of the same outlook.
+    rev.write_text(json.dumps({**body, "revises": "2026-01-08.json"}), encoding="utf-8")
+    assert "not revision 1 of the same outlook" in check_revision_chain(tmp_path)[0]
 
 
 def test_gate_rejects_bad_shape(published, tmp_path):
