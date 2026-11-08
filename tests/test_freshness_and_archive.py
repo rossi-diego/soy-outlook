@@ -162,6 +162,31 @@ def test_archive_outcome_uses_only_closes_on_or_before_the_target(tmp_path):
     assert index["prices_through"] == "2026-02-09"
 
 
+def test_archive_keeps_a_wasde_day_republish_and_skips_late_rebuilds(tmp_path):
+    prices = pd.Series(1000.0, index=pd.bdate_range("2025-12-01", "2026-01-30"))
+    meta, outlook = _meta_outlook("2026-01-09")
+    publish_archive(meta, outlook, prices, tmp_path)
+
+    # Same close, newer WASDE (second pass on a release day): archived alongside, not over.
+    meta_w = dict(meta, latest_wasde={"month": "2026-11", "release_date": "2026-01-09"})
+    publish_archive(meta_w, outlook, prices, tmp_path)
+    publish_archive(meta_w, outlook, prices, tmp_path)  # a rerun adds nothing
+    names = sorted(p.name for p in (tmp_path / "archive").glob("2026-*.json"))
+    assert names == ["2026-01-09.json", "2026-01-09_2026-11.json"]
+    index = json.loads((tmp_path / "archive" / "index.json").read_text())
+    assert [e["latest_wasde"] for e in index["entries"]] == ["2026-11", "2026-10"]
+
+    # Built two business days after its close (e.g. an offline rebuild on an old cache):
+    # published, but never archived, so the unseen record cannot be backfilled.
+    late_meta, late_outlook = _meta_outlook("2026-01-14")
+    late_meta["generated_at"] = "2026-01-16T20:00:00+00:00"
+    index = publish_archive(late_meta, late_outlook, prices, tmp_path)
+    assert not (tmp_path / "archive" / "2026-01-14.json").exists()
+    assert index["n_outlooks"] == 2
+    late_meta["generated_at"] = "2026-01-15T20:00:00+00:00"  # one business day: archived
+    assert publish_archive(late_meta, late_outlook, prices, tmp_path)["n_outlooks"] == 3
+
+
 # ---------------------------------------------------------------- validation gate and fixtures
 
 
@@ -176,7 +201,8 @@ def published(tmp_path_factory) -> Path:
     shutil.copytree(FIXTURES, base / "data" / "bronze")
     shutil.copytree(ROOT / "data" / "seed", base / "data" / "seed")
     settings = Settings(data_dir=base / "data", web_data_dir=base / "web", offline=True)
-    publish(run(settings), settings)
+    # Built on the day of the fixtures' last close, as the scheduled refresh would be.
+    publish(run(settings), settings, now=datetime(2026, 11, 6, 21, tzinfo=UTC))
     return base / "web"
 
 
@@ -227,6 +253,20 @@ def test_gate_rejects_regressions_against_the_baseline(published, tmp_path):
     assert any("went backwards" in p for p in problems)
     assert any("backtest rows fell" in p for p in problems)
     assert any("archived outlook removed: 2026-10-30.json" in p for p in problems)
+
+
+def test_gate_requires_a_timely_outlook_to_be_archived(published, tmp_path):
+    data = tmp_path / "data"
+    shutil.copytree(published, data)
+    meta = json.loads((data / "meta.json").read_text(encoding="utf-8"))
+    now = datetime(2026, 11, 9, 21, tzinfo=UTC)
+    (data / "archive" / f"{meta['as_of_close']}.json").unlink()
+    problems = validate(data, meta["schema_version"], now=now).problems
+    assert problems == [f"outlook for {meta['as_of_close']} (2026-10 WASDE) is not archived"]
+    # A late rebuild is not archived on purpose, and the gate accepts that.
+    meta["generated_at"] = "2026-11-11T21:00:00+00:00"
+    (data / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    assert validate(data, meta["schema_version"], now=now).ok
 
 
 def test_gate_rejects_bad_shape(published, tmp_path):

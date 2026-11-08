@@ -29,6 +29,7 @@ This is how new data reaches the site, what stops bad data, and what the reposit
   - `as_of_close` and the latest WASDE never go backwards.
   - Backtest rows and weekly history points shrink by at most `MAX_ROW_LOSS_SHARE` (2%).
   - Every archived outlook is still present and byte-identical.
+- **Archive.** An outlook built within `ARCHIVE_MAX_LAG_BDAYS` (1) business day of its close must be in the archive.
 
 The results are written to the run summary and as step outputs: `ok`, `stale`, `degraded`, `degraded_sources` and `as_of_close`.
 
@@ -48,11 +49,13 @@ The as-of close stays in the header at every width.
 
 ## Alerts
 
-When a refresh fails, including a failed gate or a stale close, or when it runs on degraded data, the workflow opens an issue labelled `data-alert`. If one is already open, it comments on that issue instead. The README badge shows the status of the last refresh run.
+When a refresh fails, including a failed gate, when its close is stale (even on a manual `allow_stale` run), or when it runs on degraded data, the workflow opens an issue labelled `data-alert`. If one is already open, it comments on that issue instead. The README badge shows the status of the last refresh run.
 
 ## Outlook archive: the unseen track record
 
 - Each publish writes `web/public/data/archive/<as_of_close>.json` with the horizons, central values, ranges, model, interval method and code version. It does this only if the file does not exist yet, so a file is never rewritten, and the gate rejects any refresh that would change or delete one.
+- If the same close is published again with a newer WASDE report (the second pass on a release day), that outlook is archived too, as `archive/<as_of_close>_<wasde month>.json`.
+- An outlook built more than `ARCHIVE_MAX_LAG_BDAYS` (1) business day after its close, such as an offline rebuild on an old cache, is published but not archived. Later closes are already known by then, so archiving it would backfill the record with hindsight.
 - `archive/index.json` is rebuilt on every run. Each horizon's outcome is the last CBOT close on or before its target date, marked `inside80` and `inside95`, and `pending` until that date passes.
 - The Track record page shows these rows under "Published outlooks against what happened".
 - None of these rows was used to choose a model or a range method. Unlike the backtest, where I had seen the 2024–25 holdout prices, this is the only genuinely unseen out-of-sample record. The first 1-month outcome is due a month after the first archived close (2026-11-06).

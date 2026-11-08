@@ -7,7 +7,9 @@ Three kinds of check, each returning human-readable problems (an empty list pass
   freshness - the as-of close is at most STALE_CLOSE_BDAYS business days old;
   deltas    - against the previously published copy: the as-of close and the latest WASDE
               never go backwards, backtest rows and weekly history do not shrink by more
-              than MAX_ROW_LOSS_SHARE, and archived outlooks are untouched (append-only).
+              than MAX_ROW_LOSS_SHARE, and archived outlooks are untouched (append-only);
+  archive   - an outlook built within ARCHIVE_MAX_LAG_BDAYS of its close is on record, so
+              every timely outlook the site shows can be scored later.
 """
 
 from __future__ import annotations
@@ -20,9 +22,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from soyforecast.config import HORIZONS, MAX_ROW_LOSS_SHARE, STALE_CLOSE_BDAYS
+from soyforecast.config import (
+    ARCHIVE_MAX_LAG_BDAYS,
+    HORIZONS,
+    MAX_ROW_LOSS_SHARE,
+    STALE_CLOSE_BDAYS,
+)
 from soyforecast.freshness import business_days_between, chicago_now
-from soyforecast.publish.archive import ARCHIVE_DIR, INDEX
+from soyforecast.publish.archive import (
+    ARCHIVE_DIR,
+    INDEX,
+    NAME_RE,
+    archived_for,
+    build_lag_bdays,
+    load_archive,
+)
 
 REQUIRED_FILES = (
     "meta.json",
@@ -123,13 +137,25 @@ def check_deltas(data: Path, baseline: Path) -> list[str]:
             problems.append(f"weekly history fell from {old_h} to {new_h} points")
     old_archive = baseline / ARCHIVE_DIR
     if old_archive.exists():
-        for p in sorted(old_archive.glob("????-??-??.json")):
+        for p in sorted(f for f in old_archive.iterdir() if NAME_RE.match(f.name)):
             q = data / ARCHIVE_DIR / p.name
             if not q.exists():
                 problems.append(f"archived outlook removed: {p.name}")
             elif q.read_bytes() != p.read_bytes():
                 problems.append(f"archived outlook rewritten: {p.name}")
     return problems
+
+
+def check_archived(data: Path, meta: dict[str, Any]) -> list[str]:
+    """A timely outlook must be in the archive (late rebuilds are left out on purpose)."""
+    snap = {"as_of_close": meta["as_of_close"], "generated_at": meta["generated_at"]}
+    if build_lag_bdays(snap) > ARCHIVE_MAX_LAG_BDAYS:
+        return []
+    if archived_for(load_archive(data), meta["as_of_close"], meta["latest_wasde"]["month"]):
+        return []
+    return [
+        f"outlook for {meta['as_of_close']} ({meta['latest_wasde']['month']} WASDE) is not archived"
+    ]
 
 
 def validate(
@@ -152,6 +178,7 @@ def validate(
             f"as_of_close {meta['as_of_close']} is {report.bdays_old} business days old "
             f"(limit {max_bdays})"
         )
+    report.problems += check_archived(data, meta)
     if baseline is not None:
         report.problems += check_deltas(data, baseline)
     return report

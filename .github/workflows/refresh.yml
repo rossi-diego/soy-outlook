@@ -148,7 +148,8 @@ jobs:
         run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
 
       - name: Alert on a failed, stale or degraded refresh
-        if: always() && steps.guard.outputs.should_run == 'true' && (failure() || steps.validate.outputs.degraded == 'true')
+        # Stale counts on its own: a manual run with allow_stale passes the gate but still alerts.
+        if: always() && steps.guard.outputs.should_run == 'true' && (failure() || steps.validate.outputs.degraded == 'true' || steps.validate.outputs.stale == 'true')
         run: |
           title="Data refresh needs attention"
           body="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

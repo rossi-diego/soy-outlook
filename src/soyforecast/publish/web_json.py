@@ -308,9 +308,9 @@ def build_wasde(a: Artefacts) -> dict[str, Any]:
     }
 
 
-def publish(a: Artefacts, settings: Settings) -> None:
+def publish(a: Artefacts, settings: Settings, now: datetime | None = None) -> None:
     out = settings.web_data_dir
-    meta = _clean(build_meta(a))
+    meta = _clean(build_meta(a, now))
     outlook = _clean(build_outlook(a))
     _dump(meta, out / "meta.json")
     _dump(outlook, out / "outlook.json")

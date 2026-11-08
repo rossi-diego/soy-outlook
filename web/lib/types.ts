@@ -77,7 +77,8 @@ export type ArchiveIndex = {
   n_resolved: number;
   inside80: number;
   inside95: number;
-  entries: { as_of_close: string; latest_wasde: string; p0_c_bu: number; horizons: ArchivedHorizon[] }[];
+  // `file` is the archive file name; a close re-published with a newer WASDE has its own entry.
+  entries: { file: string | null; as_of_close: string; latest_wasde: string; p0_c_bu: number; horizons: ArchivedHorizon[] }[];
 };
 
 export type PremiumSource = {

@@ -106,6 +106,11 @@ STALE_CLOSE_BDAYS = 3
 # Validation gate against the previously published data: a refresh may not lose more than
 # this share of backtest rows or of weekly history points.
 MAX_ROW_LOSS_SHARE = 0.02
+# Outlook archive (P23): an outlook is archived only when it is built within this many
+# business days of its as-of close (dated in Chicago). A later rebuild, for example an
+# offline run on an old cache after closes beyond the as-of date are known, is published
+# but never enters the unseen record, so the archive cannot be backfilled with hindsight.
+ARCHIVE_MAX_LAG_BDAYS = 1
 
 WASDE_RELEASE_URL = "https://github.com/rossi-diego/wasde-monthly-report/releases/latest/download/wasde_full.parquet"
 SOY_TICKER = "ZS=F"

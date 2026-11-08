@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 
 import EChart, { axisCommon, baseOption, type Tokens } from "@/components/EChart";
-import { dateLabel, horizonLabel, monthLabel, num, pct } from "@/lib/format";
+import { MONTHS, dateLabel, horizonLabel, num, pct } from "@/lib/format";
 import type { ArchiveIndex, Meta, MetricRow, ModelId, TrackRecord } from "@/lib/types";
 
 const MODELS: ModelId[] = ["rw", "drift", "arima", "ridge"];
@@ -97,9 +97,9 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
             </thead>
             <tbody>
               {rows.map(({ e, h }) => (
-                <tr key={`${e.as_of_close}-${h.h}`} className="border-b border-line last:border-0" data-status={h.status}>
+                <tr key={`${e.file ?? e.as_of_close}-${e.latest_wasde}-${h.h}`} className="border-b border-line last:border-0" data-status={h.status}>
                   <td className="py-1.5">
-                    {dateLabel(e.as_of_close)} <span className="text-muted">({monthLabel(e.latest_wasde).split(" ")[0].slice(0, 3)} WASDE)</span>
+                    {dateLabel(e.as_of_close)} <span className="text-muted">({MONTHS[Number(e.latest_wasde.slice(5, 7)) - 1]} WASDE)</span>
                   </td>
                   <td className="py-1.5">{horizonLabel(h.h)}</td>
                   <td className="py-1.5">{dateLabel(h.target_date)}</td>
