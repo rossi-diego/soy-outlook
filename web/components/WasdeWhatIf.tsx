@@ -6,46 +6,106 @@ import Delta from "@/components/Delta";
 import { num } from "@/lib/format";
 import type { Wasde } from "@/lib/types";
 
-type Props = { reaction: Wasde["reaction"]; buPerT: number; lines: Wasde["lines"] };
+type Props = { reaction: Wasde["reaction"]; buPerT: number };
 
 const STEP: Record<string, number> = { pp: 0.1, Mt: 0.5 };
 const RANGE: Record<string, number> = { pp: 3, Mt: 10 };
+/** Two-sided 80% normal quantile. */
+const Z80 = 1.2815515655446004;
+/** One decimal with a true minus sign. */
+const fmt1 = (v: number) => (v < 0 ? `−${num(-v, 1)}` : num(v, 1));
+
+/**
+ * 80% prediction interval of the release-day move for a vector of surprises m:
+ * mean = b'm, variance = m'Vm (HC1 coefficient covariance) + sigma_resid^2.
+ */
+export function predictionInterval(
+  b: number[],
+  cov: number[][],
+  residSd: number,
+  m: number[],
+): { mean: number; sd: number; lo: number; hi: number } {
+  const mean = b.reduce((s, bi, i) => s + bi * m[i], 0);
+  let mVm = 0;
+  for (let i = 0; i < m.length; i++) for (let j = 0; j < m.length; j++) mVm += m[i] * cov[i][j] * m[j];
+  const sd = Math.sqrt(Math.max(mVm, 0) + residSd ** 2);
+  return { mean, sd, lo: mean - Z80 * sd, hi: mean + Z80 * sd };
+}
 
 // Strength uses the Holm-adjusted p-value: the six coefficients are one family of tests.
-function strength(p: number): { label: string; tone: string } {
-  if (p < 0.05) return { label: "clear", tone: "text-ink" };
-  if (p < 0.1) return { label: "weak", tone: "text-ink-2" };
-  return { label: "not distinguishable from zero", tone: "text-muted" };
+function strength(p: number): string {
+  if (p < 0.05) return "clear";
+  if (p < 0.1) return "weak";
+  return "not distinguishable from zero";
+}
+
+function IntervalBar({ lo, hi, mean }: { lo: number; hi: number; mean: number }) {
+  // Symmetric scale around zero, rounded up to a 5 USD/t step, so the zero line sits in the middle.
+  const r = Math.max(10, Math.ceil(Math.max(Math.abs(lo), Math.abs(hi)) / 5) * 5);
+  const pos = (v: number) => `${((v + r) / (2 * r)) * 100}%`;
+  return (
+    <div className="space-y-1" aria-hidden>
+      <div className="relative h-6">
+        <div className="absolute inset-x-0 top-1/2 h-px bg-grid" />
+        <div className="absolute top-0 h-full w-px bg-[var(--axis)]" style={{ left: "50%" }} />
+        <div
+          className="absolute top-1/2 h-2.5 -translate-y-1/2 rounded-full bg-accent-soft ring-1 ring-[var(--accent)]"
+          style={{ left: pos(lo), width: `calc(${pos(hi)} - ${pos(lo)})` }}
+        />
+        <div
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--surface)] bg-[var(--accent)]"
+          style={{ left: pos(mean) }}
+        />
+      </div>
+      <div className="tabular flex justify-between text-[0.7rem] text-muted">
+        <span>−{r}</span>
+        <span>0</span>
+        <span>+{r} USD/t</span>
+      </div>
+    </div>
+  );
 }
 
 export default function WasdeWhatIf({ reaction, buPerT }: Props) {
   const [moves, setMoves] = useState<Record<string, number>>({});
-  const total = reaction.items.reduce((s, it) => s + it.usd_t_per_unit * (moves[it.feature] ?? 0), 0);
-  // Standard error of the sum, ignoring covariances between estimates (approximate).
-  const se = Math.sqrt(reaction.items.reduce((s, it) => s + (it.se_usd_t * (moves[it.feature] ?? 0)) ** 2, 0));
-  const anyMove = Object.values(moves).some((v) => v !== 0);
+  const byFeature = Object.fromEntries(reaction.items.map((it) => [it.feature, it]));
+  const b = reaction.features.map((f) => byFeature[f]?.usd_t_per_unit ?? 0);
+  const m = reaction.features.map((f) => moves[f] ?? 0);
+  // Every coefficient stays in the total, flagged or not: dropping weak ones would be post-hoc selection.
+  const pi = predictionInterval(b, reaction.cov_usd_t, reaction.resid_sd_usd_t, m);
+  const anyMove = m.some((v) => v !== 0);
+  const unclear = pi.lo < 0 && pi.hi > 0;
+  const flagged = reaction.items.filter((it) => it.weak || it.wrong_sign).length;
 
   return (
     <section className="card space-y-4 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold">What-if: the release-day move for a revision you expect</h2>
+        <h2 className="text-lg font-semibold">What-if: the historical average reaction to a WASDE surprise</h2>
         {anyMove && (
           <button type="button" className="text-sm text-ink-2 underline hover:text-ink" onClick={() => setMoves({})}>
             Reset
           </button>
         )}
       </div>
+      <p className="text-sm text-ink-2">
+        Set each line&apos;s <strong className="text-ink">surprise vs expectation</strong>: how far you think the report
+        will land from what the market expects. The history only knows revisions against the previous report, so these
+        averages are a stand-in for true surprise effects and likely understate them.
+      </p>
       <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
         {reaction.items.map((it) => {
           const v = moves[it.feature] ?? 0;
-          const s = strength(it.p_holm);
+          const grey = it.weak || it.wrong_sign;
           return (
-            <div key={it.feature} className="space-y-1">
+            <div key={it.feature} className="space-y-1" data-flagged={grey ? "true" : "false"}>
               <label htmlFor={it.feature} className="flex items-baseline justify-between gap-2 text-sm">
-                <span>{it.label}</span>
+                <span className={grey ? "text-ink-2" : "text-ink"}>
+                  {it.label}
+                  <span className="sr-only"> surprise</span>
+                </span>
                 <span className="tabular font-medium">
                   {v > 0 ? "+" : ""}
-                  {num(v, it.unit === "pp" ? 1 : 1)} {it.unit}
+                  {num(v, 1)} {it.unit}
                 </span>
               </label>
               <input
@@ -55,33 +115,51 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
                 max={RANGE[it.unit]}
                 step={STEP[it.unit]}
                 value={v}
-                onChange={(e) => setMoves((m) => ({ ...m, [it.feature]: Number(e.target.value) }))}
-                className="w-full accent-[var(--accent)]"
+                onChange={(e) => setMoves((mv) => ({ ...mv, [it.feature]: Number(e.target.value) }))}
+                className={`w-full accent-[var(--accent)] ${grey ? "opacity-60" : ""}`}
               />
               <p className="text-xs text-muted">
                 Each {it.unit === "pp" ? "+1 pp" : "+1 Mt"}: {it.usd_t_per_unit > 0 ? "+" : "−"}
-                {num(Math.abs(it.usd_t_per_unit), 2)} ± {num(it.se_usd_t, 2)} USD/t ·{" "}
-                <span className={s.tone}>evidence {s.label}</span>
+                {num(Math.abs(it.usd_t_per_unit), 2)} ± {num(it.se_usd_t, 2)} USD/t · Holm p {num(it.p_holm, 2)},{" "}
+                {strength(it.p_holm)}
+                {it.wrong_sign && (
+                  <span
+                    className="ml-1.5 rounded-full border border-warn-line bg-warn-soft px-1.5 text-[0.7rem] font-medium text-warn"
+                    title="The sign is the opposite of what supply and demand would predict; most likely noise."
+                  >
+                    unexpected sign
+                  </span>
+                )}
               </p>
             </div>
           );
         })}
       </div>
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-line pt-4">
-        <span className="text-sm text-ink-2">Expected CBOT move on release day</span>
-        <span className="text-2xl font-semibold">
-          <Delta value={total} digits={1} suffix=" USD/t" />
-        </span>
-        <span className="tabular text-sm text-muted">
-          ± {num(se, 1)} USD/t · {num(total / buPerT * 100, 1)}¢/bu
-        </span>
+      <div className="space-y-2 border-t border-line pt-4">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="text-sm text-ink-2">Historical average reaction on release day</span>
+          <span className="text-2xl font-semibold">
+            <Delta value={pi.mean} digits={1} suffix=" USD/t" />
+          </span>
+          <span className="tabular text-sm text-muted">{num((pi.mean / buPerT) * 100, 1)}¢/bu</span>
+        </div>
+        <p className="tabular text-sm text-ink-2" data-testid="pi80">
+          80% prediction interval: {fmt1(pi.lo)} to {fmt1(pi.hi)} USD/t
+          {unclear ? (
+            <span className="ml-1.5 font-medium text-ink">· direction unclear</span>
+          ) : (
+            <span className="ml-1.5 font-medium text-ink">· the whole 80% interval is {pi.mean > 0 ? "above" : "below"} zero</span>
+          )}
+        </p>
+        <IntervalBar lo={pi.lo} hi={pi.hi} mean={pi.mean} />
       </div>
       <p className="text-xs leading-relaxed text-muted">
         Average past reaction from close to close on {reaction.n_reports} release days (excluding May reports, where the
-        new marketing year starts), estimated jointly and scaled to today&apos;s price. These revisions explain{" "}
-        {num(reaction.r2 * 100, 0)}% of release-day moves; the rest is everything else in the report and the market. A
-        surprise matters only relative to what traders expected, which this table does not know. A coefficient with the
-        &ldquo;wrong&rdquo; sign and weak evidence is most likely noise.
+        new marketing year starts), estimated jointly and scaled to today&apos;s price. The interval adds the estimation
+        uncertainty of the coefficients (HC1 covariance) to the release-day noise they do not explain (residual sd{" "}
+        {num(reaction.resid_sd_usd_t, 1)} USD/t); the revisions explain {num(reaction.r2 * 100, 0)}% of release-day moves.
+        {flagged > 0 &&
+          ` ${flagged} of ${reaction.items.length} coefficients are greyed because they do not survive the Holm adjustment or have an unexpected sign. They stay in the total: dropping them after seeing the results would be selection.`}
       </p>
     </section>
   );

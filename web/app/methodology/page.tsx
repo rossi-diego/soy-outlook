@@ -2,12 +2,17 @@ import type { Metadata } from "next";
 
 import { getMeta } from "@/lib/data";
 import { dateLabel, num } from "@/lib/format";
+import { AUTHOR, pageMetadata, REPO_URL } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Methodology · Soy Outlook" };
+export const metadata: Metadata = pageMetadata(
+  "/methodology/",
+  "Methodology",
+  "How Soy Outlook forecasts CBOT soybeans after each WASDE: point-in-time data, purging by date, a pre-registered model ladder, empirical-quantile ranges, units, data licences and the audit of the first version.",
+);
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+function Block({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <section className="card space-y-3 p-5 sm:p-6">
+    <section id={id} className="card scroll-mt-20 space-y-3 p-5 sm:p-6">
       <h2 className="text-lg font-semibold">{title}</h2>
       <div className="space-y-3 text-sm leading-relaxed text-ink-2">{children}</div>
     </section>
@@ -90,8 +95,9 @@ export default function Methodology() {
           rule fixed in advance (interval score on the validation period only).
         </p>
         <p>
-          The labels show the hit rate actually achieved, next to the nominal level, including on the untouched holdout
-          since {dateLabel(meta.splits.holdout_start)}. With {meta.calibration_window} errors, each 95% bound rests on about
+          The labels show the hit rate actually achieved, next to the nominal level, including on the holdout since{" "}
+          {dateLabel(meta.splits.holdout_start)}, which was not used for any model choice (the author had seen 2024–25 prices,
+          so it is not a blind test). With {meta.calibration_window} errors, each 95% bound rests on about
           one or two past observations, and overlapping windows leave about {Math.round(meta.calibration_window / 6)}{" "}
           independent outcomes at 6 months, so the 95% tails are rough.
         </p>
@@ -152,10 +158,39 @@ export default function Methodology() {
         </p>
       </Block>
 
+      <Block title="About" id="about">
+        <p>
+          Built by <strong className="text-ink">{AUTHOR.name}</strong>, market risk coordinator in Brazilian
+          agribusiness (commodity derivatives, FX, VaR), as a portfolio project in quantitative research and data
+          engineering. I rebuilt it from an earlier version whose headline result turned out to be leakage (below); the
+          point of this one is a forecast that says how often its ranges have actually held.
+        </p>
+        <p>
+          <a className="underline hover:text-ink" href={AUTHOR.linkedin}>
+            LinkedIn
+          </a>{" "}
+          ·{" "}
+          <a className="underline hover:text-ink" href={AUTHOR.github}>
+            GitHub
+          </a>{" "}
+          ·{" "}
+          <a className="underline hover:text-ink" href={REPO_URL}>
+            Source code
+          </a>
+        </p>
+        <p>
+          <strong className="text-ink">Disclaimer.</strong> Research and educational use only; not investment, trading or
+          hedging advice, and not an offer to buy or sell anything. CBOT prices are delayed, the premium default is a stale
+          historical median, and FOB and R$ values are illustrative until you enter your own quote. The ranges describe
+          how large past forecast errors were; they are not a guarantee about future prices. No affiliation with USDA,
+          CME Group, Banco Central do Brasil or any trading company.
+        </p>
+      </Block>
+
       <Block title="What changed from the first version">
         <p>
-          The first version of this project reported a 1.46% error against 13.6% for a naive forecast. An audit found that
-          number came from leakage: a feature multiplied CBOT corn by the soybean price being predicted, corn was taken
+          The first version of this project reported a 1.46% error against 13.6% for a naive forecast. When I audited it, I
+          found that number came from leakage: a feature multiplied CBOT corn by the soybean price being predicted, corn was taken
           over the same window as the target, and the naive benchmark repeated a price from twelve months earlier. Scored
           honestly, a one-month random walk misses by about 3.6% and the original model did not beat it. The interactive
           app showed simulated data. This version replaces all of it with the pipeline described above.

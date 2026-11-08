@@ -4,7 +4,7 @@
 
 **[Live site → soy-outlook.vercel.app](https://soy-outlook.vercel.app)**
 
-Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
+Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/) · [GitHub](https://github.com/rossi-diego)
 
 [![CI](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml/badge.svg)](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
@@ -13,13 +13,21 @@ Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 [![Vercel](https://img.shields.io/badge/live-soy--outlook.vercel.app-black?logo=vercel)](https://soy-outlook.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+### What this project demonstrates
+
+- **Honest forecast evaluation.** Rolling-origin backtest on every WASDE since 2010 with point-in-time data, purging by date, a validation/holdout split and a model-selection rule fixed in advance (Clark-West, Holm-adjusted).
+- **A null result reported as a finding.** No model beats "no change" for CBOT soybeans; the site is built around that, showing ranges labelled by the hit rate they actually achieved instead of a direction call.
+- **Market-risk judgement.** FOB = CBOT + port premium, with the premium and FX as explicit inputs, a stale-input badge, and bands labelled "CBOT price risk only" until a joint band is earned.
+- **Statistics that survive scrutiny.** A release-day event study with HC1 errors, a Holm adjustment, placebo, split-sample and roll-exclusion checks, and an 80% prediction interval in the what-if.
+- **End-to-end engineering.** Typed Python package (bronze → silver → gold → publish), structured logging, 80%+ test coverage, a static Next.js site with a Playwright contract test that keeps the copy in line with the JSON, CI and Docker.
+
 ![Outlook page: three cards with the 80% range for 1, 3 and 6 months in USD per tonne FOB, a no-direction-signal note, unit and premium controls, and a fan chart of the CBOT price](docs/screenshots/outlook-light.png)
 
 ---
 
 ## The answer, in one paragraph
 
-The Paranaguá FOB price is the CBOT soybean price plus a port premium. This project forecasts the CBOT part after every WASDE since July 2010, using only what was public that day. **No model beat "no change".** That includes ARIMA, the average past change and a ridge regression on WASDE revisions, and it holds for both the 2016–2023 validation period and the untouched 2024–2026 holdout. What the project does deliver:
+The Paranaguá FOB price is the CBOT soybean price plus a port premium. This project forecasts the CBOT part after every WASDE since July 2010, using only what was public that day. **The finding: no model beat "no change".** That includes ARIMA, the average past change and a ridge regression on WASDE revisions, and it holds for both the 2016–2023 validation period and the 2024–2026 holdout, which was not used for any model choice (I had seen 2024–25 prices, so it is not a blind test). In a liquid futures market that is the expected result, and showing it with a test fixed in advance is more useful than a leaky "1.46% MAPE". What the project does deliver:
 
 1. **A tested range, labelled by what it achieved.** Over 2016–2023, the 1-month 80% range held the actual price 80% of the time; on the holdout it held 84%. The 6-month 80% range held only 71% in validation, and the site says so next to it.
 2. **The size of a WASDE release-day move, and an honest read of what drives it.** The typical release-day move is about ±4.4 USD/t, and 1 report in 10 moves CBOT by more than ±11.6 USD/t. The revisions jointly explain 18% of those moves, but no single revision coefficient survives a Holm adjustment across the six tested (the strongest, US soybean stocks-to-use, has Holm p = 0.11), and that one is unstable: about −5.6 USD/t per pp in 2010–2017, −0.6 from 2018.
@@ -44,7 +52,7 @@ Values as of the CBOT close of 6 Nov 2026 and the October 2026 WASDE. They regen
 
 ## What the first version got wrong
 
-The original repository claimed a **1.46% MAPE against 13.6% for a naive forecast**. Three agents audited it independently (ML rigour, data sourcing, stakeholder product) and agreed on the findings below:
+The original repository claimed a **1.46% MAPE against 13.6% for a naive forecast**. I audited it from three angles (ML rigour, data sourcing, stakeholder product), using a separate AI-assisted review for each as a second pair of eyes, and confirmed the findings below:
 
 | Problem | Where | Effect |
 |---|---|---|
@@ -103,7 +111,7 @@ flowchart LR
 - **Validation never overlaps the holdout.** A validation row counts only if its outcome is dated before 2024-01-01.
 - **Purging by date.** A past row can fit a model, choose the ridge penalty or calibrate a range only if its outcome date is on or before the forecast date. Unit tests check this.
 - **Fixed feature set.** The 11 features are chosen in advance, with no data-driven selection.
-- **Champion rule.** A model replaces "no change" only if it wins on validation with Clark-West, Holm-adjusted p < 0.10. The holdout is reported once and never used to choose anything.
+- **Champion rule.** A model replaces "no change" only if it wins on validation with Clark-West, Holm-adjusted p < 0.10. The holdout is reported, never used to choose anything; since I had seen 2024–25 prices, it is not a blind test.
 
 ## Quick start (under 5 minutes)
 
@@ -129,7 +137,7 @@ The repository ships the latest `web/public/data`, so `cd web && npm ci && npm r
 ```bash
 make test     # pytest: no-look-ahead, purging, intervals, stats, units, cache checks, end-to-end JSON contract
 make lint     # ruff, mypy, eslint, tsc
-make e2e      # Playwright on desktop and mobile, including a no-horizontal-scroll check
+make e2e      # Playwright on desktop and mobile: copy-vs-JSON contract, metadata, no horizontal scroll
 ```
 
 CI runs the Python checks, then the live pipeline, then the site build and Playwright on every push, and again on weekdays after the CBOT close.
@@ -142,8 +150,9 @@ CI runs the Python checks, then the live pipeline, then the site build and Playw
 │   ├── evaluation/   backtest.py (purging, empirical-quantile ranges, centring rule, champion) · stats.py (DM-HLN, Clark-West, Holm)
 │   ├── publish/      web_json.py
 │   ├── pipeline.py · cli.py · config.py (pre-registered horizons, splits, features) · units.py · logs.py
-├── tests/            35 tests: no look-ahead, intervals, event study, premium card, JSON contract
+├── tests/            36 tests: no look-ahead, intervals, event study, premium card, JSON contract
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
+│   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources
 ├── data/seed/        paranagua_premium_monthly.csv + .meta.json (derived premium table and data card, the only committed data)
 └── notebooks/archive/  v1 notebooks, kept for the audit trail
 ```

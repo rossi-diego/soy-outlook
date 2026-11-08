@@ -70,3 +70,29 @@ export function monthLabel(m: string): string {
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export const horizonLabel = (h: number) => (h === 1 ? "1 month" : `${h} months`);
+
+/** Premium in US cents per bushel -> USD per tonne (no CBOT leg). */
+export const premiumUsdT = (cBu: number, buPerT: number) => (cBu / 100) * buPerT;
+
+type CoverageLike = {
+  nominal: { "80": number; "95": number };
+  validation: { years: string; cover80: number; cover95: number } | null;
+  holdout: { years: string; cover80: number; cover95: number } | null;
+};
+
+/**
+ * Measured hit rate next to the nominal level, from the published coverage block, e.g.
+ * "held 71% in 2016-23, 85% in 2024+". The e2e contract test rebuilds this string from the JSON.
+ */
+export function heldText(cov: CoverageLike, level: "80" | "95"): string {
+  const key = level === "80" ? "cover80" : "cover95";
+  const parts = [cov.validation, cov.holdout]
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+    .map((s) => `${pct(s[key])} in ${s.years}`);
+  return parts.length ? `held ${parts.join(", ")}` : "hit rate not available yet";
+}
+
+/** "80% range (held 71% in 2016-23, 85% in 2024+)": the nominal level stays visible. */
+export function rangeLabel(cov: CoverageLike, level: "80" | "95"): string {
+  return `${pct(cov.nominal[level])} range (${heldText(cov, level)})`;
+}

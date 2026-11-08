@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
 /* Design tokens. Chart roles follow the validated reference palette (dataviz skill):
-   dark mode is its own selected steps, not an automatic inversion. */
+   dark mode is its own selected steps, not an automatic inversion.
+   Colour roles:
+   - brand  (green): identity only (logo mark, page eyebrows). Never data, never controls.
+   - accent (blue):  interaction (focus, sliders, links on hover) and the forecast series.
+   - warn   (amber): a range whose measured hit rate falls more than 5 pp below its nominal level,
+                     and stale inputs. Always paired with words, never colour alone.
+   - up / down:      diverging poles for signed changes. */
 :root {
   color-scheme: light;
   --page: #f9f9f7;
@@ -25,6 +31,9 @@
   --down-text: #b42d2c;
   --bar-muted: #86b6ef;
   --brand: #14532d;
+  --warn: #b7791f;
+  --warn-text: #8a5310;
+  --warn-soft: #fbefd9;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -51,6 +60,9 @@
     --down-text: #f19b9b;
     --bar-muted: #1c5cab;
     --brand: #4ade80;
+    --warn: #e0a23a;
+    --warn-text: #f2c475;
+    --warn-soft: #3d2a0b;
   }
 }
 
@@ -77,6 +89,9 @@
   --down-text: #f19b9b;
   --bar-muted: #1c5cab;
   --brand: #4ade80;
+  --warn: #e0a23a;
+  --warn-text: #f2c475;
+  --warn-soft: #3d2a0b;
 }
 
 @theme inline {
@@ -93,6 +108,9 @@
   --color-up: var(--up-text);
   --color-down: var(--down-text);
   --color-brand: var(--brand);
+  --color-warn: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 

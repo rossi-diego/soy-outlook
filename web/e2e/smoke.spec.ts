@@ -16,8 +16,10 @@ test("wasde what-if responds to a revision", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /What-if/ })).toBeVisible();
   const slider = page.getByLabel("US soybean stocks-to-use");
   await slider.focus();
+  const before = await page.getByTestId("pi80").textContent();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByText(/Expected CBOT move on release day/)).toBeVisible();
+  await expect(page.getByText(/Historical average reaction on release day/)).toBeVisible();
+  await expect(page.getByTestId("pi80")).not.toHaveText(before ?? "");
   await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
 });
 

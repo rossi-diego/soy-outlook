@@ -20,7 +20,7 @@ Soybean stakeholders (export traders, crushers, co-ops, risk teams) need an hone
 | Models | Random walk → drift → ARIMA(0,1,1) → ridge (SARIMAX-WASDE dropped: future exog unknown) | Scope + rigour |
 | Tests | DM with HLN correction + Newey-West lag h−1; Clark-West for nested models; Holm across horizons | Nested models, overlap |
 | Champion | Replace random walk only if CW Holm p < 0.10 on validation and lower MAE | Honest fallback |
-| Splits | Burn-in 2013–2015, validation 2016–2023, untouched holdout 2024+ | |
+| Splits | Burn-in 2013–2015, validation 2016–2023, holdout 2024+ (not used for any model choice; the author had seen 2024–25 prices) | |
 | Rolls | Flag windows crossing Jul/Aug/Sep expiries; report metrics with and without | No back-adjustable history on Yahoo |
 | UI | Outlook, This WASDE, Track record, Methodology; "what moved" waterfall cut if random walk wins | Product reviewer |
 | Added | Release-day event study (revision → same-day CBOT move) and what-if calculator | Gives stakeholders a use even with no forward edge |

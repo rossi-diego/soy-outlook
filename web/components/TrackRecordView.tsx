@@ -146,7 +146,7 @@ export default function TrackRecordView({ meta, track }: { meta: Meta; track: Tr
           Every forecast below was made with only what was public on that report day, and scored later against the
           actual CBOT close. Models were compared on {dateLabel(meta.splits.validation[0])} –{" "}
           {dateLabel(meta.splits.validation[1])}; the reports since {dateLabel(meta.splits.holdout_start)} were kept aside
-          and are shown once, untouched.
+          and not used for any model choice (the author had seen 2024–25 prices, so they are not a blind test).
         </p>
       </section>
 

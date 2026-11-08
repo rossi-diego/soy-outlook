@@ -3,8 +3,13 @@ import type { Metadata } from "next";
 import WasdeWhatIf from "@/components/WasdeWhatIf";
 import { getMeta, getWasde } from "@/lib/data";
 import { dateLabel, monthLabel, num, signed } from "@/lib/format";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata: Metadata = { title: "This WASDE · Soy Outlook" };
+export const metadata: Metadata = pageMetadata(
+  "/wasde/",
+  "This WASDE",
+  "What the latest USDA WASDE changed for soybeans, the historical average CBOT reaction to each revision on release day, and an 80% prediction interval for your own what-if.",
+);
 
 export default function WasdePage() {
   const meta = getMeta();
@@ -18,7 +23,7 @@ export default function WasdePage() {
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight">What did the latest WASDE change, and what is that worth?</h1>
         <p className="max-w-3xl text-ink-2">
           USDA publishes at 12:00 ET and CBOT soybeans close at 13:20 CT, so the market prices a report the same day.
-          Below: the lines that matter for soybeans and what the market has paid, on average, for each
+          Below: the lines that matter for soybeans and the historical average reaction to each
           revision.
         </p>
         {w.next_release && (
@@ -74,7 +79,7 @@ export default function WasdePage() {
         </p>
       </section>
 
-      <WasdeWhatIf reaction={w.reaction} buPerT={meta.consts.bu_per_t} lines={w.lines} />
+      <WasdeWhatIf reaction={w.reaction} buPerT={meta.consts.bu_per_t} />
 
       <section className="card space-y-3 p-5 text-sm leading-relaxed text-ink-2">
         <h2 className="text-lg font-semibold text-ink">And after release day?</h2>
