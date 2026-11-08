@@ -49,6 +49,25 @@ Selection: on validation only, the mean 80% + 95% interval score divided by the 
 
 **Results (computed after the pre-registration commit 2d33ed6).** Range method, validation score ratio vs the baseline: EWMA FHS 1.096, lognormal vol band 1.071, so the empirical baseline stays and the published ranges are unchanged. Holdout, reported only: FHS 1.091, vol band 0.804. Rule v2: all nine Holm-adjusted CW p = 1.0, champion no change at every horizon (unchanged). MDE for the ridge model 5–7% of the random walk's MAE.
 
+## Pre-registration, 2026-11-08 (v2.1, unit U7)
+
+Fixed in `src/soyforecast/config.py` and committed before any of the numbers below were computed.
+
+**Release-day move band (P14, this round).** The band on /wasde is the empirical quantile of |release-day log return| over every usable report of the event study (non-May reports since July 2010 with a session on the release day): the median ("typical move") and the 90th percentile ("1 report in 10 moves more"), quoted in USD/t at today's price and drawn as a range around today's close. Its hit rate is out of sample: every report from 2016 on is scored against the band built from earlier reports only (expanding window, at least 36 of them); a hit is |r| ≤ band. Reported for validation (2016–2023), holdout (2024+) and both, with Wilson 95% intervals. Nothing is chosen on it. No new page and no new model family this round.
+
+**Volatility ladder (P14, v2 roadmap, not implemented in v2.1).** Registered now so that the v2 result cannot be shaped after the fact:
+
+| Item | Fixed choice |
+|---|---|
+| Targets | (a) \|release-day log return\| per report; (b) realized variance of daily CBOT log returns over (t, t + h], h = 1, 3, 6 months, from each release-day close |
+| Ladder | unconditional mean (the band above) → EWMA (λ = 0.94, the P2 vol series) → HAR-RV (daily, weekly, monthly RV) → HAR-RV + report-month dummies and US soy stocks-to-use level |
+| Loss and tests | QLIKE; Diebold-Mariano (HLN, Newey-West lag h − 1) against the unconditional rung, under the existing purged rolling origin and the same 2016–2023 validation / 2024+ holdout split |
+| Multiplicity | every ladder test joins the inference-rule Holm family (the nine Clark-West tests plus the ladder's tests) |
+| Shared inputs | the vol estimate is the same EWMA / realized-vol series the P2 range candidates use |
+| Publication | the result is published whatever it is, including a loss; the /wasde line is upgraded from the empirical band only if a rung beats it out of sample on validation |
+
+**Decision panel (P18).** The published range method's quantiles are also exported on a finer grid (5% to 95% in 5% steps). It is the same method on more levels, so nothing is chosen on it. The panel on / is client-side arithmetic: side (producer long or buyer short), tonnes, hedge ratio and currency; downside vs selling (or buying) at today's close at the 1-in-10 adverse level (q10 for a producer, q90 for a buyer) and the rough 1-in-40 level (q2.5 / q97.5), times tonnes × (1 − hedge ratio). CBOT only, with premium and BRL held fixed, so the hedge is futures at today's close and the basis is unhedged. Labelled "illustrative, range-based, not VaR", with the 6-month under-coverage shown inline. No target-price probability (it reads as directional advice) and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors).
+
 ## Definition of done
 Static Next.js site with real data, an honest README with backtest numbers and screenshots, `docker compose up`,
 CI (Python checks → live pipeline → site build + Playwright), tests for no look-ahead.

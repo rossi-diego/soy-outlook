@@ -132,6 +132,17 @@ CONTRACT_LETTERS: dict[int, str] = {1: "F", 3: "H", 5: "K", 7: "N", 8: "Q", 9: "
 # Premium defaults: the derived monthly table is "stale" once its source series ended more
 # than this many days before the forecast date.
 STALE_PREMIUM_DAYS = 90
+
+# Decision panel (v2.1, P18, pre-registered 2026-11-08 before the grid was computed). The
+# published range method's quantiles on a finer grid, 5% to 95% in 5% steps, so the panel
+# never needs a raw residual vector. It is the same method on more levels, not a new one, and
+# nothing is chosen on it. The panel itself is client-side arithmetic on these quantiles:
+# downside vs selling (producer) or buying (buyer) at today's close, at the 1-in-10 adverse
+# level (q10 / q90) and the rough 1-in-40 level (q2.5 / q97.5), times tonnes x (1 - hedge
+# ratio), CBOT only with premium and BRL held fixed. Labelled illustrative and range-based,
+# not VaR. No target-price probability and no expected shortfall is published: the 95% tails
+# rest on about 1.5 of 60 overlapping errors each, too few for a tail average.
+QUANTILE_GRID: tuple[float, ...] = tuple(round(0.05 * i, 2) for i in range(1, 20))
 PREMIUM_PROFILE_FIRST_YEAR = 2015
 
 # Release-day event study (v2.1, pre-registered 2026-11-07). The six revision coefficients are
@@ -155,6 +166,21 @@ PLACEBO_LAG_SESSIONS = 5
 SPLIT_SAMPLE_BREAK = pd.Timestamp("2018-01-01")
 ROLL_EXCLUSION_BDAYS = 3
 SOY_CONTRACT_MONTHS: tuple[int, ...] = (1, 3, 5, 7, 8, 9, 11)
+
+# Release-day move band (v2.1, P14, pre-registered 2026-11-08 before its hit rate was
+# computed). The band is the empirical quantile of |release-day log return| over every usable
+# report of the event study, at RELEASE_MOVE_LEVELS: 0.5 ("typical move") and 0.9 ("1 report
+# in 10 moves more"), quoted in USD/t at today's price. Its hit rate is out of sample: each
+# report from VALIDATION_START on is scored against the band built from earlier reports only
+# (expanding window, at least RELEASE_MOVE_MIN_PAST of them); a hit is |r| <= band. Reported
+# for validation, holdout and both, with Wilson 95% intervals. Nothing is chosen on it.
+RELEASE_MOVE_LEVELS: tuple[float, ...] = (0.5, 0.9)
+RELEASE_MOVE_MIN_PAST = 36
+# The volatility ladder that may replace this band is a v2 roadmap item, pre-registered in
+# docs/PLAN.md (2026-11-08) and NOT implemented in v2.1: targets |release-day log return| and
+# realized variance over (t, t + h]; QLIKE + DM under the purged rolling origin; counted in the
+# inference-rule Holm family; the P11 line is upgraded only if a rung beats the band out of sample.
+VOL_LADDER_V2: tuple[str, ...] = ("unconditional", "ewma", "har_rv", "har_rv_wasde")
 
 # Champion rule: a model replaces the random walk at a horizon only if its Clark-West
 # test against the random walk, Holm-adjusted (v2: across all 9 tests, see
