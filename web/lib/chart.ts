@@ -89,6 +89,22 @@ export const axisCommon = (t: Tokens) => ({
   splitLine: { lineStyle: { color: t.grid, width: 1, type: "solid" as const } },
 });
 
+/**
+ * Time-axis labels in the page's language: ECharts ships English month names only, so pt-BR
+ * pages would show "Apr" and "Oct". Ticks are local-time month starts (ECharts' default); a
+ * January tick shows its year in bold, any other tick its month (or day and month).
+ */
+export const timeAxisLabel = (t: Tokens, month: (m: number) => string) => ({
+  ...axisCommon(t).axisLabel,
+  formatter: (v: number) => {
+    const d = new Date(v);
+    const m = d.getMonth();
+    if (d.getDate() !== 1) return `${d.getDate()} ${month(m + 1)}`;
+    return m === 0 ? `{y|${d.getFullYear()}}` : month(m + 1);
+  },
+  rich: { y: { fontWeight: "bold" as const, color: t.muted, fontSize: 11 } },
+});
+
 /** An ECharts option object; typed loosely so this module never imports ECharts. */
 export type ChartOption = Record<string, unknown>;
 export type OptionBuilder = (t: Tokens) => ChartOption;

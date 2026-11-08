@@ -155,15 +155,18 @@ export default function DecisionPanel({ horizons, p0, buPerT, sackKg, fx, unit, 
     } else setVolError(r.error);
   };
   const [targetText, setTargetText] = useState("");
-  const [target, setTarget] = useState<number | null>(null);
+  const [typed, setTyped] = useState<{ value: number; unit: Unit } | null>(null);
   const [targetError, setTargetError] = useState<string | null>(null);
   const commitTarget = () => {
     const r = parsePrice(targetText, loc);
     if (r.ok) {
-      setTarget(r.value);
+      // The target is a price in the unit it was typed in; it is never silently re-read in another.
+      setTyped(r.value === null ? null : { value: r.value, unit });
       setTargetError(null);
     } else setTargetError(r.error);
   };
+  const target = typed && typed.unit === unit ? typed.value : null;
+  const targetStale = typed !== null && typed.unit !== unit;
 
   const x = { side, tonnes, hedge: hedgePct / 100, currency, fx, buPerT };
   const producer = side === "producer";
@@ -329,7 +332,13 @@ export default function DecisionPanel({ horizons, p0, buPerT, sackKg, fx, unit, 
             className={`tabular w-full rounded-md border bg-surface px-2 py-1.5 ${targetError ? "border-warn-line" : "border-line"}`}
           />
           <p id="target-help" className={`text-xs ${targetError ? "font-medium text-warn" : "text-muted"}`} role={targetError ? "alert" : undefined}>
-            {targetError ?? t("Shows where it sits in each range; not a chance of reaching it.", "Mostra onde ele fica em cada faixa; não é a chance de atingi-lo.")}
+            {targetError ??
+              (targetStale && typed
+                ? t(
+                    `Typed in ${f.unit(typed.unit)}; enter it again in ${f.unit(unit)} to place it.`,
+                    `Digitado em ${f.unit(typed.unit)}; digite de novo em ${f.unit(unit)} para posicioná-lo.`,
+                  )
+                : t("Shows where it sits in each range; not a chance of reaching it.", "Mostra onde ele fica em cada faixa; não é a chance de atingi-lo."))}
           </p>
         </div>
       </div>

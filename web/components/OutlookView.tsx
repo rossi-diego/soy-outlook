@@ -8,7 +8,7 @@ import ChartData from "@/components/ChartData";
 import DecisionPanel from "@/components/DecisionPanel";
 import RadioGroup from "@/components/RadioGroup";
 import StressReplay from "@/components/StressReplay";
-import { axisCommon, baseOption, isNarrow, type Tokens } from "@/lib/chart";
+import { axisCommon, timeAxisLabel, baseOption, isNarrow, type Tokens } from "@/lib/chart";
 import { type Assumptions, convert, decimalsFor, parseBasis, parseFx, premiumUsdT, type Unit } from "@/lib/format";
 import { parsePremium, premiumInputText, usePremium } from "@/lib/premium";
 import type { Horizon, Meta, Outlook } from "@/lib/types";
@@ -101,7 +101,7 @@ function HorizonCard({
         <dt className="text-ink-2">{t("Central", "Central")}</dt>
         <dd className="tabular text-right">
           {f.money(c(h.central), unit)}
-          {isRw && <span className="ml-1 text-xs text-muted">{t("(CBOT unchanged)", "(CBOT sem variação)")}</span>}
+          {isRw && <span className="block text-xs text-muted">{t("CBOT unchanged", "CBOT sem variação")}</span>}
         </dd>
         <dt className="text-ink-2">{t("Hedge contract", "Contrato de hedge")}</dt>
         <dd className="tabular text-right" data-testid="contract">
@@ -504,7 +504,7 @@ export default function OutlookView({ meta, outlook }: Props) {
             return c ? `${f.date(c.value[0])}<br/>${t("Close", "Fechamento")}: <b>${fm(c.value[1])}</b>` : "";
           },
         },
-        xAxis: { type: "time", ...axisCommon(tk), splitLine: { show: false } },
+        xAxis: { type: "time", ...axisCommon(tk), axisLabel: timeAxisLabel(tk, f.monthAbbr), splitLine: { show: false } },
         yAxis: {
           type: "value",
           scale: true,
@@ -570,19 +570,16 @@ export default function OutlookView({ meta, outlook }: Props) {
             "Faixas de risco de preço para a soja brasileira de exportação, de 1 a 6 meses à frente",
           )}
         </h1>
-        <p className="max-w-3xl text-base leading-relaxed text-ink-2" data-testid="hero-framing">
-          {t(
-            "For budgeting and hedging: tested ranges labelled by the hit rate they actually achieved. A risk range, not a price call.",
-            "Para orçamento e hedge: faixas testadas, rotuladas com a taxa de acerto que de fato tiveram. Uma faixa de risco, não uma aposta de preço.",
-          )}
-        </p>
         <p className="max-w-3xl text-lg leading-relaxed text-ink-2" data-testid="hero-sentence">
           {t(`By ${range.date}, the 3-month`, `Até ${range.date}, no horizonte de 3 meses, a`)}{" "}
           <span className={h3.coverage.warn80 ? "text-warn" : undefined} data-testid="hero-range-label">
             {f.range(h3.coverage, "80")}
           </span>{" "}
           {t("is", "vai de")} <strong className="text-ink">{range.lo}</strong> {t("to", "a")}{" "}
-          <strong className="text-ink">{range.hi}</strong>.{" "}
+          <strong className="text-ink">{range.hi}</strong>
+          <span data-testid="hero-framing">
+            {t(": a risk range for budgeting and hedging, not a price call.", ": uma faixa de risco para orçamento e hedge, não uma aposta de preço.")}
+          </span>{" "}
           <Link className="text-base underline hover:text-ink" href="/track-record/">
             {t("See how it was tested", "Veja como foi testada")}
           </Link>

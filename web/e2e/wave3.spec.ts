@@ -110,6 +110,12 @@ test("target readout: a range position from the grid, never a probability (unit 
   await input.press("Enter");
   await expect(panel.getByTestId("decision-3").getByTestId("target-pos")).toHaveText("Your target sits below the p10 of the tested range.");
   await expect(panel).not.toContainText(/probability of/i);
+  // A target typed in ¢/bu is never re-read as a price in another unit.
+  await page.getByRole("radio", { name: /USD\/t/ }).first().click();
+  await expect(panel.getByTestId("target-pos")).toHaveCount(0);
+  await expect(panel.locator("#target-help")).toHaveText("Typed in US¢/bu; enter it again in USD/t to place it.");
+  await page.getByRole("radio", { name: "CBOT ¢/bu" }).click();
+  await expect(panel.getByTestId("decision-3").getByTestId("target-pos")).toHaveText("Your target sits below the p10 of the tested range.");
   await input.fill("abc");
   await input.press("Enter");
   await expect(panel.getByText("Enter a positive price, or leave it empty.")).toBeVisible();

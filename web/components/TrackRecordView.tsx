@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import Chart from "@/components/Chart";
 import ChartData from "@/components/ChartData";
 import RadioGroup from "@/components/RadioGroup";
-import { axisCommon, baseOption, type Tokens } from "@/lib/chart";
+import { axisCommon, timeAxisLabel, baseOption, type Tokens } from "@/lib/chart";
 import type { Fmt } from "@/lib/format";
 import { type Locale, TERMS } from "@/lib/i18n";
 import { HORIZONS, isoDay, maeVsNoChange, PATH_MODELS, type SlimMetric, type TrackView } from "@/lib/trackView";
@@ -404,7 +404,7 @@ export default function TrackRecordView({ meta, view, archive }: { meta: Meta; v
           },
         },
         grid: { ...baseOption(tk).grid, top: 56 },
-        xAxis: { type: "time", ...axisCommon(tk), splitLine: { show: false } },
+        xAxis: { type: "time", ...axisCommon(tk), axisLabel: timeAxisLabel(tk, f.monthAbbr), splitLine: { show: false } },
         yAxis: { type: "value", scale: true, name: "USD/t", nameTextStyle: { color: tk.muted }, ...axisCommon(tk) },
         series: [
           {
