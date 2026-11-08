@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pandas as pd
 
-from soyforecast.config import HORIZONS, Settings
+from soyforecast.config import HORIZONS, WASDE_ASSET, Settings
 from soyforecast.evaluation.backtest import (
     fob_illustrative,
     run_backtest,
@@ -20,6 +21,7 @@ from soyforecast.evaluation.backtest import (
 from soyforecast.features.dataset import build_dataset, live_row
 from soyforecast.features.vintages import build_vintages
 from soyforecast.freshness import SourceLog
+from soyforecast.ingest._cache import write_snapshot
 from soyforecast.ingest.fx import fetch_ptax
 from soyforecast.ingest.premium import (
     PremiumTable,
@@ -77,7 +79,26 @@ def ingest(
         settings.bronze, offline=settings.offline, sources=sources, transport=transport
     )
     premium = load_premium_table(settings.premium_table, settings.premium_card)
+    snapshot_inputs(settings.bronze)
     return wasde, prices, ptax, premium, manifest
+
+
+BRONZE_INPUTS = (WASDE_ASSET, "zs_daily.parquet", "ptax_daily.parquet")
+
+
+def snapshot_inputs(bronze: Path) -> None:
+    """Snapshot the bronze files this run actually uses, in every mode (P24).
+
+    A live download is snapshotted when it is accepted; an offline or cache-fallback run uses
+    bytes that may predate snapshots, so they are kept too, dated by when they entered the cache
+    (the file's modification time). Identical bytes are stored once, so this is a no-op when
+    nothing changed, and run_manifest.json can always name the snapshot behind an outlook.
+    """
+    for name in BRONZE_INPUTS:
+        path = bronze / name
+        if path.exists():
+            written = datetime.fromtimestamp(path.stat().st_mtime, UTC).date()
+            write_snapshot(path, day=written)
 
 
 def run(settings: Settings, *, update_pin: bool = False) -> Artefacts:

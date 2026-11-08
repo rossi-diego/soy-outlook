@@ -368,3 +368,50 @@ def test_run_manifest_records_inputs_lock_and_code(tmp_path, monkeypatch):
     assert m["git"]["sha"] == "abc123"
     assert m["packages"]["pandas"] == pd.__version__
     assert m["lock"]["file"] == "uv.lock"
+
+
+def test_offline_run_snapshots_the_cache_it_uses(tmp_path):
+    """Bytes that entered the cache before snapshots existed still get one (dated by mtime)."""
+    import os
+    from datetime import UTC, datetime
+
+    from soyforecast.pipeline import snapshot_inputs
+
+    f = tmp_path / "zs_daily.parquet"
+    f.write_bytes(b"cached")
+    ts = datetime(2026, 10, 30, 12, tzinfo=UTC).timestamp()
+    os.utime(f, (ts, ts))
+    snapshot_inputs(tmp_path)
+    snapshot_inputs(tmp_path)  # unchanged bytes: still one snapshot
+    snaps = [p.name for p in (tmp_path / "snapshots").iterdir()]
+    assert snaps == [f"zs_daily_20261030_{_sha(b'cached')[:12]}.parquet"]
+
+
+def test_run_manifest_lineage_without_a_checkout(tmp_path, monkeypatch):
+    """The Docker image has no .git and no repo root: SOY_GIT_SHA and SOY_UV_LOCK fill in."""
+    from soyforecast.publish import lineage
+
+    lock = tmp_path / "uv.lock"
+    lock.write_bytes(b"lock")
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    monkeypatch.setenv("SOY_GIT_SHA", "feedbeef")
+    monkeypatch.setenv("SOY_UV_LOCK", str(lock))
+    monkeypatch.setattr(lineage, "_git", lambda *args: None)
+    assert lineage.git_state() == {"sha": "feedbeef", "code_dirty": None}
+    settings = _settings(tmp_path)
+    a = type(
+        "A",
+        (),
+        {
+            "offline": True,
+            "wasde_manifest": {},
+            "vintages": pd.DataFrame(index=["2026-10"]),
+            "prices": fixtures.synthetic_prices(),
+            "ptax": fixtures.synthetic_ptax(),
+            "sources": SourceLog(),
+        },
+    )()
+    from datetime import UTC, datetime
+
+    m = lineage.build_run_manifest(a, settings, datetime(2026, 11, 6, 21, tzinfo=UTC))
+    assert m["lock"]["sha256"] == _sha(b"lock")

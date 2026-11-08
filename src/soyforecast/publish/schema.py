@@ -296,6 +296,13 @@ class PathRow(Contract):
     q90: float | None
     q975: float | None
 
+    @model_validator(mode="after")
+    def _monotone(self) -> PathRow:
+        qs = [q for q in (self.q025, self.q10, self.q90, self.q975) if q is not None]
+        if any(a > b for a, b in itertools.pairwise(qs)):
+            raise ValueError(f"path {self.origin}: quantiles are not monotone: {qs}")
+        return self
+
 
 class FobRow(Contract):
     split: str
@@ -466,6 +473,15 @@ class ArchivedHorizon(Contract):
     actual_date: IsoDate | None
     inside80: bool | None
     inside95: bool | None
+
+    @model_validator(mode="after")
+    def _monotone(self) -> ArchivedHorizon:
+        qs = [self.low95, self.low80, self.high80, self.high95]
+        if any(a > b for a, b in itertools.pairwise(qs)):
+            raise ValueError(f"archived horizon {self.h}: ranges are not nested: {qs}")
+        if not self.low95 <= self.central <= self.high95:
+            raise ValueError(f"archived horizon {self.h}: central value outside the 95% range")
+        return self
 
 
 class ArchiveEntry(Contract):

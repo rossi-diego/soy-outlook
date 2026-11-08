@@ -132,3 +132,16 @@ def test_export_schema_cli(tmp_path):
     assert {"Meta", "Outlook", "Horizon", "TrackRecord", "Wasde"} <= set(site["$defs"])
     assert Path(tmp_path / "archive_index.schema.json").exists()
     shutil.rmtree(tmp_path)
+
+
+def test_track_record_paths_and_archive_reject_crossed_ranges(published):
+    tr = json.loads((published / "track_record.json").read_text(encoding="utf-8"))
+    row = tr["paths"]["1"]["rw"][0]
+    row["q10"], row["q90"] = row["q90"] + 1, row["q10"]
+    with pytest.raises(ValidationError, match="not monotone"):
+        schema.validate_payload("track_record.json", tr)
+    idx = json.loads((published / "archive" / "index.json").read_text(encoding="utf-8"))
+    hz = idx["entries"][0]["horizons"][0]
+    hz["low80"] = hz["high95"] + 1
+    with pytest.raises(ValidationError, match="not nested"):
+        schema.validate_payload("archive/index.json", idx)

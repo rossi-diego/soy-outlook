@@ -81,11 +81,13 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Build the multi-stage, non-root pipeline image from uv.lock
-        run: docker build --tag soyforecast:ci .
+        run: docker build --build-arg GIT_SHA=${{ github.sha }} --tag soyforecast:ci .
       - name: The image runs as a non-root user and the CLI starts
         run: |
           test "$(docker run --rm --entrypoint id soyforecast:ci -u)" != "0"
           docker run --rm soyforecast:ci --help
+          test "$(docker run --rm --entrypoint printenv soyforecast:ci SOY_GIT_SHA)" = "${{ github.sha }}"
+          docker run --rm --entrypoint test soyforecast:ci -f /app/uv.lock
 
   web:
     needs: python

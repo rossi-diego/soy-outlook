@@ -16,15 +16,19 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
 FROM python:3.12-slim AS runtime
+# The commit the image was built from, recorded in run_manifest.json (no .git in the image).
+ARG GIT_SHA=""
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" \
     XDG_CACHE_HOME=/tmp/cache
 RUN groupadd --system --gid 10001 soy && useradd --system --uid 10001 --gid soy --home /app soy
 WORKDIR /app
 COPY --from=builder --chown=soy:soy /app/.venv /app/.venv
+# uv.lock ships with the image so run_manifest.json can hash the exact versions it was built from.
+COPY --chown=soy:soy uv.lock /app/uv.lock
 # The package is installed non-editable, so point it at the mounted project folders.
 ENV SOY_DATA_DIR=/app/data \
     SOY_WEB_DATA_DIR=/app/web/public/data \
-    SOY_WASDE_LOCK=/app/data/wasde.lock.json
+    SOY_WASDE_LOCK=/app/data/wasde.lock.json     SOY_UV_LOCK=/app/uv.lock     SOY_GIT_SHA=${GIT_SHA}
 USER soy
 ENTRYPOINT ["soyforecast"]
 CMD ["--json-logs", "run"]

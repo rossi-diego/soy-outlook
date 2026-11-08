@@ -50,8 +50,12 @@ def _git(*args: str) -> str | None:
 
 
 def git_state() -> dict[str, Any]:
-    """Commit SHA (GITHUB_SHA in Actions) and whether the code differed from it."""
-    sha = os.getenv("GITHUB_SHA") or _git("rev-parse", "HEAD")
+    """Commit SHA and whether the code differed from it.
+
+    GITHUB_SHA in Actions; SOY_GIT_SHA where there is no checkout (the Docker image is built with
+    it); otherwise `git rev-parse HEAD`. code_dirty is None when git cannot tell.
+    """
+    sha = os.getenv("GITHUB_SHA") or os.getenv("SOY_GIT_SHA") or _git("rev-parse", "HEAD")
     # Only code and the lock count as dirty: a refresh changes web/public/data by design.
     status = _git(
         "status", "--porcelain", "--untracked-files=no", "--", "src", "pyproject.toml", "uv.lock"
@@ -96,7 +100,9 @@ def _series_span(s: pd.Series) -> dict[str, Any]:
 def build_run_manifest(a: Artefacts, settings: Settings, now: datetime) -> dict[str, Any]:
     bronze = settings.bronze
     pin = load_pin(settings.wasde_lock)
-    lock = ROOT / "uv.lock"
+    # A non-editable install (the Docker image) has no repository root: SOY_UV_LOCK points at
+    # the copy of uv.lock shipped next to the virtualenv.
+    lock = Path(os.getenv("SOY_UV_LOCK") or ROOT / "uv.lock")
     wasde = _file(bronze / WASDE_ASSET)
     return {
         "run_manifest_version": RUN_MANIFEST_VERSION,
