@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import TrackRecordView from "@/components/TrackRecordView";
-import { getMeta, getTrackRecord } from "@/lib/data";
+import { getArchive, getMeta, getTrackRecord } from "@/lib/data";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata: Metadata = pageMetadata(
@@ -11,5 +11,5 @@ export const metadata: Metadata = pageMetadata(
 );
 
 export default function TrackRecordPage() {
-  return <TrackRecordView meta={getMeta()} track={getTrackRecord()} />;
+  return <TrackRecordView meta={getMeta()} track={getTrackRecord()} archive={getArchive()} />;
 }

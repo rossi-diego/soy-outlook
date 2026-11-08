@@ -37,7 +37,7 @@ def test_pipeline_publishes_the_site_contract(
         "reports": 196,
     }
 
-    def fake_ingest(settings):
+    def fake_ingest(settings, sources=None):
         settings.ensure()
         return synthetic_wasde, synthetic_prices, ptax, premium, manifest
 
@@ -58,6 +58,12 @@ def test_pipeline_publishes_the_site_contract(
     assert meta["premium_source"]["stale"] is True
     assert meta["premium_source"]["last"] == "2025-06-18"
     assert meta["intervals"]["centring"] in meta["intervals"]["candidates"]
+    fresh = meta["freshness"]
+    assert fresh["as_of_close"] == meta["as_of_close"] == "2026-11-06"
+    assert fresh["stale_after_bdays"] == 3 and fresh["next_wasde"] == "2026-11-10"
+    archive = json.loads((out / "archive" / "index.json").read_text(encoding="utf-8"))
+    assert archive["n_outlooks"] == 1 and archive["n_resolved"] == 0
+    assert (out / "archive" / "2026-11-06.json").exists()
 
     outlook = json.loads((out / "outlook.json").read_text(encoding="utf-8"))
     assert [h["h"] for h in outlook["horizons"]] == list(HORIZONS)

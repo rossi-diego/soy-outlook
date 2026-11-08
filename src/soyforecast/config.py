@@ -94,6 +94,19 @@ FEATURES: tuple[str, ...] = (
     "may_rollover",
 )
 
+# Data freshness (v2.1, P23). These change how the published data is labelled and gated,
+# never a forecast. The CBOT soybean day session closes at 13:20 America/Chicago; the
+# scheduled refresh runs at 19:45 UTC (13:45 CST / 14:45 CDT) and a guard in code skips
+# any run that starts before CLOSE_GUARD_LOCAL on a Chicago weekday, whatever the season.
+CBOT_TZ = "America/Chicago"
+CLOSE_GUARD_LOCAL = (13, 30)
+# The site shows a stale banner (and the refresh gate fails) once the as-of close is more
+# than this many business days old.
+STALE_CLOSE_BDAYS = 3
+# Validation gate against the previously published data: a refresh may not lose more than
+# this share of backtest rows or of weekly history points.
+MAX_ROW_LOSS_SHARE = 0.02
+
 WASDE_RELEASE_URL = "https://github.com/rossi-diego/wasde-monthly-report/releases/latest/download/wasde_full.parquet"
 SOY_TICKER = "ZS=F"
 PTAX_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados"

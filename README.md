@@ -7,6 +7,7 @@
 Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/) · [GitHub](https://github.com/rossi-diego)
 
 [![CI](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml/badge.svg)](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml)
+[![Data refresh](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/refresh.yml/badge.svg)](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/refresh.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -137,10 +138,16 @@ The repository ships the latest `web/public/data`, so `cd web && npm ci && npm r
 ```bash
 make test     # pytest: no-look-ahead, purging, intervals, stats, units, cache checks, end-to-end JSON contract
 make lint     # ruff, mypy, eslint, tsc
-make e2e      # Playwright on desktop and mobile: copy-vs-JSON contract, metadata, no horizontal scroll
+make e2e      # Playwright on desktop and mobile: copy-vs-JSON contract, stale banner (pinned clock), archive, metadata, no horizontal scroll
+make ci-offline  # the hermetic CI run: offline pipeline on synthetic fixtures, then the validation gate
 ```
 
-CI runs the Python checks, then the live pipeline, then the site build and Playwright on every push, and again on weekdays after the CBOT close.
+Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](docs/REFRESH.md)):
+
+- **`ci.yml`, on every push and PR, is hermetic.** It runs lint, mypy and pytest, then `soyforecast run --offline` on committed synthetic fixtures behind a dead-proxy network tripwire, then the site build and Playwright against the committed `web/public/data`.
+- **`refresh.yml`, on weekdays after the CBOT close.** The cron is DST-safe, with a Chicago-clock guard in code, and a second pass runs on WASDE days. It does a live run, then the validation gate (`soyforecast validate`: shape, freshness, row deltas, append-only archive), then the site build and e2e on the new data. It finishes with a bot PR that auto-merges. Only this job can write, and it opens a `data-alert` issue when a run is stale, degraded or failed.
+- **On the site, a banner appears when the data is stale.** That means the close is more than 3 business days old, a newer WASDE is out, or the refresh fell back to cache. The as-of date stays in the header on mobile.
+- **Every published outlook is archived, append-only,** in `web/public/data/archive/`. The Track record page scores each one once its target date passes. This published-vs-outcome table is the project's only genuinely unseen out-of-sample record.
 
 ```
 ├── src/soyforecast/
@@ -148,9 +155,10 @@ CI runs the Python checks, then the live pipeline, then the site build and Playw
 │   ├── features/     vintages.py (projected MY, revisions) · dataset.py (origins, targets, roll flags)
 │   ├── models/       ladder.py (rw, drift, arima, ridge) · live.py (forecast, release-day reaction)
 │   ├── evaluation/   backtest.py (purging, empirical-quantile ranges, centring rule, champion) · stats.py (DM-HLN, Clark-West, Holm)
-│   ├── publish/      web_json.py
-│   ├── pipeline.py · cli.py · config.py (pre-registered horizons, splits, features) · units.py · logs.py
-├── tests/            36 tests: no look-ahead, intervals, event study, premium card, JSON contract
+│   ├── publish/      web_json.py · archive.py (append-only outlook archive, scored outcomes) · validate.py (refresh gate)
+│   ├── pipeline.py · cli.py · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
+├── tests/            56 tests: no look-ahead, intervals, event study, premium card, JSON contract, close guard, gate, archive
+│   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources
 ├── data/seed/        paranagua_premium_monthly.csv + .meta.json (derived premium table and data card, the only committed data)

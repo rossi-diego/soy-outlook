@@ -9,6 +9,10 @@ from typing import Any
 import structlog
 
 
+def _stderr_logger(*_: Any) -> structlog.PrintLogger:
+    return structlog.PrintLogger(file=sys.stderr)
+
+
 def configure_logging(level: str = "INFO", json: bool = False) -> None:
     """Configure stdlib logging + structlog once per process."""
     logging.basicConfig(format="%(message)s", stream=sys.stderr, level=level.upper())
@@ -25,8 +29,10 @@ def configure_logging(level: str = "INFO", json: bool = False) -> None:
     structlog.configure(
         processors=[*processors, renderer],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level.upper())),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-        cache_logger_on_first_use=True,
+        logger_factory=_stderr_logger,
+        # Not cached, and stderr is looked up per logger: the CLI may reconfigure (and tests
+        # swap sys.stderr) within one process.
+        cache_logger_on_first_use=False,
     )
 
 

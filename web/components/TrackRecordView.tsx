@@ -3,8 +3,8 @@
 import { useCallback, useState } from "react";
 
 import EChart, { axisCommon, baseOption, type Tokens } from "@/components/EChart";
-import { dateLabel, horizonLabel, num, pct } from "@/lib/format";
-import type { Meta, MetricRow, ModelId, TrackRecord } from "@/lib/types";
+import { dateLabel, horizonLabel, monthLabel, num, pct } from "@/lib/format";
+import type { ArchiveIndex, Meta, MetricRow, ModelId, TrackRecord } from "@/lib/types";
 
 const MODELS: ModelId[] = ["rw", "drift", "arima", "ridge"];
 const PATH_MODELS: ModelId[] = ["rw", "arima", "ridge"];
@@ -45,7 +45,96 @@ function Pill<T extends string | number>({
   );
 }
 
-export default function TrackRecordView({ meta, track }: { meta: Meta; track: TrackRecord }) {
+function Outcome({ ok, label }: { ok: boolean | null; label: string }) {
+  if (ok === null) return <span className="text-muted">—</span>;
+  return (
+    <span className={ok ? "text-ink" : "font-medium text-warn"}>
+      {ok ? "inside" : "outside"}
+      <span className="sr-only"> the {label} range</span>
+    </span>
+  );
+}
+
+function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }) {
+  const usd = (v: number | null) => (v === null ? "—" : num(v * k, 0));
+  const rows = archive.entries.flatMap((e) => e.horizons.map((h) => ({ e, h })));
+  return (
+    <section className="card space-y-3 p-5" data-testid="published-vs-outcome">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">Published outlooks against what happened</h2>
+        <p className="max-w-3xl text-sm text-ink-2">
+          Every outlook this site publishes is frozen in an append-only archive on the day it goes out, and scored here
+          once its target date passes. Nothing in these rows was ever used to choose a model or a range method, so, as
+          they mature, this becomes the only genuinely unseen out-of-sample record.
+        </p>
+      </div>
+      <p className="text-sm" data-testid="archive-summary">
+        <strong>{archive.n_outlooks}</strong> {archive.n_outlooks === 1 ? "outlook" : "outlooks"} archived ·{" "}
+        <strong>{archive.n_resolved}</strong> of {rows.length} forecasts resolved
+        {archive.n_resolved > 0 && (
+          <>
+            {" "}
+            · inside the 80% range {archive.inside80} of {archive.n_resolved}, inside the 95% range {archive.inside95} of{" "}
+            {archive.n_resolved}
+          </>
+        )}
+        {archive.prices_through && <span className="text-muted"> · closes through {dateLabel(archive.prices_through)}</span>}
+      </p>
+      {rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[40rem] text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 font-medium">Published</th>
+                <th className="py-2 font-medium">Horizon</th>
+                <th className="py-2 font-medium">Target</th>
+                <th className="py-2 text-right font-medium">Central</th>
+                <th className="py-2 text-right font-medium">80% range</th>
+                <th className="py-2 text-right font-medium">Outcome</th>
+                <th className="py-2 text-right font-medium">80%</th>
+                <th className="py-2 text-right font-medium">95%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ e, h }) => (
+                <tr key={`${e.as_of_close}-${h.h}`} className="border-b border-line last:border-0" data-status={h.status}>
+                  <td className="py-1.5">
+                    {dateLabel(e.as_of_close)} <span className="text-muted">({monthLabel(e.latest_wasde).split(" ")[0].slice(0, 3)} WASDE)</span>
+                  </td>
+                  <td className="py-1.5">{horizonLabel(h.h)}</td>
+                  <td className="py-1.5">{dateLabel(h.target_date)}</td>
+                  <td className="tabular py-1.5 text-right">{usd(h.central)}</td>
+                  <td className="tabular py-1.5 text-right">
+                    {usd(h.low80)}–{usd(h.high80)}
+                  </td>
+                  <td className="tabular py-1.5 text-right">
+                    {h.status === "resolved" ? usd(h.actual) : <span className="text-muted">pending</span>}
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <Outcome ok={h.inside80} label="80%" />
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <Outcome ok={h.inside95} label="95%" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-xs text-muted">
+        CBOT front month, USD/t; the outcome is the last close on or before the target date. The archive files are
+        published at{" "}
+        <a className="underline hover:text-ink" href="/data/archive/index.json">
+          /data/archive/
+        </a>{" "}
+        and a refresh is rejected if it would change or remove one.
+      </p>
+    </section>
+  );
+}
+
+export default function TrackRecordView({ meta, track, archive }: { meta: Meta; track: TrackRecord; archive: ArchiveIndex }) {
   const [h, setH] = useState(3);
   const [model, setModel] = useState<ModelId>("rw");
   const k = meta.consts.bu_per_t / 100;
@@ -183,6 +272,8 @@ export default function TrackRecordView({ meta, track }: { meta: Meta; track: Tr
           );
         })}
       </section>
+
+      <PublishedVsOutcome archive={archive} k={k} />
 
       <section className="card space-y-3 p-5">
         <h2 className="text-lg font-semibold">Average miss by horizon (validation {meta.splits.validation[0].slice(0, 4)}–{meta.splits.validation[1].slice(0, 4)})</h2>

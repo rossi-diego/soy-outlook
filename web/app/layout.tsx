@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 
+import FreshnessBanner from "@/components/FreshnessBanner";
 import ThemeToggle, { themeBootScript } from "@/components/ThemeToggle";
 import { getMeta } from "@/lib/data";
 import { dateLabel, monthLabel } from "@/lib/format";
@@ -78,14 +79,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               ))}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-xs text-muted">
-              <span className="hidden sm:inline">
-                CBOT close <strong className="text-ink">{dateLabel(meta.as_of_close)}</strong>
-                {meta.next_wasde && <> · next WASDE {dateLabel(meta.next_wasde)}</>}
+              {/* The as-of date stays visible on every width; the next-WASDE date joins it from sm up. */}
+              <span data-testid="as-of">
+                <span className="hidden sm:inline">CBOT close </span>
+                <span className="sm:hidden">Close </span>
+                <strong className="text-ink">{dateLabel(meta.as_of_close)}</strong>
+                {meta.next_wasde && <span className="hidden sm:inline"> · next WASDE {dateLabel(meta.next_wasde)}</span>}
               </span>
               <ThemeToggle />
             </div>
           </div>
         </header>
+        <FreshnessBanner freshness={meta.freshness} />
         <main id="main" className="mx-auto max-w-6xl px-4 py-8">
           {children}
         </main>

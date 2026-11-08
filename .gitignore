@@ -43,3 +43,6 @@ Thumbs.db
 .idea/
 *.log
 .ipynb_checkpoints/
+
+# CI scratch (hermetic offline run)
+.ci/

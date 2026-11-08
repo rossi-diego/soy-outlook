@@ -17,6 +17,7 @@ import httpx
 import pandas as pd
 
 from soyforecast.config import Settings
+from soyforecast.freshness import SourceLog
 from soyforecast.ingest._cache import atomic_write_bytes, sha256
 from soyforecast.logs import get_logger
 
@@ -36,7 +37,7 @@ REQUIRED_COLUMNS = {
 }
 
 
-def fetch_wasde(settings: Settings) -> Path:
+def fetch_wasde(settings: Settings, sources: SourceLog | None = None) -> Path:
     """Download (or copy) the WASDE parquet into bronze and write its manifest."""
     target = settings.bronze / "wasde_full.parquet"
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -45,6 +46,8 @@ def fetch_wasde(settings: Settings) -> Path:
         source = str(settings.wasde_local)
     elif settings.offline and target.exists():
         log.info("wasde.offline_cache", path=str(target))
+        if sources is not None:
+            sources.record("wasde", "offline", _latest_report(target))
         return target
     else:
         log.info("wasde.download", url=settings.wasde_url)
@@ -66,8 +69,19 @@ def fetch_wasde(settings: Settings) -> Path:
         "fetched_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     (settings.bronze / "wasde_manifest.json").write_text(json.dumps(manifest, indent=2))
+    if sources is not None:
+        if settings.wasde_local:
+            sources.record("wasde", "offline", manifest["latest_report"], "local file")
+        elif not release_meta:
+            sources.record("wasde", "cache", manifest["latest_report"], "release meta unavailable")
+        else:
+            sources.record("wasde", "live", manifest["latest_report"])
     log.info("wasde.ready", **manifest)
     return target
+
+
+def _latest_report(path: Path) -> str:
+    return str(pd.read_parquet(path, columns=["report_month"])["report_month"].max())
 
 
 def _release_meta(url: str) -> dict[str, Any]:

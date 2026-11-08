@@ -18,6 +18,7 @@ from soyforecast.evaluation.backtest import (
 )
 from soyforecast.features.dataset import build_dataset, live_row
 from soyforecast.features.vintages import build_vintages
+from soyforecast.freshness import SourceLog
 from soyforecast.ingest.fx import fetch_ptax
 from soyforecast.ingest.premium import (
     PremiumTable,
@@ -54,22 +55,25 @@ class Artefacts:
     reaction: dict[str, Any]
     centring: str
     interval_choice: pd.DataFrame
+    sources: SourceLog
+    offline: bool
 
 
 def ingest(
-    settings: Settings,
+    settings: Settings, sources: SourceLog | None = None
 ) -> tuple[pd.DataFrame, pd.Series, pd.Series, PremiumTable, dict[str, Any]]:
     settings.ensure()
-    wasde = load_wasde(fetch_wasde(settings))
+    wasde = load_wasde(fetch_wasde(settings, sources))
     manifest = json.loads((settings.bronze / "wasde_manifest.json").read_text())
-    prices = fetch_soy_prices(settings.bronze, offline=settings.offline)
-    ptax = fetch_ptax(settings.bronze, offline=settings.offline)
+    prices = fetch_soy_prices(settings.bronze, offline=settings.offline, sources=sources)
+    ptax = fetch_ptax(settings.bronze, offline=settings.offline, sources=sources)
     premium = load_premium_table(settings.premium_table, settings.premium_card)
     return wasde, prices, ptax, premium, manifest
 
 
 def run(settings: Settings) -> Artefacts:
-    wasde, prices, ptax, premium, manifest = ingest(settings)
+    sources = SourceLog()
+    wasde, prices, ptax, premium, manifest = ingest(settings, sources)
     vintages = build_vintages(wasde)
     vintages.to_parquet(settings.silver / "wasde_vintages.parquet")
     dataset = build_dataset(vintages, prices)
@@ -105,6 +109,8 @@ def run(settings: Settings) -> Artefacts:
         reaction,
         centring,
         interval_choice,
+        sources,
+        settings.offline,
     )
 
 

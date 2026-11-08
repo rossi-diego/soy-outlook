@@ -1,11 +1,20 @@
+# Hermetic CI for pushes and pull requests: no data is downloaded. The pipeline runs offline on
+# committed synthetic fixtures (tests/fixtures/bronze), and the site is built and tested against
+# the committed web/public/data. Live data only enters through refresh.yml, behind its gate.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 19 * * 1-5" # weekdays after the CBOT close: refresh and rebuild
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   python:
@@ -20,11 +29,15 @@ jobs:
       - run: ruff format --check src tests
       - run: ruff check src tests
       - run: mypy src
-      - run: pytest --cov --cov-report=term-missing --cov-fail-under=80
+      - run: pytest -m "not network" --cov --cov-report=term-missing --cov-fail-under=80
 
-  pipeline:
+  pipeline-offline:
     needs: python
     runs-on: ubuntu-latest
+    env:
+      SOY_DATA_DIR: ${{ github.workspace }}/.ci/data
+      SOY_WEB_DATA_DIR: ${{ github.workspace }}/.ci/web-data
+      SOY_OFFLINE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,28 +45,31 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install .
-      - name: Run the pipeline on live data
-        run: soyforecast --json-logs run
+      - name: Stage the synthetic fixtures (no licensed or downloaded data)
+        run: |
+          mkdir -p "$SOY_DATA_DIR"
+          cp -r tests/fixtures/bronze "$SOY_DATA_DIR/bronze"
+          cp -r data/seed "$SOY_DATA_DIR/seed"
+      - name: Offline pipeline run (network tripwire, every HTTP call goes to a dead proxy)
         env:
-          SOY_DATA_DIR: ${{ github.workspace }}/data
-          SOY_WEB_DATA_DIR: ${{ github.workspace }}/web/public/data
-      - uses: actions/upload-artifact@v4
-        with:
-          name: site-data
-          path: web/public/data
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          SOY_WASDE_URL: http://127.0.0.1:9/blocked.parquet
+        run: soyforecast --json-logs run --offline
+      - name: Validation gate on the fixture output (shape only; fixture dates are fixed)
+        run: soyforecast --json-logs validate --data "$SOY_WEB_DATA_DIR" --allow-stale
+      - name: Validation gate on the committed site data
+        run: soyforecast --json-logs validate --data web/public/data --allow-stale
 
   web:
-    needs: pipeline
+    needs: python
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: site-data
-          path: web/public/data
       - uses: actions/setup-node@v4
         with:
           node-version: 22

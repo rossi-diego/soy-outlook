@@ -12,6 +12,7 @@ import httpx
 import pandas as pd
 
 from soyforecast.config import PTAX_URL
+from soyforecast.freshness import SourceLog
 from soyforecast.ingest._cache import atomic_write_parquet
 from soyforecast.logs import get_logger
 
@@ -31,10 +32,18 @@ def parse_ptax(rows: list[dict[str, str]]) -> pd.Series:
     return s.sort_index()
 
 
-def fetch_ptax(bronze: Path, offline: bool = False, start_year: int = 2016) -> pd.Series:
+def fetch_ptax(
+    bronze: Path,
+    offline: bool = False,
+    start_year: int = 2016,
+    sources: SourceLog | None = None,
+) -> pd.Series:
     path = bronze / "ptax_daily.parquet"
     if offline and path.exists():
-        return pd.read_parquet(path)["brl_per_usd"]
+        cached = pd.read_parquet(path)["brl_per_usd"]
+        if sources is not None:
+            sources.record("ptax", "offline", cached.index.max())
+        return cached
     today = pd.Timestamp.today().normalize()
     parts: list[pd.Series] = []
     try:
@@ -56,10 +65,15 @@ def fetch_ptax(bronze: Path, offline: bool = False, start_year: int = 2016) -> p
     except (httpx.HTTPError, ValueError) as exc:
         if path.exists():
             log.warning("ptax.using_cache", error=str(exc))
-            return pd.read_parquet(path)["brl_per_usd"]
+            cached = pd.read_parquet(path)["brl_per_usd"]
+            if sources is not None:
+                sources.record("ptax", "cache", cached.index.max(), str(exc)[:200])
+            return cached
         raise
     s = pd.concat(parts)
     s = s[~s.index.duplicated(keep="last")]
     atomic_write_parquet(s.to_frame(), path)
+    if sources is not None:
+        sources.record("ptax", "live", s.index.max())
     log.info("ptax.ready", rows=len(s), last=str(s.index.max().date()), value=float(s.iloc[-1]))
     return s

@@ -34,8 +34,10 @@ from soyforecast.config import (
     Settings,
 )
 from soyforecast.features.vintages import FEATURE_META
+from soyforecast.freshness import freshness_block
 from soyforecast.logs import get_logger
 from soyforecast.models.ladder import MODEL_LABELS
+from soyforecast.publish.archive import publish_archive
 from soyforecast.units import BUSHELS_PER_TONNE, SACK_KG
 
 if TYPE_CHECKING:
@@ -95,13 +97,14 @@ def _premium_source(a: Artefacts) -> dict[str, Any]:
     }
 
 
-def build_meta(a: Artefacts) -> dict[str, Any]:
+def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
     release = pd.Timestamp(a.live["release_date"])
+    now = now or datetime.now(UTC)
     return {
         "schema_version": SCHEMA_VERSION,
         "version": __version__,
-        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "generated_at": now.isoformat(timespec="seconds"),
         "as_of_close": anchor,
         "latest_wasde": {"month": a.live["report_month"], "release_date": a.live["release_date"]},
         # Ranges are calibrated at release-day origins; the live forecast is issued from the
@@ -109,6 +112,11 @@ def build_meta(a: Artefacts) -> dict[str, Any]:
         "days_since_report": int((anchor - release).days),
         "origin_note": "Ranges are calibrated on forecasts made at the close of WASDE release days.",
         "next_wasde": a.wasde_manifest.get("next_release"),
+        # Where each input came from and how old it is (P23): the site's stale banner and
+        # the refresh workflow's validation gate read this block.
+        "freshness": freshness_block(
+            anchor, now, a.wasde_manifest.get("next_release"), a.sources, a.offline
+        ),
         "wasde_source": {
             "tag": a.wasde_manifest.get("release_tag"),
             "sha256": a.wasde_manifest.get("sha256"),
@@ -302,8 +310,10 @@ def build_wasde(a: Artefacts) -> dict[str, Any]:
 
 def publish(a: Artefacts, settings: Settings) -> None:
     out = settings.web_data_dir
-    _dump(build_meta(a), out / "meta.json")
-    _dump(build_outlook(a), out / "outlook.json")
+    meta = _clean(build_meta(a))
+    outlook = _clean(build_outlook(a))
+    _dump(meta, out / "meta.json")
+    _dump(outlook, out / "outlook.json")
     _dump(build_track_record(a), out / "track_record.json")
     _dump(build_wasde(a), out / "wasde.json")
     cols = [
@@ -326,4 +336,5 @@ def publish(a: Artefacts, settings: Settings) -> None:
     ]
     a.backtest[cols].to_csv(out / "backtest.csv", index=False, float_format="%.6g")
     a.metrics.to_csv(out / "metrics.csv", index=False, float_format="%.6g")
+    publish_archive(meta, outlook, a.prices, out)
     log.info("publish.done", path=str(out), files=sorted(p.name for p in out.iterdir()))

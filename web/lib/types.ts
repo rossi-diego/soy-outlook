@@ -12,6 +12,7 @@ export type Meta = {
   days_since_report: number;
   origin_note: string;
   next_wasde: string | null;
+  freshness: Freshness;
   wasde_source: { tag: string | null; sha256: string | null; reports: number | null };
   consts: { bu_per_t: number; sack_kg: number };
   fx_default: { value: number; date: string; source: string };
@@ -31,6 +32,52 @@ export type Meta = {
   };
   models: Record<ModelId, string>;
   features: { id: string; label: string; unit: string }[];
+};
+
+export type SourceStatus = {
+  /** live: downloaded this run; offline: cache on purpose; cache: a download failed and the cache was used. */
+  status: "live" | "offline" | "cache";
+  last: string | null;
+  detail: string | null;
+};
+
+export type Freshness = {
+  as_of_close: string;
+  generated_at: string;
+  mode: "live" | "offline";
+  stale_after_bdays: number;
+  bdays_close_to_generated: number;
+  next_wasde: string | null;
+  sources: Record<string, SourceStatus>;
+  degraded: boolean;
+  degraded_sources: string[];
+};
+
+export type ArchivedHorizon = {
+  h: number;
+  model: ModelId;
+  target_date: string;
+  central: number;
+  low80: number;
+  high80: number;
+  low95: number;
+  high95: number;
+  status: "pending" | "resolved";
+  actual: number | null;
+  actual_date: string | null;
+  inside80: boolean | null;
+  inside95: boolean | null;
+};
+
+/** web/public/data/archive/index.json: every published outlook, scored once its targets pass. */
+export type ArchiveIndex = {
+  archive_schema_version: number;
+  prices_through: string;
+  n_outlooks: number;
+  n_resolved: number;
+  inside80: number;
+  inside95: number;
+  entries: { as_of_close: string; latest_wasde: string; p0_c_bu: number; horizons: ArchivedHorizon[] }[];
 };
 
 export type PremiumSource = {

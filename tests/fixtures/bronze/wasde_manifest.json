@@ -1,0 +1,10 @@
+{
+  "release_tag": "fixture",
+  "next_release": "2026-11-10",
+  "source": "synthetic (soyforecast.fixtures)",
+  "sha256": null,
+  "bytes": null,
+  "reports": 196,
+  "latest_report": "2026-10",
+  "fetched_at": null
+}
