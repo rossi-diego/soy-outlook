@@ -254,13 +254,16 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
         )}
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span className="text-sm text-ink-2">{t("Historical average reaction on release day", "Reação média histórica no dia da divulgação")}</span>
-          <span className="text-2xl font-semibold">
-            <Delta value={pi.mean} digits={1} suffix=" USD/t" loc={loc} />
+          <span className="text-2xl font-semibold" data-testid="whatif-central">
+            <Delta value={pi.mean} digits={1} suffix=" USD/t" loc={loc} zeroAsNumber />
           </span>
-          <span className="tabular text-sm text-muted">{f.num((pi.mean / buPerT) * 100, 1)}¢/bu</span>
+          <span className="tabular text-sm text-muted">
+            ({t("same move in CBOT", "o mesmo movimento na CBOT")}: {fmt1(Math.round((pi.mean / buPerT) * 1000) / 10, loc)}¢/bu)
+          </span>
         </div>
         <p className="tabular text-sm text-ink-2" data-testid="pi80">
-          {t("80% prediction interval", "Intervalo de predição de 80%")}: {fmt1(pi.lo, loc)} {t("to", "a")} {fmt1(pi.hi, loc)} USD/t
+          {t("80% prediction interval", "Intervalo de predição de 80%")}: {fmt1(pi.lo, loc)} {t("to", "a")} {fmt1(pi.hi, loc)} USD/t{" "}
+          ({t("central", "central")} {fmt1(Math.round(pi.mean * 10) / 10, loc)} USD/t)
           {unclear ? (
             <span className="ml-1.5 font-medium text-ink">· {t("direction unclear", "direção incerta")}</span>
           ) : (

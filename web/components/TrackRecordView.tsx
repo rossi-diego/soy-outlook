@@ -89,6 +89,9 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
   const { t, f } = useI18n();
   const usd = (v: number | null) => (v === null ? "—" : f.num(v * k, 0));
   const rows = archive.entries.flatMap((e) => e.horizons.map((h) => ({ e, h })));
+  // The tally scores each outlook once, on its first-published record; revisions are shown, not re-scored.
+  const scored = archive.entries.filter((e) => e.revision === 1).reduce((n, e) => n + e.horizons.length, 0);
+  const unit = t("CBOT USD/t, excl. premium", "CBOT em USD/t, sem prêmio");
   return (
     <section className="card space-y-3 p-5" data-testid="published-vs-outcome">
       <div className="space-y-1">
@@ -106,7 +109,12 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
           archive.n_outlooks === 1 ? "outlook archived" : "outlooks archived",
           archive.n_outlooks === 1 ? "perspectiva arquivada" : "perspectivas arquivadas",
         )}{" "}
-        · <strong>{archive.n_resolved}</strong> {t(`of ${rows.length} forecasts resolved`, `de ${rows.length} previsões resolvidas`)}
+        · <strong>{archive.n_resolved}</strong> {t(`of ${scored} forecasts resolved`, `de ${scored} previsões resolvidas`)}
+        {archive.n_revisions > 0 &&
+          t(
+            ` · ${archive.n_revisions} ${archive.n_revisions === 1 ? "revision" : "revisions"} shown, not scored`,
+            ` · ${archive.n_revisions} ${archive.n_revisions === 1 ? "revisão mostrada" : "revisões mostradas"}, sem pontuação`,
+          )}
         {archive.n_resolved > 0 &&
           t(
             ` · inside the 80% range ${archive.inside80} of ${archive.n_resolved}, inside the 95% range ${archive.inside95} of ${archive.n_resolved}`,
@@ -121,13 +129,21 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
       </p>
       {rows.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="stack-sm w-full min-w-[40rem] text-sm">
+          <table className="stack-sm w-full min-w-[40rem] text-sm" data-testid="archive-table">
+            <caption className="pb-2 text-left text-xs text-muted" data-testid="archive-unit">
+              {t(
+                `Prices in ${unit} (the archive stores CBOT ¢/bu); once you type a premium on the Outlook page, its FOB numbers sit higher by that premium.`,
+                `Preços em ${unit} (o arquivo guarda CBOT em ¢/bu); depois que você digita um prêmio na página Perspectiva, os números FOB dela ficam mais altos nesse valor.`,
+              )}
+            </caption>
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                 <th className="py-2 font-medium">{t("Published", "Publicada")}</th>
                 <th className="py-2 font-medium">{t("Horizon", "Horizonte")}</th>
                 <th className="py-2 font-medium">{t("Target", "Alvo")}</th>
-                <th className="py-2 text-right font-medium">{t("Central", "Central")}</th>
+                <th className="py-2 text-right font-medium">
+                  {t("Central", "Central")} <span className="normal-case">(CBOT USD/t)</span>
+                </th>
                 <th className="py-2 text-right font-medium">{t("80% range", "Faixa de 80%")}</th>
                 <th className="py-2 text-right font-medium">{t("Outcome", "Resultado")}</th>
                 <th className="py-2 text-right font-medium">80%</th>
@@ -136,13 +152,29 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
             </thead>
             <tbody>
               {rows.map(({ e, h }) => (
-                <tr key={`${e.file ?? e.as_of_close}-${e.latest_wasde}-${h.h}`} className="border-b border-line last:border-0" data-status={h.status}>
+                <tr
+                  key={`${e.file ?? e.as_of_close}-${e.latest_wasde}-${h.h}`}
+                  className="border-b border-line last:border-0"
+                  data-status={h.status}
+                  data-revision={e.revision}
+                >
                   <td className="py-1.5">
                     <span>
                       {f.date(e.as_of_close)}{" "}
                       <span className="font-normal text-muted">
                         ({t(`${f.monthAbbr(Number(e.latest_wasde.slice(5, 7)))} WASDE`, `WASDE de ${f.monthAbbr(Number(e.latest_wasde.slice(5, 7)))}`)})
                       </span>
+                      {e.revision > 1 && (
+                        <span
+                          className="ml-1.5 rounded-full border border-line px-1.5 text-[0.7rem] font-medium text-ink-2"
+                          title={t(
+                            `${e.revision_reason === "close revised" ? "The data vendor revised the close" : "The outlook was republished with other numbers"}; the earlier record (${e.revises}) stays as it was and is the one scored.`,
+                            `${e.revision_reason === "close revised" ? "O fornecedor revisou o fechamento" : "A perspectiva foi republicada com outros números"}; o registro anterior (${e.revises}) fica como estava e é o pontuado.`,
+                          )}
+                        >
+                          {t(`rev. ${e.revision}, ${e.revision_reason === "close revised" ? "close revised" : "republished"}`, `rev. ${e.revision}, ${e.revision_reason === "close revised" ? "fechamento revisado" : "republicada"}`)}
+                        </span>
+                      )}
                     </span>
                   </td>
                   <td data-label={t("Horizon", "Horizonte")} className="py-1.5">
@@ -174,8 +206,8 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
       )}
       <p className="text-xs text-muted">
         {t(
-          "CBOT front month, USD/t; the outcome is the last close on or before the target date. The archive files are published at",
-          "Primeiro vencimento da CBOT, USD/t; o resultado é o último fechamento até a data-alvo. Os arquivos ficam em",
+          "CBOT front month in USD/t, excluding the Paranaguá premium; the outcome is the last close on or before the target date. If the data vendor later revises a close, the site republishes and the change is added as a new revision record next to the original, never written over it. The archive files are published at",
+          "Primeiro vencimento da CBOT em USD/t, sem o prêmio de Paranaguá; o resultado é o último fechamento até a data-alvo. Se o fornecedor depois revisar um fechamento, o site republica e a mudança entra como um novo registro de revisão ao lado do original, nunca por cima dele. Os arquivos ficam em",
         )}{" "}
         <a className="underline hover:text-ink" href="/data/archive/index.json">
           /data/archive/

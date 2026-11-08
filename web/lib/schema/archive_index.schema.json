@@ -26,6 +26,36 @@
         "p0_c_bu": {
           "type": "number"
         },
+        "revision": {
+          "description": "1 = first-published record; N = file <name>.rN.json (P23b).",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "revises": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The archive file this revision follows."
+        },
+        "revision_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "close revised",
+                "outlook revised"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "horizons": {
           "items": {
             "$ref": "#/$defs/ArchivedHorizon"
@@ -38,6 +68,9 @@
         "as_of_close",
         "latest_wasde",
         "p0_c_bu",
+        "revision",
+        "revises",
+        "revision_reason",
         "horizons"
       ],
       "title": "ArchiveEntry",
@@ -156,6 +189,11 @@
       "type": "string"
     },
     "n_outlooks": {
+      "description": "Outlooks on record, each counted once (revision 1).",
+      "type": "integer"
+    },
+    "n_revisions": {
+      "description": "Later records of an outlook (revised close).",
       "type": "integer"
     },
     "n_resolved": {
@@ -178,6 +216,7 @@
     "archive_schema_version",
     "prices_through",
     "n_outlooks",
+    "n_revisions",
     "n_resolved",
     "inside80",
     "inside95",

@@ -97,6 +97,18 @@ def test_publish_swaps_in_a_complete_folder_and_keeps_the_archive(fixture_run, t
     assert sorted(p.name for p in tmp_path.iterdir()) == ["web"]
 
 
+def test_committed_archive_matches_the_committed_outlook():
+    """The newest archived record of the outlook on the site shows the same numbers (P23b)."""
+    from soyforecast.publish.archive import differences, load_archive, records_for, snapshot
+
+    data = ROOT / "web" / "public" / "data"
+    meta = json.loads((data / "meta.json").read_text(encoding="utf-8"))
+    outlook = json.loads((data / "outlook.json").read_text(encoding="utf-8"))
+    records = records_for(load_archive(data), meta["as_of_close"], meta["latest_wasde"]["month"])
+    assert records, f"outlook for {meta['as_of_close']} is not archived"
+    assert differences(records[-1], snapshot(meta, outlook)) == []
+
+
 def test_publish_refuses_to_go_backwards(fixture_run, tmp_path):
     artefacts, settings = fixture_run
     s = replace(settings, web_data_dir=tmp_path / "web")

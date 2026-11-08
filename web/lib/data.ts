@@ -56,6 +56,7 @@ const EMPTY_ARCHIVE: ArchiveIndex = {
   archive_schema_version: 1,
   prices_through: "",
   n_outlooks: 0,
+  n_revisions: 0,
   n_resolved: 0,
   inside80: 0,
   inside95: 0,

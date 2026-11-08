@@ -710,7 +710,19 @@ class ArchiveEntry(Contract):
     as_of_close: IsoDate
     latest_wasde: ReportMonth
     p0_c_bu: float
+    revision: int = Field(
+        ge=1, description="1 = first-published record; N = file <name>.rN.json (P23b)."
+    )
+    revises: str | None = Field(description="The archive file this revision follows.")
+    revision_reason: Literal["close revised", "outlook revised"] | None
     horizons: list[ArchivedHorizon]
+
+    @model_validator(mode="after")
+    def _revision_links(self) -> ArchiveEntry:
+        first = self.revision == 1
+        if first != (self.revises is None) or first != (self.revision_reason is None):
+            raise ValueError("revision 1 has no revises/reason; a later revision has both")
+        return self
 
 
 class ArchiveIndex(Contract):
@@ -718,7 +730,8 @@ class ArchiveIndex(Contract):
 
     archive_schema_version: Literal[1]
     prices_through: str
-    n_outlooks: int
+    n_outlooks: int = Field(description="Outlooks on record, each counted once (revision 1).")
+    n_revisions: int = Field(description="Later records of an outlook (revised close).")
     n_resolved: int
     inside80: int
     inside95: int

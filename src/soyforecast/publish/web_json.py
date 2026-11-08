@@ -58,7 +58,7 @@ from soyforecast.models.ladder import MODEL_LABELS
 from soyforecast.publish.archive import publish_archive
 from soyforecast.publish.lineage import build_run_manifest
 from soyforecast.publish.schema import SCHEMA_VERSION, dump, validate_payload
-from soyforecast.publish.validate import check_deltas, check_shape
+from soyforecast.publish.validate import check_archived, check_deltas, check_shape
 from soyforecast.units import BUSHELS_PER_TONNE, SACK_KG
 
 if TYPE_CHECKING:
@@ -444,6 +444,8 @@ def publish(a: Artefacts, settings: Settings, now: datetime | None = None) -> No
         a.metrics.to_csv(staging / "metrics.csv", index=False, float_format="%.6g")
         publish_archive(payloads["meta.json"], payloads["outlook.json"], a.prices, staging)
         problems = check_shape(staging, SCHEMA_VERSION)
+        if not problems:
+            problems += check_archived(staging, payloads["meta.json"])
         if (out / "meta.json").exists():
             problems += check_deltas(staging, out)
         if problems:

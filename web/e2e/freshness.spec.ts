@@ -79,11 +79,34 @@ test("published-vs-outcome follows the archive index", async ({ page }) => {
   await page.goto("/track-record/");
   const section = page.getByTestId("published-vs-outcome");
   await expect(section).toBeVisible();
-  const total = index.entries.reduce((n: number, e: { horizons: unknown[] }) => n + e.horizons.length, 0);
+  type Entry = { revision: number; as_of_close: string; latest_wasde: string; p0_c_bu: number; horizons: { status: string }[] };
+  const entries = index.entries as Entry[];
+  const total = entries.reduce((n, e) => n + e.horizons.length, 0);
+  const scored = entries.filter((e) => e.revision === 1).reduce((n, e) => n + e.horizons.length, 0);
+  const resolvedScored = entries
+    .filter((e) => e.revision === 1)
+    .reduce((n, e) => n + e.horizons.filter((h) => h.status === "resolved").length, 0);
+  expect(resolvedScored).toBe(index.n_resolved);
   await expect(page.getByTestId("archive-summary")).toContainText(
     `${index.n_outlooks} ${index.n_outlooks === 1 ? "outlook" : "outlooks"} archived`,
   );
-  await expect(page.getByTestId("archive-summary")).toContainText(`${index.n_resolved} of ${total} forecasts resolved`);
+  await expect(page.getByTestId("archive-summary")).toContainText(`${index.n_resolved} of ${scored} forecasts resolved`);
   await expect(section.locator("tbody tr")).toHaveCount(total);
-  await expect(section.locator('tbody tr[data-status="pending"]')).toHaveCount(total - index.n_resolved);
+  await expect(section.locator('tbody tr[data-revision="1"]')).toHaveCount(scored);
+  // The unit is stated on the table itself, not only in the footnote.
+  await expect(page.getByTestId("archive-unit")).toContainText("CBOT USD/t, excl. premium");
+});
+
+test("the newest archived record matches the live outlook for the same close", async ({ page }) => {
+  const index = await (await page.request.get("/data/archive/index.json")).json();
+  const meta = await (await page.request.get("/data/meta.json")).json();
+  const outlook = await (await page.request.get("/data/outlook.json")).json();
+  const newest = (index.entries as { revision: number; as_of_close: string; latest_wasde: string; p0_c_bu: number; horizons: { h: number; central: number }[] }[])
+    .filter((e) => e.as_of_close === meta.as_of_close && e.latest_wasde === meta.latest_wasde.month)
+    .sort((a, b) => b.revision - a.revision)[0];
+  expect(newest, "the outlook on the site is archived").toBeTruthy();
+  expect(newest.p0_c_bu).toBeCloseTo(outlook.last.c_bu, 2);
+  for (const h of outlook.horizons as { h: number; central: number }[]) {
+    expect(newest.horizons.find((x) => x.h === h.h)?.central).toBeCloseTo(h.central, 2);
+  }
 });

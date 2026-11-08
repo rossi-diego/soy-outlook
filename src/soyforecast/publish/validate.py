@@ -9,7 +9,9 @@ Four kinds of check, each returning human-readable problems (an empty list passe
               never go backwards, backtest rows and weekly history do not shrink by more
               than MAX_ROW_LOSS_SHARE, and archived outlooks are untouched (append-only);
   archive   - an outlook built within ARCHIVE_MAX_LAG_BDAYS of its close is on record, so
-              every timely outlook the site shows can be scored later.
+              every timely outlook the site shows can be scored later, and the newest
+              archived record of the outlook on the site matches outlook.json (a revised
+              close is a new `.r<N>` record, never a silent difference).
 """
 
 from __future__ import annotations
@@ -32,9 +34,11 @@ from soyforecast.publish.archive import (
     ARCHIVE_DIR,
     INDEX,
     NAME_RE,
-    archived_for,
     build_lag_bdays,
+    differences,
     load_archive,
+    records_for,
+    snapshot,
 )
 from soyforecast.publish.schema import FILES, validate_payload
 
@@ -140,15 +144,27 @@ def check_deltas(data: Path, baseline: Path) -> list[str]:
 
 
 def check_archived(data: Path, meta: dict[str, Any]) -> list[str]:
-    """A timely outlook must be in the archive (late rebuilds are left out on purpose)."""
-    snap = {"as_of_close": meta["as_of_close"], "generated_at": meta["generated_at"]}
-    if build_lag_bdays(snap) > ARCHIVE_MAX_LAG_BDAYS:
-        return []
-    if archived_for(load_archive(data), meta["as_of_close"], meta["latest_wasde"]["month"]):
-        return []
-    return [
-        f"outlook for {meta['as_of_close']} ({meta['latest_wasde']['month']} WASDE) is not archived"
-    ]
+    """The outlook on the site is on record, and its newest record shows the same numbers.
+
+    A timely outlook must be archived (late rebuilds are left out on purpose). Whenever the
+    outlook is archived, timely or not, its newest record must match outlook.json: a revised
+    close is written as a new revision, so the site never silently differs from the record.
+    """
+    as_of, month = meta["as_of_close"], meta["latest_wasde"]["month"]
+    records = records_for(load_archive(data), as_of, month)
+    if not records:
+        snap = {"as_of_close": as_of, "generated_at": meta["generated_at"]}
+        if build_lag_bdays(snap) > ARCHIVE_MAX_LAG_BDAYS:
+            return []
+        return [f"outlook for {as_of} ({month} WASDE) is not archived"]
+    newest = records[-1]
+    diff = differences(newest, snapshot(meta, _json(data / "outlook.json")))
+    if diff:
+        return [
+            f"newest archived record {newest['file']} differs from outlook.json: "
+            + "; ".join(diff[:4])
+        ]
+    return []
 
 
 def validate(

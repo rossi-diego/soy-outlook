@@ -22,7 +22,7 @@ from soyforecast.freshness import (
 )
 from soyforecast.ingest.prices import fetch_soy_prices
 from soyforecast.publish.archive import load_archive, publish_archive, score
-from soyforecast.publish.schema import SCHEMA_VERSION
+from soyforecast.publish.schema import SCHEMA_VERSION, validate_payload
 from soyforecast.publish.validate import validate
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bronze"
@@ -136,19 +136,51 @@ def test_archive_is_append_only_and_scored_once_targets_pass(tmp_path):
     publish_archive(meta, outlook, prices, tmp_path)
     first = (tmp_path / "archive" / "2026-01-09.json").read_bytes()
 
-    # A later run for the same close (different code, different numbers) never rewrites it.
+    # A later run for the same close (different numbers) never rewrites it: it adds a revision.
     meta2, outlook2 = _meta_outlook("2026-01-09", p0=2000.0)
     publish_archive(meta2, outlook2, prices, tmp_path)
     assert (tmp_path / "archive" / "2026-01-09.json").read_bytes() == first
 
     prices.loc[pd.Timestamp("2026-02-09")] = 1150.0  # 1m target: inside 95%, outside 80%
     index = score(load_archive(tmp_path), prices)
-    h = {r["h"]: r for r in index["entries"][0]["horizons"]}
+    first_record = next(e for e in index["entries"] if e["revision"] == 1)
+    h = {r["h"]: r for r in first_record["horizons"]}
     assert h[1]["status"] == "resolved" and h[1]["actual"] == 1150.0
     assert h[1]["inside80"] is False and h[1]["inside95"] is True
     assert h[3]["status"] == "resolved" and h[3]["inside80"] is True
     assert h[6]["status"] == "pending" and h[6]["actual"] is None
-    assert index["n_resolved"] == 2
+    assert index["n_resolved"] == 2  # the revision is shown but never scored twice
+    assert index["n_outlooks"] == 1 and index["n_revisions"] == 1
+
+
+def test_a_revised_close_is_a_new_revision_record_not_a_silent_difference(tmp_path):
+    prices = pd.Series(1000.0, index=pd.bdate_range("2025-12-01", "2026-01-30"))
+    meta, outlook = _meta_outlook("2026-01-09", p0=1189.0)
+    publish_archive(meta, outlook, prices, tmp_path)
+    folder = tmp_path / "archive"
+    original = (folder / "2026-01-09.json").read_bytes()
+
+    # The vendor revises the close; a later (even late) run republishes the same outlook.
+    meta_r, outlook_r = _meta_outlook("2026-01-09", p0=1193.75)
+    meta_r["generated_at"] = "2026-01-14T20:00:00+00:00"
+    publish_archive(meta_r, outlook_r, prices, tmp_path)
+    publish_archive(meta_r, outlook_r, prices, tmp_path)  # same numbers: nothing new
+    assert (folder / "2026-01-09.json").read_bytes() == original
+    names = sorted(p.name for p in folder.glob("2026-*.json"))
+    assert names == ["2026-01-09.json", "2026-01-09.r2.json"]
+    rev = json.loads((folder / "2026-01-09.r2.json").read_text(encoding="utf-8"))
+    assert rev["revision"] == 2 and rev["revises"] == "2026-01-09.json"
+    assert rev["revision_reason"] == "close revised" and rev["p0_c_bu"] == 1193.75
+
+    # A third set of numbers chains on the newest record.
+    meta_3, outlook_3 = _meta_outlook("2026-01-09", p0=1190.0)
+    index = publish_archive(meta_3, outlook_3, prices, tmp_path)
+    assert (folder / "2026-01-09.r3.json").exists()
+    r3 = json.loads((folder / "2026-01-09.r3.json").read_text(encoding="utf-8"))
+    assert r3["revises"] == "2026-01-09.r2.json"
+    assert [e["revision"] for e in index["entries"]] == [3, 2, 1]
+    assert index["n_outlooks"] == 1 and index["n_revisions"] == 2
+    validate_payload("archive/index.json", index)
 
 
 def test_archive_outcome_uses_only_closes_on_or_before_the_target(tmp_path):
@@ -252,6 +284,18 @@ def test_gate_requires_a_timely_outlook_to_be_archived(published, tmp_path):
     meta["generated_at"] = "2026-11-11T21:00:00+00:00"
     (data / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     assert validate(data, meta["schema_version"], now=now).ok
+
+
+def test_gate_requires_the_newest_record_to_match_the_live_outlook(published, tmp_path):
+    data = tmp_path / "data"
+    shutil.copytree(published, data)
+    meta = json.loads((data / "meta.json").read_text(encoding="utf-8"))
+    now = datetime(2026, 11, 9, 21, tzinfo=UTC)
+    outlook = json.loads((data / "outlook.json").read_text(encoding="utf-8"))
+    outlook["last"]["c_bu"] += 4.75  # the close was revised after the record was written
+    (data / "outlook.json").write_text(json.dumps(outlook), encoding="utf-8")
+    problems = validate(data, meta["schema_version"], now=now).problems
+    assert len(problems) == 1 and "differs from outlook.json: p0" in problems[0]
 
 
 def test_gate_rejects_bad_shape(published, tmp_path):

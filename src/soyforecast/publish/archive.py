@@ -6,9 +6,19 @@ on record whatever the code does later. If the same close is published again wit
 WASDE report (the second refresh pass on a WASDE day), that outlook is archived as well, as
 `archive/<as_of_close>_<wasde month>.json`. An outlook built more than ARCHIVE_MAX_LAG_BDAYS
 business days after its close is published but not archived, so a late rebuild can never
-backfill the record with hindsight. `archive/index.json` is rebuilt on every run: it
-lists the archived outlooks and, for each horizon whose target date has passed, the CBOT
-close realized on or before that date and whether it fell inside the 80% and 95% ranges.
+backfill the record with hindsight.
+
+Revisions (P23b). The newest record for a close and WASDE report must match the outlook the
+site shows for it (validate.check_archived enforces this). When a later run (timely or not)
+publishes different numbers for an already archived close (typically because the data vendor
+revised the close), the earlier file is kept as it is and the new numbers are written next to
+it as `<name>.r<N>.json` with `revision`, `revises` and `revision_reason`. Nothing is ever
+silently different from the record, and the scored tally uses only the first-published record
+of each outlook, so a revision cannot improve the score.
+
+`archive/index.json` is rebuilt on every run: it lists the archived outlooks and, for each
+horizon whose target date has passed, the CBOT close realized on or before that date and
+whether it fell inside the 80% and 95% ranges.
 
 Unlike the backtest, nothing in these rows was ever seen when a model or method was
 chosen; once targets mature, this becomes the project's only genuinely unseen
@@ -35,9 +45,13 @@ log = get_logger(__name__)
 ARCHIVE_DIR = "archive"
 INDEX = "index.json"
 ARCHIVE_SCHEMA_VERSION = 1
-NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(_\d{4}-\d{2})?\.json$")
+NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(_\d{4}-\d{2})?(\.r\d+)?\.json$")
+REVISION_RE = re.compile(r"\.r(\d+)\.json$")
 
 HORIZON_KEYS = ("h", "model", "target_date", "central", "q025", "q100", "q900", "q975")
+NUMBER_KEYS = ("central", "q025", "q100", "q900", "q975")
+# Published numbers are rounded to cents; anything closer than this is the same number.
+SAME_TOL = 0.005
 
 
 def snapshot(meta: dict[str, Any], outlook: dict[str, Any]) -> dict[str, Any]:
@@ -61,11 +75,45 @@ def build_lag_bdays(snap: dict[str, Any]) -> int:
     return business_days_between(snap["as_of_close"], built)
 
 
-def archived_for(entries: list[dict[str, Any]], as_of: str, wasde_month: str) -> bool:
-    """True when an outlook for this close and WASDE report is already archived."""
-    return any(
-        e["as_of_close"] == as_of and e["latest_wasde"]["month"] == wasde_month for e in entries
-    )
+def revision_of(entry: dict[str, Any]) -> int:
+    """1 for the first-published record, N for `<name>.rN.json`."""
+    return int(entry.get("revision", 1))
+
+
+def records_for(
+    entries: list[dict[str, Any]], as_of: str, wasde_month: str
+) -> list[dict[str, Any]]:
+    """Every archived record of one outlook (close + WASDE report), oldest revision first."""
+    rows = [
+        e
+        for e in entries
+        if e["as_of_close"] == as_of and e["latest_wasde"]["month"] == wasde_month
+    ]
+    return sorted(rows, key=revision_of)
+
+
+def differences(record: dict[str, Any], snap: dict[str, Any]) -> list[str]:
+    """Where an archived record and a fresh snapshot of the same outlook disagree (empty: same)."""
+
+    def far(a: Any, b: Any) -> bool:
+        return abs(float(a) - float(b)) > SAME_TOL
+
+    out = []
+    if far(record["p0_c_bu"], snap["p0_c_bu"]):
+        out.append(f"p0 {record['p0_c_bu']} vs {snap['p0_c_bu']}")
+    old = {h["h"]: h for h in record["horizons"]}
+    new = {h["h"]: h for h in snap["horizons"]}
+    if sorted(old) != sorted(new):
+        out.append(f"horizons {sorted(old)} vs {sorted(new)}")
+        return out
+    for h in sorted(new):
+        a, b = old[h], new[h]
+        if a["model"] != b["model"] or a["target_date"] != b["target_date"]:
+            out.append(
+                f"h={h} model/target {a['model']} {a['target_date']} vs {b['model']} {b['target_date']}"
+            )
+        out += [f"h={h} {k} {a[k]} vs {b[k]}" for k in NUMBER_KEYS if far(a[k], b[k])]
+    return out
 
 
 def write_snapshot(snap: dict[str, Any], out: Path) -> Path | None:
@@ -73,20 +121,34 @@ def write_snapshot(snap: dict[str, Any], out: Path) -> Path | None:
 
     Append-only: an existing file is never touched. The first outlook for a close goes to
     <as_of>.json; a re-publish of that close with a newer WASDE goes to <as_of>_<month>.json.
+    A re-publish with different numbers (a revised close) goes to <name>.r<N>.json.
     """
     folder = out / ARCHIVE_DIR
     folder.mkdir(parents=True, exist_ok=True)
     as_of, month = snap["as_of_close"], snap["latest_wasde"]["month"]
+    records = records_for(load_archive(out), as_of, month)
     lag = build_lag_bdays(snap)
-    if lag > ARCHIVE_MAX_LAG_BDAYS:
+    if not records and lag > ARCHIVE_MAX_LAG_BDAYS:
         log.warning("archive.too_late", as_of=as_of, lag_bdays=lag, limit=ARCHIVE_MAX_LAG_BDAYS)
         return None
-    if archived_for(load_archive(out), as_of, month):
-        log.info("archive.exists", as_of=as_of, wasde=month)
-        return None
-    path = folder / f"{as_of}.json"
-    if path.exists():
-        path = folder / f"{as_of}_{month}.json"
+    if records:
+        # A revision is recorded whenever it happens (it is never scored, so lateness
+        # cannot backfill anything); the site must never silently differ from the record.
+        latest = records[-1]
+        diff = differences(latest, snap)
+        if not diff:
+            log.info("archive.exists", as_of=as_of, wasde=month)
+            return None
+        rev = revision_of(latest) + 1
+        base = REVISION_RE.sub(".json", latest["file"])[: -len(".json")]
+        path = folder / f"{base}.r{rev}.json"
+        reason = "close revised" if diff[0].startswith("p0 ") else "outlook revised"
+        snap = {**snap, "revision": rev, "revises": latest["file"], "revision_reason": reason}
+        log.warning("archive.revision", path=path.name, revises=latest["file"], diff=diff[:4])
+    else:
+        path = folder / f"{as_of}.json"
+        if path.exists():
+            path = folder / f"{as_of}_{month}.json"
     if path.exists():  # a file with that name but other content: never overwrite it
         log.warning("archive.name_taken", path=path.name)
         return None
@@ -148,19 +210,27 @@ def score(entries: list[dict[str, Any]], prices: pd.Series) -> dict[str, Any]:
                 "as_of_close": e["as_of_close"],
                 "latest_wasde": e["latest_wasde"]["month"],
                 "p0_c_bu": e["p0_c_bu"],
+                "revision": revision_of(e),
+                "revises": e.get("revises"),
+                "revision_reason": e.get("revision_reason"),
                 "horizons": horizons,
             }
         )
-    resolved = [h for r in out_rows for h in r["horizons"] if h["status"] == "resolved"]
+    # The tally scores each outlook once, on its first-published record (revision 1).
+    first = [r for r in out_rows if r["revision"] == 1]
+    resolved = [h for r in first for h in r["horizons"] if h["status"] == "resolved"]
     return {
         "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
         "prices_through": last_close.date().isoformat(),
-        "n_outlooks": len(out_rows),
+        "n_outlooks": len(first),
+        "n_revisions": len(out_rows) - len(first),
         "n_resolved": len(resolved),
         "inside80": sum(bool(h["inside80"]) for h in resolved),
         "inside95": sum(bool(h["inside95"]) for h in resolved),
         "entries": sorted(
-            out_rows, key=lambda r: (r["as_of_close"], r["latest_wasde"]), reverse=True
+            out_rows,
+            key=lambda r: (r["as_of_close"], r["latest_wasde"], r["revision"]),
+            reverse=True,
         ),
     }
 

@@ -891,7 +891,14 @@ export interface SeriesInput {
 export interface ArchiveIndex {
   archive_schema_version: 1;
   prices_through: string;
+  /**
+   * Outlooks on record, each counted once (revision 1).
+   */
   n_outlooks: number;
+  /**
+   * Later records of an outlook (revised close).
+   */
+  n_revisions: number;
   n_resolved: number;
   inside80: number;
   inside95: number;
@@ -909,6 +916,15 @@ export interface ArchiveEntry {
   as_of_close: string;
   latest_wasde: string;
   p0_c_bu: number;
+  /**
+   * 1 = first-published record; N = file <name>.rN.json (P23b).
+   */
+  revision: number;
+  /**
+   * The archive file this revision follows.
+   */
+  revises: string | null;
+  revision_reason: ("close revised" | "outlook revised") | null;
   horizons: ArchivedHorizon[];
 }
 /**
