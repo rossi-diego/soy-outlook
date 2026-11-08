@@ -56,7 +56,9 @@ def write_snapshot(snap: dict[str, Any], out: Path) -> Path | None:
     if path.exists():
         log.info("archive.exists", path=path.name)
         return None
-    path.write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
+    # LF on every OS, so the append-only byte comparison does not depend on where it ran.
+    text = json.dumps(snap, ensure_ascii=False, indent=1)
+    path.write_text(text, encoding="utf-8", newline="\n")
     log.info("archive.written", path=path.name)
     return path
 
