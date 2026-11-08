@@ -23,7 +23,7 @@ This is how new data reaches the site, what stops bad data, and what the reposit
 
 ## Validation gate (`soyforecast validate`)
 
-- **Shape.** Every file exists and `schema_version` matches. There is one horizon per configured horizon, each with finite, monotone quantiles. History, metrics, paths and WASDE lines are non-empty. This is a structural check until the pydantic contract (P25) replaces it.
+- **Shape.** Every file exists and `schema_version` matches. There is one horizon per configured horizon, each with finite, monotone quantiles. History, metrics, paths and WASDE lines are non-empty. The pydantic site contract (P25) enforces it.
 - **Freshness.** The as-of close may be at most `STALE_CLOSE_BDAYS` (3) business days old. `--allow-stale` reports an old close without failing on it.
 - **Deltas against the previously published copy.**
   - `as_of_close` and the latest WASDE never go backwards.
@@ -57,8 +57,15 @@ When a refresh fails, including a failed gate, when its close is stale (even on 
 - If the same close is published again with a newer WASDE report (the second pass on a release day), that outlook is archived too, as `archive/<as_of_close>_<wasde month>.json`.
 - An outlook built more than `ARCHIVE_MAX_LAG_BDAYS` (1) business day after its close, such as an offline rebuild on an old cache, is published but not archived. Later closes are already known by then, so archiving it would backfill the record with hindsight.
 - `archive/index.json` is rebuilt on every run. Each horizon's outcome is the last CBOT close on or before its target date, marked `inside80` and `inside95`, and `pending` until that date passes.
+- **Revisions (P23b).** If a later run sees a revised close for an archived date, it writes `<date>.r<N>.json` (`revision`, `revises`, `revision_reason`) next to the original, which is never rewritten. `check_revision_chain` in `publish/validate.py` rejects a revision whose number or `revises` link is wrong, and only the first-published record is scored. The newest archive record must match `outlook.json`; publish, `soyforecast validate`, a pytest and an e2e test check this.
 - The Track record page shows these rows under "Published outlooks against what happened".
 - None of these rows was used to choose a model or a range method. Unlike the backtest, where I had seen the 2024–25 holdout prices, this is the only genuinely unseen out-of-sample record. The first 1-month outcome is due a month after the first archived close (2026-11-06).
+
+## Contract, input pins and lineage
+
+- **The JSON the site reads is a checked contract.** `src/soyforecast/publish/schema.py` defines every published file as a pydantic model (unknown keys, nulls where numbers are expected, NaN, non-monotone quantiles and missing horizons are all rejected). `publish` validates before writing, writes into a staging folder, re-checks it against the live copy (as-of close and latest WASDE never go backwards) and only then swaps it in with `os.replace`; a failure leaves the published data untouched (exit code 4). `soyforecast export-schema` writes the models as JSON Schema to `web/lib/schema/`; `npm run gen:types` turns that into `web/lib/types.generated.ts`, and `web/lib/data.ts` validates every file against the same schema at build time, so a wrong `schema_version` or shape fails `next build`. CI fails when the schema or the generated types are stale. Generated types rather than zod: zod would be a second, hand-written copy of the contract.
+- **Inputs are pinned and checked before they replace the cache.** The WASDE history is pinned to one WASDE Tracker release tag and its sha256 in `data/wasde.lock.json`; other bytes under that tag are rejected, and only the scheduled refresh moves the pin (`run --update-pin`), as a reviewable diff in its PR. A new WASDE file must keep every column, numeric values and unique keys, and may not lose reports. A PTAX download must stay within 1-15 BRL/USD, move less than 15% a day and end no earlier than the cache. A rejected or failed download falls back to the cache and marks the run degraded. `--offline` never touches the network and fails with exit code 3 when a cache is missing (exit codes are listed in `src/soyforecast/errors.py`).
+- **Every run says what produced it.** `web/public/data/run_manifest.json` lists the sha256 of every input file, the WASDE pin and whether the file matched it, the hash of `uv.lock`, the git commit (and whether the code differed from it), and the versions of the packages that shape a forecast. Every input is also kept as a dated, content-hashed snapshot in `data/bronze/snapshots/` (identical bytes stored once, the last 30 per source kept). In the Docker image, which has no git checkout, the commit comes from the `GIT_SHA` build argument and `uv.lock` ships next to the virtualenv.
 
 ## What the owner must enable
 

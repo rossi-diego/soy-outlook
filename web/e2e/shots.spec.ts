@@ -26,7 +26,7 @@ for (const [name, url] of PAGES) {
       await page.goto(url);
       await page.waitForTimeout(1200);
       // The first two screens: what a phone visitor sees before scrolling far.
-      await page.screenshot({ path: `${DIR}/${name}-mobile-${theme}.png`, clip: { x: 0, y: 0, width: 390, height: 1688 } });
+      await page.screenshot({ path: `${DIR}/${name}-mobile-${theme}.png`, fullPage: true, clip: { x: 0, y: 0, width: 390, height: 1688 } });
     });
   }
 }
@@ -43,7 +43,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390]] as const) {
     await page.goto("/");
     await page.waitForTimeout(1200);
     if (width === 390) {
-      await page.screenshot({ path: `${DIR}/outlook-pt-mobile-${theme}.png`, clip: { x: 0, y: 0, width: 390, height: 1688 } });
+      await page.screenshot({ path: `${DIR}/outlook-pt-mobile-${theme}.png`, fullPage: true, clip: { x: 0, y: 0, width: 390, height: 1688 } });
     } else {
       await page.screenshot({ path: `${DIR}/outlook-pt-${theme}.png`, fullPage: true });
     }

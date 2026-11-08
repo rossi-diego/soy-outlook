@@ -74,12 +74,12 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 
 ## Pages
 
-| Page | Question it answers |
-|---|---|
-| **Outlook** | How far could CBOT (¢/bu, USD/t, R$ per sack) move in 1, 3 and 6 months, within an 80% and a 95% range? FX is your input, and FOB appears once you type a premium (empty by default, kept in your browser only). A decision panel (side, tonnes, hedge ratio, USD or BRL) turns the ranges into downside vs selling today at the 1-in-10 and rough 1-in-40 levels, from a published 5–95% quantile grid; it is labelled illustrative, range-based not VaR, CBOT only with the basis unhedged, and shows the 6-month under-coverage inline. No target-price probability and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors). The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
-| **This WASDE** | How far does CBOT usually move on release day? The empirical band (±4.5 USD/t typical, ±11.6 for 1 report in 10) is drawn around today's price with its out-of-sample hit rate: scored on earlier reports only, the 1-in-10 band held 90% of 86 reports in 2016–2023 and 97% of 29 in 2024+. What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. A *How stable is this?* block shows the placebo, split-sample and roll-exclusion checks in plain language, and the what-if opens on the 2018+ fit (toggle: all reports). |
-| **Track record** | Did any model beat "no change"? A one-line verdict with the smallest effect the tests could have detected, where the 80% range missed (below vs above), a dot plot of each model's error against no change, and past forecasts against actual prices (holdout shaded, misses and crop-roll windows marked). The DM/CW tests, Kupiec/Christoffersen calibration tests and the range-method comparison sit in a **For statisticians** fold. |
-| **Methodology** | Plain-language method, units, limitations and the audit of v1. |
+| Page | Question it answers | What is on it |
+|---|---|---|
+| **Outlook** | How far could CBOT move in 1, 3 and 6 months? | 80% and 95% ranges in ¢/bu, USD/t or R$/sack, each labelled with its measured hit rate. FX is an input; FOB appears only once you type a premium (empty by default, kept in your browser). A decision panel shows downside vs selling today at 1-in-10 and rough 1-in-40 (illustrative, range-based, not VaR). Whisker chart, folded stress replay. |
+| **This WASDE** | How much does CBOT move on release day, and on what? | Release-day band (±4.5 USD/t typical, ±11.6 for 1 report in 10) with its out-of-sample hit rate, the latest revisions, a what-if with an 80% prediction interval (opens on the 2018+ fit), and a *How stable is this?* block. |
+| **Track record** | Did any model beat "no change"? | One-line verdict with the minimum detectable effect, misses by tail, a dot plot of errors vs no change, past forecasts vs prices, published outlooks vs outcomes. Formal tests sit in a **For statisticians** fold. |
+| **Methodology** | How was it built, and what are the limits? | Method, units, limitations and the v1 audit. |
 
 | This WASDE | Track record |
 |---|---|
@@ -153,26 +153,23 @@ The repository ships the latest `web/public/data`, so `cd web && npm ci && npm r
 
 ## Development
 
-```bash
-make test     # pytest: no-look-ahead, purging, intervals, stats, units, ingest checks, JSON contract, end to end
-make test-fast   # the same without the end-to-end pipeline runs (marked slow), about 6 s
-make schema   # after changing publish/schema.py: re-export JSON Schema and regenerate web/lib/types.generated.ts
-make lint     # ruff, mypy, eslint, tsc
-make e2e      # Playwright on desktop and mobile: copy-vs-JSON contract, stale banner (pinned clock), archive, metadata, no horizontal scroll
-cd web && npm run test:unit   # vitest: unit conversion, FX parsing, labels, the slim track-record payload, what-if interval
-cd web && npm run size        # after a build: HTML <= 100 KB per page, first-load JS budget, ECharts never in first-load scripts
-make ci-offline  # the hermetic CI run: offline pipeline on synthetic fixtures, then the validation gate
-```
+| Command | What it runs |
+|---|---|
+| `make test` / `make test-fast` | pytest with coverage / without the slow end-to-end runs (about 6 s) |
+| `make lint` | ruff, mypy, eslint, tsc |
+| `make e2e` | Playwright on desktop and mobile: copy-vs-JSON contract, axe, stale banner, archive, no horizontal scroll |
+| `make schema` | after editing `publish/schema.py`: re-export JSON Schema and regenerate `web/lib/types.generated.ts` |
+| `make ci-offline` | the hermetic CI run: offline pipeline on synthetic fixtures, then the validation gate |
+| `cd web && npm run test:unit` | vitest: units, FX parsing, labels, what-if interval, stability copy |
+| `cd web && npm run size` | after a build: per-page HTML and first-load JS budgets, ECharts never in first-load scripts |
 
-Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](docs/REFRESH.md)):
+How data reaches the site, in short (details and owner setup in [docs/REFRESH.md](docs/REFRESH.md)):
 
-- **`ci.yml`, on every push and PR, is hermetic.** Every action is pinned by commit SHA (Dependabot keeps the pins current). It installs exactly `uv.lock`, runs lint, mypy (with pandas-stubs) and pytest on Python 3.11 and 3.12, builds the multi-stage, non-root Docker image, and runs `soyforecast run --offline` on committed synthetic fixtures behind a dead-proxy network tripwire, then the site build and Playwright against the committed `web/public/data`.
-- **`refresh.yml`, on weekdays after the CBOT close.** The cron is DST-safe, with a Chicago-clock guard in code, and a second pass runs on WASDE days. It does a live run, then the validation gate (`soyforecast validate`: shape, freshness, row deltas, append-only archive), then the site build and e2e on the new data. It finishes with a bot PR that auto-merges. Only this job can write, and it opens a `data-alert` issue when a run is stale, degraded or failed.
-- **On the site, a banner appears when the data is stale.** That means the close is more than 3 business days old, a newer WASDE is out, or the refresh fell back to cache. The as-of date stays in the header on mobile.
-- **The JSON the site reads is a checked contract.** `src/soyforecast/publish/schema.py` defines every published file as a pydantic model (unknown keys, nulls where numbers are expected, NaN, non-monotone quantiles and missing horizons are all rejected). `publish` validates before writing, writes into a staging folder, re-checks it against the live copy (as-of close and latest WASDE never go backwards) and only then swaps it in with `os.replace`; a failure leaves the published data untouched (exit code 4). `soyforecast export-schema` writes the models as JSON Schema to `web/lib/schema/`; `npm run gen:types` turns that into `web/lib/types.generated.ts`, and `web/lib/data.ts` validates every file against the same schema at build time, so a wrong `schema_version` or shape fails `next build`. CI fails when the schema or the generated types are stale. Generated types rather than zod: zod would be a second, hand-written copy of the contract in TypeScript, while generated types and the schema check both come from the one pydantic definition.
-- **Inputs are pinned and checked before they replace the cache.** The WASDE history is pinned to one WASDE Tracker release tag and its sha256 in `data/wasde.lock.json`; other bytes under that tag are rejected, and only the scheduled refresh moves the pin (`run --update-pin`), as a reviewable diff in its PR. A new WASDE file must keep every column, numeric values and unique keys, and may not lose reports. A PTAX download must stay within 1-15 BRL/USD, move less than 15% a day and end no earlier than the cache. A rejected or failed download falls back to the cache and marks the run degraded. `--offline` never touches the network and fails with exit code 3 when a cache is missing (exit codes are listed in `src/soyforecast/errors.py`).
-- **Every run says what produced it.** `web/public/data/run_manifest.json` lists the sha256 of every input file, the WASDE pin and whether the file matched it, the hash of `uv.lock`, the git commit (and whether the code differed from it), and the versions of the packages that shape a forecast. Every input a run uses, downloaded or read from the cache, is also kept as a dated, content-hashed snapshot in `data/bronze/snapshots/` (identical bytes are stored once, the last 30 per source are kept), and the manifest names it. In the Docker image, which has no git checkout, the commit comes from the `GIT_SHA` build argument and `uv.lock` ships next to the virtualenv, so a published outlook can be rebuilt from exactly its inputs.
-- **Every published outlook is archived, append-only,** in `web/public/data/archive/`. The Track record page scores each one once its target date passes. If the vendor later revises a close, the republished numbers go into a new revision record (`<date>.r2.json`) next to the original; nothing is rewritten, and only the first-published record is scored. This published-vs-outcome table is the project's only genuinely unseen out-of-sample record.
+- **`ci.yml` (push, PR) is hermetic:** SHA-pinned actions, `uv.lock`, Python 3.11 and 3.12, Docker build, an offline pipeline run behind a dead-proxy tripwire, then the site build and Playwright.
+- **`refresh.yml` (weekdays after the CBOT close, plus a WASDE-day pass):** live run → `soyforecast validate` gate → site build and e2e → bot PR with auto-merge; a `data-alert` issue when a run is stale, degraded or failed.
+- **A checked contract:** every published file is a pydantic model, exported to JSON Schema and generated TypeScript types and validated again in `next build`; publish is staged and swapped atomically.
+- **Pinned, traceable inputs:** WASDE pinned by release tag and sha256, PTAX bounds checks, cache fallback marked as degraded, and a `run_manifest.json` with input hashes, the `uv.lock` hash and the git commit.
+- **Append-only outlook archive:** each published outlook is kept and scored once its date passes; a revised close goes into `<date>.rN.json` and only the first record is scored.
 
 ```
 ├── src/soyforecast/
@@ -182,7 +179,7 @@ Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](
 │   ├── evaluation/   backtest.py (purging, range methods and their rule, centring rule, calibration stats, champion) · stats.py (DM-HLN, Clark-West, Holm, HAC / block-bootstrap hit-rate CIs, Kupiec, Christoffersen, MDE, Pesaran-Timmermann)
 │   ├── publish/      schema.py (pydantic site contract) · web_json.py (validated, staged publish) · archive.py (append-only outlook archive) · lineage.py (run manifest) · validate.py (refresh gate)
 │   ├── pipeline.py · cli.py · errors.py (exit codes) · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
-├── tests/            106 tests: no look-ahead, intervals, event study, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
+├── tests/            110 tests: no look-ahead, intervals, event study, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
 │   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources

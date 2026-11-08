@@ -105,6 +105,19 @@ Twelve reviewer lenses (quant, stats, trader, farmer, risk, UX, dataviz, fronten
 
 The live run re-fetched the 6 Nov 2026 close as 1,193.75¢/bu; an earlier local run from cached prices had archived 1,189¢/bu. That archive file was created on this unreleased branch and never deployed, so it was not a published record: polish unit C (P23b) regenerated it from the current publish, and the archive now matches the outlook. From here on the rule is mechanical. The newest archive record of the outlook on the site must match outlook.json (the publish step and `soyforecast validate` both check this, plus a pytest and an e2e contract test). When a later run sees a revised close for an archived date, it writes `<date>.r<N>.json` (`revision`, `revises`, `revision_reason`) next to the original, which is never rewritten. The scored tally uses only the first-published record.
 
+## Polish round (2026-11-08)
+
+A re-review by the same twelve lenses averaged 8.0/10, up from round one. Four polish units followed, each implemented and then audited:
+
+- **A · premium as user input only.** The seed premium table, `derive-premium`, the illustrative FOB fields and every premium file are gone; FOB appears only after the user types a quote (kept in the browser). Git history still holds the old files (see DATA_LICENSES.md); purging them needs `filter-repo` and a force-push, an owner decision.
+- **B · Outlook decluttered.** One-sentence hero, four-line cards, a single "How to read these ranges" fold, chart under the cards in the page unit, pt-BR month labels, a side-aware tail flag and a target readout tied to the unit it was typed in. The hit-rate pill keeps the pre-registered warn rule (amber only more than 5 pp below nominal).
+- **C · archive consistency (P23b).** The newest archive record must equal `outlook.json`; a revised close becomes `<date>.rN.json` with a checked revision chain, and only the first record is scored.
+- **D · WASDE stability.** Placebo, split-sample and roll-exclusion checks shown in plain language; the what-if opens on the 2018+ fit by a display rule fixed in `config.py` (`WHATIF_DEFAULT_FIT`) before it was viewed. No widening was added after seeing the intervals.
+
+Finalisation: a live run on the 6 Nov 2026 close reproduced every published number (only `meta.json` and `run_manifest.json` timestamps changed) and the archive matches the outlook. README numbers were checked against `metrics.csv` and `track_record.json`; its Pages and Development sections were cut to short tables, with the engineering detail moved to [REFRESH.md](REFRESH.md). Screenshots were regenerated (the phone captures now show the first two screens, as intended). Checks: ruff, mypy, pytest 110, eslint, tsc, check:types, vitest 52, build, size budget, Playwright 148 including axe.
+
+Still open for the owner: the git-history purge, the hit-rate pill threshold, an explicit instability widening for the what-if (needs a new pre-registered rule), and the v2.1 contract-consistent targets.
+
 ## Definition of done
 Static Next.js site with real data, an honest README with backtest numbers and screenshots, `docker compose up`,
 CI (Python checks → live pipeline → site build + Playwright), tests for no look-ahead.
