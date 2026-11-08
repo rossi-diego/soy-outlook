@@ -96,3 +96,24 @@ export function heldText(cov: CoverageLike, level: "80" | "95"): string {
 export function rangeLabel(cov: CoverageLike, level: "80" | "95"): string {
   return `${pct(cov.nominal[level])} range (${heldText(cov, level)})`;
 }
+
+type CiSplit = {
+  ci80: [number | null, number | null];
+  ci95: [number | null, number | null];
+  n_eff80: number | null;
+  n_eff95: number | null;
+} | null;
+
+/**
+ * Plain-words uncertainty of a validation hit rate (P4), e.g. "likely 54–87%, about 32
+ * independent outcomes": the moving-block bootstrap 95% CI and the overlap-aware n_eff.
+ * The e2e contract test rebuilds this string from the JSON.
+ */
+export function ciText(split: CiSplit, level: "80" | "95", withCount = true): string | null {
+  if (!split) return null;
+  const [lo, hi] = level === "80" ? split.ci80 : split.ci95;
+  const n = level === "80" ? split.n_eff80 : split.n_eff95;
+  if (lo === null || hi === null) return null;
+  const count = n === null || !withCount ? "" : `, about ${Math.round(n)} independent outcomes`;
+  return `likely ${pct(lo)}–${pct(hi)}${count}`;
+}

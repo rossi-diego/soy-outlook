@@ -110,3 +110,34 @@ test("theme control is labelled and cycles", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Theme: Light/ })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
+
+test("cards carry the hit-rate CI, the hedge contract and the roll flag from the JSON (P4, P10)", async ({ page }) => {
+  const outlook = await json(page, "outlook.json");
+  await page.goto("/");
+  for (const h of outlook.horizons) {
+    const card = page.getByTestId(`horizon-${h.h}`);
+    const v = h.coverage.validation;
+    await expect(card.getByTestId("ci80")).toHaveText(
+      `${v.years}: likely ${pct(v.ci80[0])}–${pct(v.ci80[1])}, about ${Math.round(v.n_eff80)} independent outcomes`,
+    );
+    await expect(card.getByTestId("ci95")).toHaveText(`likely ${pct(v.ci95[0])}–${pct(v.ci95[1])}`);
+    const contract = card.getByTestId("contract");
+    await expect(contract).toContainText(h.contract.reference.code);
+    await expect(contract.getByText("crosses a roll")).toHaveCount(h.contract.crosses_roll ? 1 : 0);
+  }
+});
+
+test("track record states the minimum detectable effect from the JSON (P4)", async ({ page }) => {
+  const meta = await json(page, "meta.json");
+  const track = await json(page, "track_record.json");
+  await page.goto("/track-record/");
+  for (const h of [1, 3, 6]) {
+    const row = track.metrics.find(
+      (r: { subset: string; split: string; model: string; h: number }) =>
+        r.subset === "all" && r.split === "validation" && r.model === "ridge" && r.h === h,
+    );
+    const verdict = meta.champion[String(h)] === "rw" ? "none was found." : "passed.";
+    await expect(page.getByTestId(`mde-${h}`)).toContainText(`~${(row.mde_mae * 100).toFixed(0)}% lower error`);
+    await expect(page.getByTestId(`mde-${h}`)).toContainText(verdict);
+  }
+});

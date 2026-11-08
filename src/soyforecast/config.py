@@ -121,8 +121,12 @@ STRESS_HISTOGRAM_STEP = 0.025  # bin width of the full h-month return distributi
 # Reference contract (P10 minimum step, 2026-11-08). The site's price is the Yahoo continuous
 # front month; the contract a hedge would use for horizon h is the first soybean contract
 # (F H K N Q U X) whose first notice day (last business day of the month before delivery) falls
-# after the target date. A window "crosses a roll" when that contract differs from the one the
-# same rule gives at the origin. Targets are not rebuilt on specific contracts (roadmap v2.1).
+# after the target date. Amended 2026-11-08 in the U5 review (a label, not a result-driven
+# choice): a window "crosses a roll" when the continuous front month itself rolls inside it,
+# i.e. a contract's last trading day falls between origin and target (the expiry convention
+# of the crop-roll flag). The first-notice comparison it replaced missed the roll a few days
+# after the origin, e.g. X26 -> F27 on 13 Nov 2026 inside a 1-month window from 6 Nov.
+# Targets are not rebuilt on specific contracts (roadmap v2.1).
 CONTRACT_LETTERS: dict[int, str] = {1: "F", 3: "H", 5: "K", 7: "N", 8: "Q", 9: "U", 11: "X"}
 
 # Premium defaults: the derived monthly table is "stale" once its source series ended more

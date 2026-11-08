@@ -26,7 +26,7 @@ from soyforecast.config import (
 )
 from soyforecast.evaluation.backtest import eligible, interval_offsets
 from soyforecast.evaluation.stats import holm
-from soyforecast.features.contracts import crosses_roll, reference_contract
+from soyforecast.features.contracts import crosses_roll, front_contract, reference_contract
 from soyforecast.features.dataset import crop_roll_dates, crosses_crop_roll
 from soyforecast.features.vintages import FEATURE_META
 from soyforecast.models.ladder import MODELS
@@ -74,7 +74,8 @@ def live_forecast(
             # The hedge contract for this horizon, and whether the continuous front month
             # rolls inside the window (the price then partly measures a calendar spread).
             "contract": {
-                "origin": reference_contract(anchor)["code"],
+                "front_at_origin": front_contract(anchor)["code"],
+                "front_at_target": front_contract(target)["code"],
                 "reference": reference_contract(target),
                 "crosses_roll": crosses_roll(anchor, target),
                 "crosses_crop_roll": crosses_crop_roll(anchor, target, rolls),

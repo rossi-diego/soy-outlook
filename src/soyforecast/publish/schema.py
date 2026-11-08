@@ -241,9 +241,18 @@ class ContractInfo(Contract):
 class HorizonContract(Contract):
     """The hedge contract for a horizon (P10); prices stay the continuous front month."""
 
-    origin: str
-    reference: ContractInfo
-    crosses_roll: bool
+    front_at_origin: str = Field(
+        pattern=r"^[FHKNQUX]\d{2}$", description="Contract ZS=F quotes at the origin close."
+    )
+    front_at_target: str = Field(
+        pattern=r"^[FHKNQUX]\d{2}$", description="Contract ZS=F will quote on the target date."
+    )
+    reference: ContractInfo = Field(
+        description="Hedge contract: the first whose first notice day is after the target date."
+    )
+    crosses_roll: bool = Field(
+        description="The continuous front month rolls (at a last trading day) inside the window."
+    )
     crosses_crop_roll: bool
     series: str
 
@@ -286,8 +295,10 @@ class StressEpisode(Contract):
     pct: float
     percentile: float = Field(ge=0, le=100)
     c_bu: float
-    usd_t: float
-    brl_sack: float
+    usd_t: float = Field(description="CBOT price in USD/t, no premium.")
+    cbot_brl_sack: float = Field(
+        description="CBOT price only (no premium) in R$ per 60 kg sack at today's PTAX."
+    )
 
 
 class ReturnDistribution(Contract):

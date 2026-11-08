@@ -242,15 +242,24 @@ export interface Horizon {
  * via the `definition` "HorizonContract".
  */
 export interface HorizonContract {
-  origin: string;
+  /**
+   * Contract ZS=F quotes at the origin close.
+   */
+  front_at_origin: string;
+  /**
+   * Contract ZS=F will quote on the target date.
+   */
+  front_at_target: string;
   reference: ContractInfo;
+  /**
+   * The continuous front month rolls (at a last trading day) inside the window.
+   */
   crosses_roll: boolean;
   crosses_crop_roll: boolean;
   series: string;
 }
 /**
- * This interface was referenced by `SiteData`'s JSON-Schema
- * via the `definition` "ContractInfo".
+ * Hedge contract: the first whose first notice day is after the target date.
  */
 export interface ContractInfo {
   code: string;
@@ -366,8 +375,14 @@ export interface StressEpisode {
   pct: number;
   percentile: number;
   c_bu: number;
+  /**
+   * CBOT price in USD/t, no premium.
+   */
   usd_t: number;
-  brl_sack: number;
+  /**
+   * CBOT price only (no premium) in R$ per 60 kg sack at today's PTAX.
+   */
+  cbot_brl_sack: number;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -892,4 +907,14 @@ export interface ArchivedHorizon {
   actual_date: string | null;
   inside80: boolean | null;
   inside95: boolean | null;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "ContractInfo".
+ */
+export interface ContractInfo1 {
+  code: string;
+  delivery_month: string;
+  first_notice: string;
+  last_trade: string;
 }

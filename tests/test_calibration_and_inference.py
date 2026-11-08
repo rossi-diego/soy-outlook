@@ -25,7 +25,14 @@ from soyforecast.evaluation.stats import (
     n_eff,
     subsample_median_p,
 )
-from soyforecast.features.contracts import crosses_roll, first_notice_day, reference_contract
+from soyforecast.features.contracts import (
+    crosses_roll,
+    first_notice_day,
+    front_contract,
+    last_trading_day,
+    reference_contract,
+)
+from soyforecast.features.dataset import crop_roll_dates, crosses_crop_roll
 from soyforecast.features.vol import ewma_vol, realized_vol, vol_at
 from soyforecast.models.stress import episode_return, h_month_returns, stress_replay
 
@@ -250,8 +257,22 @@ def test_reference_contract_by_first_notice_day():
         for d in ("2026-12-06", "2027-02-06", "2027-05-06", "2027-06-30", "2027-10-30")
     ]
     assert codes == ["F27", "H27", "N27", "Q27", "F28"]
-    assert not crosses_roll(pd.Timestamp("2026-11-06"), pd.Timestamp("2026-12-06"))
-    assert crosses_roll(pd.Timestamp("2026-11-06"), pd.Timestamp("2027-02-06"))
+    # the continuous front month quotes X26 until its last trading day (13 Nov 2026) ...
+    assert last_trading_day(2026, 11) == pd.Timestamp("2026-11-13")
+    assert front_contract(pd.Timestamp("2026-11-06"))["code"] == "X26"
+    assert front_contract(pd.Timestamp("2026-11-13"))["code"] == "X26"
+    assert front_contract(pd.Timestamp("2026-11-16"))["code"] == "F27"
+    # ... so a 1-month window from 6 Nov crosses the X26 -> F27 roll
+    assert crosses_roll(pd.Timestamp("2026-11-06"), pd.Timestamp("2026-12-06"))
+    # no expiry between 16 Nov and 6 Jan (F27 trades until 14 Jan)
+    assert not crosses_roll(pd.Timestamp("2026-11-16"), pd.Timestamp("2027-01-06"))
+    assert crosses_roll(pd.Timestamp("2026-11-16"), pd.Timestamp("2027-02-06"))
+    # agrees with the crop-roll flag: every Jul/Aug/Sep expiry is also a front-month roll
+    rolls = crop_roll_dates(2010, 2026)
+    for o in pd.date_range("2010-01-10", "2025-12-10", freq="MS") + pd.Timedelta(days=9):
+        t = o + pd.DateOffset(months=1)
+        if crosses_crop_roll(o, t, rolls):
+            assert crosses_roll(o, t)
 
 
 # ------------------------------------------------------------------ P19

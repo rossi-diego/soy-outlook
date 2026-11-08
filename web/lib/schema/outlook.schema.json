@@ -287,13 +287,22 @@
       "additionalProperties": false,
       "description": "The hedge contract for a horizon (P10); prices stay the continuous front month.",
       "properties": {
-        "origin": {
+        "front_at_origin": {
+          "description": "Contract ZS=F quotes at the origin close.",
+          "pattern": "^[FHKNQUX]\\d{2}$",
+          "type": "string"
+        },
+        "front_at_target": {
+          "description": "Contract ZS=F will quote on the target date.",
+          "pattern": "^[FHKNQUX]\\d{2}$",
           "type": "string"
         },
         "reference": {
-          "$ref": "#/$defs/ContractInfo"
+          "$ref": "#/$defs/ContractInfo",
+          "description": "Hedge contract: the first whose first notice day is after the target date."
         },
         "crosses_roll": {
+          "description": "The continuous front month rolls (at a last trading day) inside the window.",
           "type": "boolean"
         },
         "crosses_crop_roll": {
@@ -304,7 +313,8 @@
         }
       },
       "required": [
-        "origin",
+        "front_at_origin",
+        "front_at_target",
         "reference",
         "crosses_roll",
         "crosses_crop_roll",
@@ -564,9 +574,11 @@
           "type": "number"
         },
         "usd_t": {
+          "description": "CBOT price in USD/t, no premium.",
           "type": "number"
         },
-        "brl_sack": {
+        "cbot_brl_sack": {
+          "description": "CBOT price only (no premium) in R$ per 60 kg sack at today's PTAX.",
           "type": "number"
         }
       },
@@ -581,7 +593,7 @@
         "percentile",
         "c_bu",
         "usd_t",
-        "brl_sack"
+        "cbot_brl_sack"
       ],
       "title": "StressEpisode",
       "type": "object"

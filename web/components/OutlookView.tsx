@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import EChart, { axisCommon, baseOption, type Tokens } from "@/components/EChart";
 import {
   type Assumptions,
+  ciText,
   convert,
   dateLabel,
   decimalsFor,
@@ -86,6 +87,9 @@ function HorizonCard({
   const cov = h.coverage;
   const ref = h.premium_reference;
   const usdT = (v: number) => premiumUsdT(v, a.buPerT);
+  const ci80 = ciText(cov.validation, "80");
+  const ci95 = ciText(cov.validation, "95", false);
+  const ct = h.contract;
   return (
     <article className="card flex flex-col gap-3 p-5" data-testid={`horizon-${h.h}`}>
       <header className="flex items-baseline justify-between gap-2">
@@ -101,6 +105,11 @@ function HorizonCard({
             </Badge>
           )}
         </p>
+        {ci80 && (
+          <p className="text-xs text-muted" data-testid="ci80">
+            {cov.validation?.years}: {ci80}
+          </p>
+        )}
         <p className="tabular text-2xl font-semibold tracking-tight">
           {num(c(h.q100), decimalsFor(unit))} – {num(c(h.q900), decimalsFor(unit))}
         </p>
@@ -118,11 +127,30 @@ function HorizonCard({
           <span className={`block text-xs ${cov.warn95 ? "text-warn" : "text-muted"}`} data-testid="held95">
             {heldText(cov, "95")}
           </span>
+          {ci95 && (
+            <span className="block text-xs text-muted" data-testid="ci95">
+              {ci95}
+            </span>
+          )}
           {cov.warn95 && (
             <Badge warn title="Validation hit rate more than 5 percentage points below the nominal 95%">
               below 95%
             </Badge>
           )}
+        </dd>
+        <dt className="text-ink-2">Hedge contract</dt>
+        <dd className="tabular text-right" data-testid="contract">
+          {ct.reference.code}
+          {ct.crosses_roll && (
+            <Badge title="The continuous front-month price rolls to another contract inside this window, so part of the move is a calendar spread">
+              crosses a roll
+            </Badge>
+          )}
+          <span className="block text-xs text-muted">
+            {ct.crosses_roll
+              ? `price series rolls ${ct.front_at_origin} → ${ct.front_at_target}${ct.crosses_crop_roll ? ", old to new crop" : ""}`
+              : `price series stays on ${ct.front_at_origin}`}
+          </span>
         </dd>
         {unit !== "c_bu" && (
           <>
@@ -144,7 +172,8 @@ function HorizonCard({
       <p className="text-xs leading-relaxed text-ink-2">{FOB_BRIDGE}</p>
       <p className="mt-auto border-t border-line pt-3 text-xs leading-relaxed text-muted">
         Hit rates on {cov.validation?.n ?? "—"} validation and {cov.holdout?.n ?? "—"} later reports. Each 95% tail rests on
-        about {num(h.tail_obs_95, 1)} past errors ({num(h.calibration_n_eff, 0)} independent outcomes). {origin}
+        about {num(h.tail_obs_95, 1)} of the {h.calibration_n} past errors behind the range (about{" "}
+        {num(h.calibration_n_eff, 0)} non-overlapping). {origin}
       </p>
     </article>
   );

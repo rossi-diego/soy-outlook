@@ -94,7 +94,7 @@ def stress_replay(prices: pd.Series, p_now_c_bu: float, fx_now: float) -> dict[s
                     "percentile": round(float((dist <= ep["logret"]).mean()) * 100, 1),
                     "c_bu": round(c_bu, 2),
                     "usd_t": round(usd_t, 2),
-                    "brl_sack": round(usd_t_to_brl_sack(usd_t, fx_now), 2),
+                    "cbot_brl_sack": round(usd_t_to_brl_sack(usd_t, fx_now), 2),
                 }
             )
         out_h.append({"h": h, "episodes": episodes, "distribution": _distribution(dist)})
@@ -104,7 +104,10 @@ def stress_replay(prices: pd.Series, p_now_c_bu: float, fx_now: float) -> dict[s
             "Five episodes named before any outcome was computed; each starts at the first CBOT "
             "session of its month; the realized h-month return is applied to today's price."
         ),
-        "basis": "CBOT only: premium and BRL/USD held at today's values",
+        "basis": (
+            "CBOT only: no port premium is added; R$ per sack converts the CBOT price at "
+            "today's PTAX, held fixed"
+        ),
         "p0_c_bu": round(p_now_c_bu, 2),
         "fx": round(fx_now, 4),
         "horizons": out_h,

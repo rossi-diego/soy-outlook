@@ -226,6 +226,12 @@ export default function TrackRecordView({ meta, track, archive }: { meta: Meta; 
   );
 
   const tests = track.tests;
+  const pathRows = track.paths[String(h)]?.[model] ?? [];
+  const rollShare = {
+    n: pathRows.filter((r) => r.roll_cross).length,
+    crop: pathRows.filter((r) => r.crop_roll).length,
+    total: pathRows.length,
+  };
   return (
     <div className="space-y-8">
       <section className="space-y-3">
@@ -245,6 +251,9 @@ export default function TrackRecordView({ meta, track, archive }: { meta: Meta; 
           const rwH = find(m, "holdout", "rw", hh);
           const others = MODELS.filter((x) => x !== "rw").map((x) => find(m, "validation", x, hh));
           const best = others.reduce((a, b) => ((b?.mase ?? 9) < (a?.mase ?? 9) ? b : a), others[0]);
+          // P4: the smallest improvement the WASDE model's test could have detected
+          const mdeRidge = find(m, "validation", "ridge", hh)?.mde_mae;
+          const champ = meta.champion[String(hh)];
           return (
             <article key={hh} className="card space-y-3 p-5">
               <h2 className="text-sm font-medium text-ink-2">{horizonLabel(hh)} ahead</h2>
@@ -267,6 +276,12 @@ export default function TrackRecordView({ meta, track, archive }: { meta: Meta; 
                   {pct(rw?.cover95)} <span className="text-muted">/ {pct(rwH?.cover95)} holdout</span>
                 </dd>
               </dl>
+              {mdeRidge != null && (
+                <p className="text-xs leading-relaxed text-ink-2" data-testid={`mde-${hh}`}>
+                  We could detect a ~{num(mdeRidge * 100, 0)}% lower error by the WASDE model than by no change;{" "}
+                  {champ === "rw" ? "none was found." : `${meta.models[champ]} passed.`}
+                </p>
+              )}
               {hh > 1 && <p className="text-xs text-muted">Overlapping {hh}-month windows: few independent outcomes, low power.</p>}
             </article>
           );
@@ -295,7 +310,10 @@ export default function TrackRecordView({ meta, track, archive }: { meta: Meta; 
         <EChart option={pathOption} height={360} ariaLabel="Past forecasts with 80% ranges against the actual CBOT price" />
         <p className="text-xs text-muted">
           Each point sits on the date the forecast was for. Ranges start once {24} realized errors exist. CBOT front month,
-          USD/t. The continuous front month jumps when a contract expires, so a window crossing a roll partly measures a calendar spread; the July–September rolls (old crop to new crop) are the largest.
+          USD/t. The continuous front month jumps when a contract expires, so a window crossing a roll partly measures a calendar spread; the July–September rolls (old crop to new crop) are the largest.{" "}
+          <span data-testid="roll-share">
+            {rollShare.n} of {rollShare.total} {h}-month windows shown cross a roll ({rollShare.crop} an old-to-new-crop roll).
+          </span>
         </p>
       </section>
 
