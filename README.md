@@ -6,8 +6,8 @@
 
 Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/) · [GitHub](https://github.com/rossi-diego)
 
-[![CI](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml/badge.svg)](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml)
-[![Data refresh](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/refresh.yml/badge.svg)](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/refresh.yml)
+[![CI](https://github.com/rossi-diego/soy-outlook/actions/workflows/ci.yml/badge.svg)](https://github.com/rossi-diego/soy-outlook/actions/workflows/ci.yml)
+[![Data refresh](https://github.com/rossi-diego/soy-outlook/actions/workflows/refresh.yml/badge.svg)](https://github.com/rossi-diego/soy-outlook/actions/workflows/refresh.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -135,8 +135,8 @@ flowchart LR
 ## Quick start (under 5 minutes)
 
 ```bash
-git clone https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting.git
-cd sarimax-brazilian-soybean-forecasting
+git clone https://github.com/rossi-diego/soy-outlook.git
+cd soy-outlook
 docker compose up          # pipeline (~1 min), then the site on http://localhost:3000
 ```
 

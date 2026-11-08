@@ -8,7 +8,7 @@ export const AUTHOR = {
   linkedin: "https://www.linkedin.com/in/rossi-diego/",
   github: "https://github.com/rossi-diego",
 };
-export const REPO_URL = "https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting";
+export const REPO_URL = "https://github.com/rossi-diego/soy-outlook";
 
 /** Static, branded card: the question and the honest headline, no live price range. */
 export const OG_IMAGE = {

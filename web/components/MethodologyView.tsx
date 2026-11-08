@@ -19,7 +19,7 @@ const A = ({ href, children }: { href: string; children: React.ReactNode }) => (
   </a>
 );
 
-const LICENSES = "https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/blob/main/DATA_LICENSES.md";
+const LICENSES = "https://github.com/rossi-diego/soy-outlook/blob/main/DATA_LICENSES.md";
 
 /** The /methodology/ page body in both locales (P20); every number comes from meta.json. */
 export default function MethodologyView({ meta }: { meta: Meta }) {
