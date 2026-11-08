@@ -7,33 +7,42 @@ async function json(page: Page, f: string) {
 }
 const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
 
+async function openSettings(page: Page) {
+  const settings = page.getByTestId("settings");
+  if (!(await settings.evaluate((el) => (el as HTMLDetailsElement).open))) await settings.locator("summary").click();
+}
+
+async function openAnalysts(page: Page) {
+  await page.goto("/track-record/");
+  await page.getByTestId("for-analysts").locator("summary").click();
+  await expect(page.getByTestId("analyst-outlook")).toBeVisible({ timeout: 30_000 });
+}
+
 type Metric = { subset: string; split: string; model: string; h: number; mase: number; mde_mae: number; miss_lo80: number; miss_hi80: number };
 
-test("hero chart: follows the unit, CBOT quote toggle, 18-month/3-year toggle, labelled FOB shift (P21, unit B)", async ({ page }) => {
+test("today's outlook chart follows the unit and labels a FOB view (story chapter 4)", async ({ page }) => {
   await page.goto("/");
-  const chart = page.getByTestId("hero-chart");
-  await expect(chart.locator('[data-chart="ready"] svg')).toBeVisible({ timeout: 30_000 });
-  await expect(chart.getByRole("radio", { name: "18 months" })).toBeChecked();
-  await chart.getByRole("radio", { name: "3 years" }).click();
-  await expect(chart.getByRole("radio", { name: "3 years" })).toBeChecked();
-  const caption = page.getByTestId("chart-caption");
+  const chart = page.getByTestId("outlook-chart");
+  await expect(chart.locator("svg")).toBeVisible({ timeout: 30_000 });
+  await expect(chart.locator("svg").getByText("today", { exact: false }).first()).toBeVisible();
+  const caption = page.getByTestId("outlook-caption");
   await expect(caption).toContainText("CBOT soybeans in US dollars per tonne, CBOT only, excl. premium");
-  await chart.getByRole("radio", { name: "CBOT quote" }).click();
+  await openSettings(page);
+  await page.getByRole("radio", { name: "CBOT ¢/bu" }).click();
   await expect(caption).toContainText("CBOT soybeans, US cents per bushel");
-  await expect(chart.locator("svg").getByText("no change")).toBeVisible();
-  await expect(chart.locator("svg").getByText("today")).toBeVisible();
-  const meta = await json(page, "meta.json");
-  if ([1, 3, 6].every((h) => meta.champion[String(h)] === "rw")) {
-    await expect(page.getByTestId("validation-start")).toHaveText(meta.splits.validation[0].slice(0, 4));
-  }
-  // No premium entered: no FOB view at all. Typing one makes "Your unit" the labelled FOB shift.
-  await expect(caption).not.toContainText(/constant shift/i);
+  await expect(page.getByTestId("ticket-price")).toHaveText(/¢$/);
+  // A typed premium makes USD/t the labelled FOB view.
+  await page.getByRole("radio", { name: "CBOT USD/t" }).click();
   await page.getByLabel(/Paranaguá premium/).fill("80");
   await page.getByLabel(/Paranaguá premium/).press("Enter");
-  await chart.getByRole("radio", { name: "Your unit" }).click();
-  await expect(chart.getByRole("heading", { level: 2 })).toContainText("FOB USD/t");
-  await expect(caption).toContainText("Constant shift");
-  await expect(caption).toContainText("not a historical FOB series");
+  await expect(caption).toContainText("Paranaguá FOB, US dollars per tonne");
+  await expect(page.getByTestId("settings-state")).toHaveText("USD/t, with your premium");
+  const meta = await json(page, "meta.json");
+  if ([1, 3, 6].every((h) => meta.champion[String(h)] === "rw")) {
+    await openAnalysts(page);
+    await page.getByTestId("ranges-details").locator("summary").first().click();
+    await expect(page.getByTestId("validation-start")).toHaveText(meta.splits.validation[0].slice(0, 4));
+  }
 });
 
 test("track record: verdict, breach strip, rival copy, derived labels and the statisticians fold (P22, P28)", async ({ page }) => {
@@ -98,7 +107,7 @@ test("past-forecast chart reports misses and roll windows from the data (P4, P10
 
 test("stress replay is folded, labelled and lists the pre-registered episodes (P19)", async ({ page }) => {
   const outlook = await json(page, "outlook.json");
-  await page.goto("/");
+  await openAnalysts(page);
   const panel = page.getByTestId("stress-replay");
   await expect(panel.locator("summary")).toContainText("illustrative scenarios, not probabilities");
   await panel.locator("summary").click();
@@ -112,6 +121,7 @@ test("stress replay is folded, labelled and lists the pre-registered episodes (P
 
 test("FX is typed as text, checked on blur, with an inline error outside 3-9 (P28)", async ({ page }) => {
   await page.goto("/");
+  await openSettings(page);
   await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
   const fx = page.getByLabel("BRL per USD");
   await fx.fill("12");
@@ -155,15 +165,26 @@ test("charts load after the page, behind a fixed-height skeleton (P28)", async (
     if (/zrender|echarts/.test(body)) await new Promise((r) => setTimeout(r, 1500));
     await route.fulfill({ response: res, body });
   });
-  await page.goto("/");
-  const box = page.getByTestId("hero-chart").locator('[data-chart="loading"]');
+  // The home page draws plain SVG; the ECharts pages are the track record and the WASDE page.
+  await page.goto("/track-record/");
+  const box = page.locator('main [data-chart="loading"]').first();
   await expect(box).toBeVisible();
-  // The skeleton holds the chart's own height: 360 px from sm up, capped at 260 px on phones (P27).
+  // The skeleton holds the chart's own height: 340 px from sm up, capped at 260 px on phones (P27).
   const phone = (page.viewportSize()?.width ?? 1280) < 640;
   const h = (await box.boundingBox())!.height;
   if (phone) expect(h).toBeCloseTo(260, 0);
   else expect(h).toBeGreaterThan(300);
-  await expect(page.getByTestId("hero-chart").locator('[data-chart="ready"] svg')).toBeVisible({ timeout: 30_000 });
-  const ready = await page.getByTestId("hero-chart").locator('[data-chart="ready"]').boundingBox();
-  expect(Math.round(ready!.height)).toBe(phone ? 260 : 360);
+  const ready = page.locator('main [data-chart="ready"]').first();
+  await expect(ready.locator("svg")).toBeVisible({ timeout: 30_000 });
+  expect(Math.round((await ready.boundingBox())!.height)).toBe(phone ? 260 : 340);
+});
+
+test("the home page loads no ECharts at all (story charts are SVG)", async ({ page }) => {
+  const chunks: string[] = [];
+  page.on("response", async (r) => {
+    if (/_next\/static\/chunks\/.*\.js$/.test(r.url())) chunks.push(await r.text().catch(() => ""));
+  });
+  await page.goto("/");
+  await expect(page.getByTestId("outlook-chart").locator("svg")).toBeVisible({ timeout: 30_000 });
+  expect(chunks.some((b) => /zrender/.test(b))).toBe(false);
 });

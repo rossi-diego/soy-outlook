@@ -9,6 +9,13 @@ async function json(page: Page, f: string) {
   return (await page.request.get(`/data/${f}`)).json();
 }
 
+/** The full decision panel lives in the analyst fold on /track-record/ since the story redesign. */
+async function openAnalysts(page: Page) {
+  await page.goto("/track-record/");
+  await page.getByTestId("for-analysts").locator("summary").click();
+  await expect(page.getByTestId("analyst-outlook")).toBeVisible({ timeout: 30_000 });
+}
+
 type H = {
   h: number;
   q025: number;
@@ -21,11 +28,50 @@ type H = {
 };
 
 test("hero and description frame the page as price-risk ranges for budgeting and hedging (P18)", async ({ page }) => {
+  const outlook = await json(page, "outlook.json");
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Price-risk ranges");
-  await expect(page.getByTestId("hero-framing")).toContainText("budgeting and hedging");
+  // The question names the month of the farthest target date, read from the data.
+  const far = (outlook.horizons as { h: number; target_date: string }[]).sort((a, b) => b.h - a.h)[0];
+  const month = new Date(far.target_date + "T12:00:00Z").toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`How far could soybeans move by ${month}?`);
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /budgeting and hedging/);
   await expect(page.getByText(/where could .* trade/i)).toHaveCount(0);
+  await expect(page.getByText(/accurate prediction/i)).toHaveCount(0);
+});
+
+test("story calculator: the bad case follows the published quantiles and the shared decision maths", async ({ page }) => {
+  const meta = await json(page, "meta.json");
+  const outlook = await json(page, "outlook.json");
+  const p0: number = outlook.last.c_bu;
+  const base = { side: "producer" as const, tonnes: 1000, hedge: 0, currency: "usd" as const, fx: 0, buPerT: meta.consts.bu_per_t };
+  await page.goto("/");
+  const calc = page.getByTestId("story-calc");
+  const hs = outlook.horizons as H[];
+  for (const h of hs) {
+    const row = calc.getByTestId(`calc-${h.h}`);
+    await expect(row.getByTestId("calc-loss")).toHaveText(moneyAmount(pnlVsToday(adverse(h, "producer").oneInTen, p0, base), "usd"));
+    await expect(row.getByTestId("calc-warn")).toHaveCount(h.coverage.tail_warn_lo80 ? 1 : 0);
+  }
+  const h3 = hs.find((h) => h.h === 3)!;
+  await expect(calc.getByTestId("calc-hint")).toContainText(moneyAmount(pnlVsToday(h3.q100, p0, { ...base, hedge: 0.5 }), "usd"));
+  await calc.getByRole("button", { name: "Try 50% hedged" }).click();
+  await expect(calc.getByTestId("calc-hedge")).toHaveText("50%");
+  await expect(calc.getByRole("button", { name: "Try 50% hedged" })).toHaveCount(0);
+  await expect(calc.getByTestId("calc-3").getByTestId("calc-loss")).toHaveText(moneyAmount(pnlVsToday(h3.q100, p0, { ...base, hedge: 0.5 }), "usd"));
+  // A buyer is hurt by the top of the range, with the upper tail's flag.
+  await calc.getByRole("button", { name: "Buyer" }).click();
+  for (const h of hs) {
+    const row = calc.getByTestId(`calc-${h.h}`);
+    await expect(row.getByTestId("calc-loss")).toHaveText(moneyAmount(pnlVsToday(h.q900, p0, { ...base, side: "buyer", hedge: 0.5 }), "usd"));
+    await expect(row.getByTestId("calc-warn")).toHaveCount(h.coverage.tail_warn_hi80 ? 1 : 0);
+  }
+  // Reais per sack as the unit puts the calculator in reais at the settings' exchange rate.
+  await page.getByTestId("settings").locator("summary").click();
+  await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
+  const fx = Math.round(meta.fx_default.value * 100) / 100;
+  await expect(calc.getByTestId("calc-1").getByTestId("calc-loss")).toHaveText(
+    moneyAmount(pnlVsToday(hs[0].q900, p0, { ...base, side: "buyer", hedge: 0.5, currency: "brl", fx }), "brl"),
+  );
 });
 
 test("decision panel: downside vs selling today follows the published quantiles (P18)", async ({ page }) => {
@@ -33,7 +79,7 @@ test("decision panel: downside vs selling today follows the published quantiles 
   const outlook = await json(page, "outlook.json");
   const p0: number = outlook.last.c_bu;
   const base = { side: "producer" as const, tonnes: 1000, hedge: 0, currency: "usd" as const, fx: 0, buPerT: meta.consts.bu_per_t };
-  await page.goto("/");
+  await openAnalysts(page);
   const panel = page.getByTestId("decision-panel");
   await expect(panel.getByTestId("decision-labels")).toContainText("illustrative");
   await expect(panel.getByTestId("decision-labels")).toContainText("range-based, not VaR");
@@ -91,7 +137,7 @@ test("decision panel: downside vs selling today follows the published quantiles 
 test("target readout: a range position from the grid, never a probability (unit B)", async ({ page }) => {
   const meta = await json(page, "meta.json");
   const outlook = await json(page, "outlook.json");
-  await page.goto("/");
+  await openAnalysts(page);
   await page.getByRole("radio", { name: "CBOT ¢/bu" }).click();
   const panel = page.getByTestId("decision-panel");
   await expect(panel.getByTestId("target-pos")).toHaveCount(0);

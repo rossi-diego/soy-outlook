@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-test("outlook shows three horizons and switches units", async ({ page }) => {
+test("outlook tells the story: three horizons, six chapters, units from Settings", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Brazilian export soybeans");
-  await expect(page.getByRole("heading", { name: /In 1 month/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /In 6 months/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("How far could soybeans move");
+  for (const h of [1, 3, 6]) await expect(page.getByTestId(`ladder-${h}`)).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveCount(6);
   await expect(page.locator('[role="img"] svg').first()).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("settings").locator("summary").click();
   await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
   await expect(page.getByLabel("BRL per USD")).toBeVisible();
+  await expect(page.getByTestId("ticket-price")).toHaveText(/^R\$ [\d,.]+$/);
   await expect(page.getByText(/R\$ [\d,.]+\/sc/).first()).toBeVisible();
 });
 

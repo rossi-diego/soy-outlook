@@ -4,7 +4,6 @@ import { expect, type Page, test } from "@playwright/test";
 // so a hard-coded "8 in 10" or a stale hit rate cannot ship.
 
 const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
-const signed0 = (v: number) => (v > 0 ? `+${Math.round(v)}` : v < 0 ? `−${Math.round(Math.abs(v))}` : "0");
 
 type Split = { years: string; cover80: number; cover95: number; n: number } | null;
 type Cov = { nominal: { "80": number; "95": number }; validation: Split; holdout: Split; warn80: boolean; warn95: boolean };
@@ -18,12 +17,60 @@ async function json(page: Page, f: string) {
   return (await page.request.get(`/data/${f}`)).json();
 }
 
-test("range labels carry the published hit rates, never a fixed '8 in 10'", async ({ page }) => {
+/** The home page's unit and premium controls sit in the Settings disclosure next to the hero. */
+async function openSettings(page: Page) {
+  const settings = page.getByTestId("settings");
+  if (!(await settings.evaluate((el) => (el as HTMLDetailsElement).open))) await settings.locator("summary").click();
+}
+
+/** The analyst view of today's outlook, folded at the foot of /track-record/. */
+async function openAnalysts(page: Page) {
+  await page.goto("/track-record/");
+  await page.getByTestId("for-analysts").locator("summary").click();
+  await expect(page.getByTestId("analyst-outlook")).toBeVisible({ timeout: 30_000 });
+}
+
+test("the story's counts and hit rates are the published ones, never a fixed '8 in 10'", async ({ page }) => {
   const outlook = await json(page, "outlook.json");
+  const track = await json(page, "track_record.json");
+  const horizons = outlook.horizons as { h: number; coverage: Cov }[];
   await page.goto("/");
+  // "about 8 times in 10" is the nominal level of the published 80% range, rebuilt here.
+  const nominal = Math.round(horizons[0].coverage.nominal["80"] * 10);
+  await expect(page.locator(".lede")).toContainText(`about ${nominal} times in 10`);
+  // A horizon flagged below its nominal level says so in the ladder, with its measured share.
+  for (const h of horizons) {
+    const flag = page.getByTestId(`ladder-${h.h}`).getByTestId("ladder-flag");
+    await expect(flag).toHaveCount(h.coverage.warn80 ? 1 : 0);
+    if (h.coverage.warn80) await expect(flag).toHaveText(`⚠ held ${Math.round(h.coverage.validation!.cover80 * 10)} in 10, not ${nominal}`);
+  }
+  await expect(page.getByTestId("warn-caption")).toHaveCount(horizons.filter((h) => h.coverage.warn80).length);
+  // Chapter 3: the counts are the scored 3-month ranges in track_record.json, the rates are outlook.json's.
+  const h3 = horizons.find((h) => h.h === 3)!;
+  type Row = { split: string; actual: number | null; q10: number | null; q90: number | null };
+  const rows = (track.paths["3"].rw as Row[]).filter((r) => r.split === "validation" && r.actual !== null && r.q10 !== null);
+  const inside = rows.filter((r) => r.actual! >= r.q10! && r.actual! <= r.q90!).length;
+  const [shown, of] = ((await page.getByTestId("stat-held").textContent()) ?? "").match(/\d+/g)!.map(Number);
+  expect(of).toBe(rows.length);
+  expect(Math.abs(shown - inside)).toBeLessThanOrEqual(1); // 0.1 USD/t rounding can move a boundary case
+  await expect(page.getByTestId("stat-rate")).toHaveText(pct(h3.coverage.validation!.cover80));
+  await expect(page.getByTestId("stat-holdout")).toHaveText(pct(h3.coverage.holdout!.cover80));
+  // Chapter 2: the contest is the published validation MAE at 3 months, % vs no change from MASE.
+  type M = { subset: string; split: string; model: string; h: number; mae_usd_t: number; mase: number };
+  for (const m of ["rw", "arima", "drift", "ridge"]) {
+    const r = (track.metrics as M[]).find((x) => x.subset === "all" && x.split === "validation" && x.model === m && x.h === 3)!;
+    const row = page.getByTestId(`contest-${m}`);
+    await expect(row).toContainText(r.mae_usd_t.toFixed(1));
+    if (m !== "rw") await expect(row).toContainText(`${r.mase >= 1 ? "+" : "−"}${Math.abs((r.mase - 1) * 100).toFixed(1)}%`);
+  }
+});
+
+test("analyst cards carry the published hit rates in full (moved from the home page)", async ({ page }) => {
+  const outlook = await json(page, "outlook.json");
+  await openAnalysts(page);
   await expect(page.getByText(/8 in 10/)).toHaveCount(0);
+  await page.getByTestId("ranges-details").locator("summary").first().click();
   for (const h of outlook.horizons as { h: number; coverage: Cov }[]) {
-    // Unit B: the card shows one pill, the validation hit rate; both eras sit in the shared fold.
     const card = page.getByTestId(`horizon-${h.h}`);
     const v = h.coverage.validation!;
     await expect(card.getByTestId("label80")).toContainText(`${pct(h.coverage.nominal["80"])} range`);
@@ -34,10 +81,6 @@ test("range labels carry the published hit rates, never a fixed '8 in 10'", asyn
     await expect(detail.getByTestId("held95")).toHaveText(held(h.coverage, "cover95"));
     await expect(detail.getByText("below 95%")).toHaveCount(h.coverage.warn95 ? 1 : 0);
   }
-  const h3 = (outlook.horizons as { h: number; coverage: Cov }[]).find((h) => h.h === 3)!;
-  await expect(page.getByTestId("hero-range-label")).toHaveText(
-    `${pct(h3.coverage.nominal["80"])} range (${held(h3.coverage, "cover80")})`,
-  );
 });
 
 test("no premium is shipped: CBOT-only units until the user types a premium, which is remembered", async ({ page }) => {
@@ -56,32 +99,23 @@ test("no premium is shipped: CBOT-only units until the user types a premium, whi
   const headline = page.getByTestId("headline");
   const toUsdT = (cBu: number) => Math.round((cBu / 100) * meta.consts.bu_per_t).toLocaleString("en-US");
   // Default (English): USD/t is CBOT only, labelled, with no FOB anywhere and an empty premium field.
-  await expect(page.getByRole("radio", { name: "CBOT USD/t" })).toBeChecked();
-  await expect(page.getByRole("radio", { name: "FOB USD/t" })).toHaveCount(0);
+  await expect(page.getByTestId("ticket-price")).toHaveText(`$${toUsdT(outlook.last.c_bu)}`);
+  await expect(page.getByTestId("ticket")).toContainText("CBOT soybeans");
+  await expect(page.getByTestId("settings-state")).toHaveText("USD/t, CBOT only");
   await expect(headline).toContainText(`= $${toUsdT(outlook.last.c_bu)}/t`);
   await expect(headline).toContainText("(CBOT only, excl. premium)");
   await expect(headline).not.toContainText("FOB");
+  await expect(page.getByTestId("outlook-caption")).toContainText("CBOT soybeans in US dollars per tonne, CBOT only, excl. premium");
+  await expect(page.locator("main")).not.toContainText(/FOB/);
+  await openSettings(page);
+  await expect(page.getByRole("radio", { name: "CBOT USD/t" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "FOB USD/t" })).toHaveCount(0);
   const input = page.getByLabel(/Paranaguá premium/);
   await expect(input).toHaveValue("");
-  await expect(page.getByTestId("premium-help")).toContainText(
-    "Enter your broker's Paranaguá premium in ¢/bu vs the named CBOT contract",
-  );
-  for (const h of outlook.horizons) {
-    const card = page.getByTestId(`horizon-${h.h}`);
-    await expect(card.getByTestId("basis-label")).toHaveText("CBOT only, excl. premium");
-    await expect(card.getByTestId("premium-row")).toHaveCount(0);
-  }
-  await expect(page.getByText(/^FOB = CBOT \+ your premium/)).toHaveCount(0);
+  await expect(page.getByTestId("premium-help")).toContainText("Enter your broker's Paranaguá premium in ¢/bu vs the named CBOT contract");
   await expect(page.getByText("About the premium")).toHaveCount(0);
   await expect(page.getByText(/assumed premium|historical median/i)).toHaveCount(0);
   await expect(page.getByText("stale", { exact: true })).toHaveCount(0);
-  // No FOB chart view without a premium; the decision panel and stress replay still render.
-  // The chart follows the unit: CBOT in USD/t, nothing added, never a FOB view without a premium.
-  await expect(page.getByTestId("hero-chart").getByRole("radio", { name: "Your unit" })).toBeChecked();
-  await expect(page.getByTestId("chart-caption")).toContainText("CBOT only, excl. premium");
-  await expect(page.getByTestId("chart-caption")).not.toContainText(/constant shift/i);
-  await expect(page.getByTestId("decision-footnote")).toBeVisible();
-  await expect(page.getByTestId("stress-replay")).toBeVisible();
 
   // A bad value is rejected inline; a typed premium turns USD/t into FOB, with the sum shown.
   await input.fill("abc");
@@ -92,23 +126,42 @@ test("no premium is shipped: CBOT-only units until the user types a premium, whi
   await expect(page.getByRole("radio", { name: "FOB USD/t" })).toBeChecked();
   await expect(headline).toContainText("your premium +80¢/bu");
   await expect(headline).toContainText(`= FOB $${toUsdT(outlook.last.c_bu + 80)}/t`);
+  await expect(page.getByTestId("ticket-price")).toHaveText(`$${toUsdT(outlook.last.c_bu + 80)}`);
+  await expect(page.getByTestId("ticket")).toContainText("Paranaguá FOB, your premium");
+  await expect(page.getByTestId("outlook-caption")).toContainText("Paranaguá FOB, US dollars per tonne");
+
+  // Remembered per viewer across a reload and across pages (the analyst cards on /track-record/).
+  await page.reload();
+  await openSettings(page);
+  await expect(page.getByLabel(/Paranaguá premium/)).toHaveValue("80");
+  await expect(headline).toContainText("your premium +80¢/bu");
+  await openAnalysts(page);
   await expect(page.getByTestId("horizon-1").getByTestId("basis-label")).toHaveText("CBOT price risk only; your premium held fixed");
   await expect(page.getByText(/^FOB = CBOT \+ your premium/)).toHaveCount(outlook.horizons.length);
   await expect(page.getByTestId("horizon-1").getByTestId("premium-row")).toContainText("+80¢/bu");
-  await expect(page.getByTestId("chart-caption")).toContainText("Constant shift");
-  await expect(page.getByTestId("chart-caption")).toContainText("not a historical FOB series");
+  await expect(page.getByTestId("decision-footnote")).toBeVisible();
+  await expect(page.getByTestId("stress-replay")).toBeVisible();
 
-  // Remembered per viewer across a reload; Clear goes back to CBOT only and forgets it.
-  await page.reload();
-  await expect(page.getByLabel(/Paranaguá premium/)).toHaveValue("80");
-  await expect(headline).toContainText("your premium +80¢/bu");
+  // Clear goes back to CBOT only and forgets it.
+  await page.goto("/");
+  await openSettings(page);
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(headline).toContainText("(CBOT only, excl. premium)");
   await page.reload();
+  await openSettings(page);
   await expect(page.getByLabel(/Paranaguá premium/)).toHaveValue("");
   // CBOT ¢/bu drops the premium field and every FOB row.
   await page.getByRole("radio", { name: "CBOT ¢/bu" }).click();
   await expect(page.getByLabel(/Paranaguá premium/)).toHaveCount(0);
+  await expect(page.getByTestId("outlook-caption")).toContainText("CBOT soybeans, US cents per bushel");
+
+  // Without a premium the analyst cards say CBOT only.
+  await openAnalysts(page);
+  for (const h of outlook.horizons) {
+    const card = page.getByTestId(`horizon-${h.h}`);
+    await expect(card.getByTestId("basis-label")).toHaveText("CBOT only, excl. premium");
+    await expect(card.getByTestId("premium-row")).toHaveCount(0);
+  }
 });
 
 test("a throwing localStorage still lets the user enter a premium", async ({ page }) => {
@@ -121,6 +174,7 @@ test("a throwing localStorage still lets the user enter a premium", async ({ pag
     Storage.prototype.removeItem = boom;
   });
   await page.goto("/");
+  await openSettings(page);
   const input = page.getByLabel(/Paranaguá premium/);
   await expect(input).toHaveValue("");
   await input.fill("50");
@@ -143,6 +197,7 @@ test("a failed storage write never resurrects a stale stored premium", async ({ 
   await page.goto("/");
   const headline = page.getByTestId("headline");
   await expect(headline).toContainText("your premium +80¢/bu");
+  await openSettings(page);
   const input = page.getByLabel(/Paranaguá premium/);
   await input.fill("50");
   await input.press("Enter");
@@ -153,6 +208,7 @@ test("a failed storage write never resurrects a stale stored premium", async ({ 
 
 test("an invalid premium says which value still applies", async ({ page }) => {
   await page.goto("/");
+  await openSettings(page);
   const input = page.getByLabel(/Paranaguá premium/);
   const help = page.getByTestId("premium-help");
   await input.fill("abc");
@@ -251,9 +307,10 @@ test("theme control is labelled and cycles", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
-test("cards carry the hit-rate CI, the hedge contract and the roll flag from the JSON (P4, P10)", async ({ page }) => {
+test("analyst cards carry the hit-rate CI, the hedge contract and the roll flag from the JSON (P4, P10)", async ({ page }) => {
   const outlook = await json(page, "outlook.json");
-  await page.goto("/");
+  await openAnalysts(page);
+  await page.getByTestId("ranges-details").locator("summary").first().click();
   for (const h of outlook.horizons) {
     const card = page.getByTestId(`horizon-${h.h}`);
     const detail = page.getByTestId(`detail-${h.h}`);
