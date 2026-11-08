@@ -20,6 +20,8 @@ Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 - **A null result reported as a finding.** No model beats "no change" for CBOT soybeans; the site is built around that, showing ranges labelled by the hit rate they actually achieved instead of a direction call.
 - **Market-risk judgement.** FOB = CBOT + port premium, with the premium and FX as explicit inputs, a stale-input badge, and bands labelled "CBOT price risk only" until a joint band is earned.
 - **Statistics that survive scrutiny.** A release-day event study with HC1 errors, a Holm adjustment, placebo, split-sample and roll-exclusion checks, and an 80% prediction interval in the what-if.
+- **Built for both audiences.** English by default (USD/t), with a client-side Portuguese (pt-BR) toggle that follows the browser language and switches to R$/saca, Brazilian number and date formats and an optional, user-supplied port-to-interior discount; numbers and caveats are identical in both, which an end-to-end test checks on every page.
+- **Accessible and mobile-first.** WCAG AA contrast, native radio groups, slider value text and a data table under every chart; an axe gate in CI (zero serious or critical violations on every route, both themes, both locales) and 390 px phone screenshots below.
 - **End-to-end engineering.** Typed Python package (bronze → silver → gold → publish), structured logging, 80%+ test coverage, a static Next.js site with a Playwright contract test that keeps the copy in line with the JSON, CI and Docker.
 
 ![Outlook page: three cards with the 80% range for 1, 3 and 6 months in USD per tonne FOB, a no-direction-signal note, unit and premium controls, and a fan chart of the CBOT price](docs/screenshots/outlook-light.png)
@@ -82,6 +84,12 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 | This WASDE | Track record |
 |---|---|
 | ![This WASDE page](docs/screenshots/wasde-light.png) | ![Track record page, dark theme](docs/screenshots/track-record-dark.png) |
+
+On a phone (390 px): cards stack, charts are 260 px high, segmented controls use short labels and the WASDE and test tables become labelled rows.
+
+| Outlook, light | Outlook, dark | This WASDE, light | Track record, dark |
+|---|---|---|---|
+| ![Outlook page on a 390 px phone, light theme](docs/screenshots/outlook-mobile-light.png) | ![Outlook page on a 390 px phone, dark theme](docs/screenshots/outlook-mobile-dark.png) | ![This WASDE page on a 390 px phone, light theme](docs/screenshots/wasde-mobile-light.png) | ![Track record page on a 390 px phone, dark theme](docs/screenshots/track-record-mobile-dark.png) |
 
 ## Architecture
 

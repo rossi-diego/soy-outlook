@@ -13,9 +13,9 @@ test("hero chart: CBOT by default, 18-month/3-year toggle, labelled FOB shift (P
   await page.goto("/");
   const chart = page.getByTestId("hero-chart");
   await expect(chart.locator('[data-chart="ready"] svg')).toBeVisible({ timeout: 30_000 });
-  await expect(chart.getByRole("radio", { name: "18 months" })).toHaveAttribute("aria-checked", "true");
+  await expect(chart.getByRole("radio", { name: "18 months" })).toBeChecked();
   await chart.getByRole("radio", { name: "3 years" }).click();
-  await expect(chart.getByRole("radio", { name: "3 years" })).toHaveAttribute("aria-checked", "true");
+  await expect(chart.getByRole("radio", { name: "3 years" })).toBeChecked();
   const caption = page.getByTestId("chart-caption");
   await expect(caption).toContainText("CBOT soybeans, US cents per bushel");
   await expect(chart.locator("svg").getByText("no change")).toBeVisible();
@@ -151,6 +151,12 @@ test("charts load after the page, behind a fixed-height skeleton (P28)", async (
   await page.goto("/");
   const box = page.getByTestId("hero-chart").locator('[data-chart="loading"]');
   await expect(box).toBeVisible();
-  expect((await box.boundingBox())!.height).toBeGreaterThan(300);
+  // The skeleton holds the chart's own height: 360 px from sm up, capped at 260 px on phones (P27).
+  const phone = (page.viewportSize()?.width ?? 1280) < 640;
+  const h = (await box.boundingBox())!.height;
+  if (phone) expect(h).toBeCloseTo(260, 0);
+  else expect(h).toBeGreaterThan(300);
   await expect(page.getByTestId("hero-chart").locator('[data-chart="ready"] svg')).toBeVisible({ timeout: 30_000 });
+  const ready = await page.getByTestId("hero-chart").locator('[data-chart="ready"]').boundingBox();
+  expect(Math.round(ready!.height)).toBe(phone ? 260 : 360);
 });

@@ -2,6 +2,8 @@
 // Illustrative and range-based, not VaR: CBOT only, premium and BRL held fixed, so the hedge is
 // futures at today's close and the basis stays unhedged. No target-price probability.
 
+import type { Locale } from "./i18n";
+
 export type Side = "producer" | "buyer";
 export type Currency = "usd" | "brl";
 
@@ -38,25 +40,37 @@ export function profile(h: HorizonLike, p0: number, x: DecisionInputs): { level:
   return x.side === "producer" ? rows : rows.reverse();
 }
 
-/** "US$ 1.2M" style, signed with a true minus. */
-export function moneyAmount(v: number, currency: Currency): string {
+/** "US$ 1.2M" style, signed with a true minus; pt-BR: "US$ 1,2 mi", "R$ 68 mil". */
+export function moneyAmount(v: number, currency: Currency, loc: Locale = "en"): string {
   const sym = currency === "usd" ? "US$" : "R$";
   const a = Math.abs(v);
+  const intl = loc === "pt-BR" ? "pt-BR" : "en-US";
+  const pt = loc === "pt-BR";
   const body =
     a >= 1e6
-      ? `${(a / 1e6).toLocaleString("en-US", { maximumFractionDigits: a >= 1e8 ? 0 : 2 })}M`
+      ? `${(a / 1e6).toLocaleString(intl, { maximumFractionDigits: a >= 1e8 ? 0 : 2 })}${pt ? " mi" : "M"}`
       : a >= 1e4
-        ? `${(a / 1e3).toLocaleString("en-US", { maximumFractionDigits: 0 })}k`
-        : a.toLocaleString("en-US", { maximumFractionDigits: 0 });
+        ? `${(a / 1e3).toLocaleString(intl, { maximumFractionDigits: 0 })}${pt ? " mil" : "k"}`
+        : a.toLocaleString(intl, { maximumFractionDigits: 0 });
   if (Math.round(a) === 0) return `${sym} 0`;
   return `${v < 0 ? "−" : "+"}${sym} ${body}`;
 }
 
-/** Parse typed tonnes ("5000", "5,000", "5 000"); rejects anything not in 1..TONNES_MAX. */
-export function parseTonnes(text: string): { ok: true; value: number } | { ok: false; error: string } {
-  const t = text.trim().replace(/[\s,_]/g, "");
-  if (!/^\d+(\.\d+)?$/.test(t)) return { ok: false, error: "Enter a whole number of tonnes." };
+/**
+ * Parse typed tonnes ("5000", "5,000", "5 000"; pt-BR "5.000"); rejects anything not in
+ * 1..TONNES_MAX. The thousands separator follows the locale, the value never does.
+ */
+export function parseTonnes(text: string, loc: Locale = "en"): { ok: true; value: number } | { ok: false; error: string } {
+  const pt = loc === "pt-BR";
+  const t = pt ? text.trim().replace(/[\s._]/g, "").replace(",", ".") : text.trim().replace(/[\s,_]/g, "");
+  if (!/^\d+(\.\d+)?$/.test(t)) return { ok: false, error: pt ? "Digite um número inteiro de toneladas." : "Enter a whole number of tonnes." };
   const v = Math.round(Number(t));
-  if (v < 1 || v > TONNES_MAX) return { ok: false, error: `Use between 1 and ${TONNES_MAX.toLocaleString("en-US")} tonnes.` };
+  if (v < 1 || v > TONNES_MAX)
+    return {
+      ok: false,
+      error: pt
+        ? `Use entre 1 e ${TONNES_MAX.toLocaleString("pt-BR")} toneladas.`
+        : `Use between 1 and ${TONNES_MAX.toLocaleString("en-US")} tonnes.`,
+    };
   return { ok: true, value: v };
 }

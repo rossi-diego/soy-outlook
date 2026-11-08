@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { CSSProperties } from "react";
 
 import type { EChartProps } from "@/components/EChart";
 
@@ -25,11 +26,13 @@ const Lazy = dynamic(() => import("@/components/EChart"), {
 
 /**
  * The chart every page uses: ECharts is code-split and fetched after hydration. While it
- * loads, the skeleton holds the exact height of the chart.
+ * loads, the skeleton holds the exact height of the chart. Below the sm breakpoint every chart
+ * is capped at 260 px (P27, `.chart-box` in globals.css), so a phone sees the chart and its
+ * controls on one screen.
  */
 export default function Chart(props: EChartProps) {
   return (
-    <div style={{ height: props.height ?? 320 }}>
+    <div className="chart-box" style={{ "--chart-h": `${props.height ?? 320}px` } as CSSProperties}>
       <Lazy {...props} />
     </div>
   );

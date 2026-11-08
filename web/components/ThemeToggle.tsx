@@ -2,17 +2,16 @@
 
 import { useSyncExternalStore } from "react";
 
+import { THEME_KEY as KEY } from "@/lib/theme";
+import { useI18n } from "@/lib/useI18n";
+
 type Mode = "system" | "light" | "dark";
-const KEY = "wasde-theme";
 
 function apply(mode: Mode) {
   const el = document.documentElement;
   if (mode === "system") el.removeAttribute("data-theme");
   else el.setAttribute("data-theme", mode);
 }
-
-/** Runs before paint (inlined in <head>) so there is no theme flash. */
-export const themeBootScript = `try{var m=localStorage.getItem("${KEY}");if(m==="light"||m==="dark")document.documentElement.setAttribute("data-theme",m)}catch(e){}`;
 
 const EVENT = "wasde-theme-change";
 
@@ -37,6 +36,7 @@ function subscribe(cb: () => void) {
 export default function ThemeToggle() {
   // Server and first client render agree on "system"; the stored choice follows without a hydration mismatch.
   const mode = useSyncExternalStore(subscribe, readMode, () => "system" as Mode);
+  const { pt } = useI18n();
 
   const next = () => {
     const order: Mode[] = ["system", "light", "dark"];
@@ -51,14 +51,14 @@ export default function ThemeToggle() {
     window.dispatchEvent(new Event(EVENT));
   };
 
-  const label = LABEL[mode];
+  const label = (pt ? LABEL_PT : LABEL)[mode];
   return (
     <button
       type="button"
       onClick={next}
       className="inline-flex h-8 items-center gap-1.5 rounded-full border border-line px-2.5 text-xs text-ink-2 hover:bg-surface-2 hover:text-ink"
-      aria-label={`Theme: ${label}. Click to change.`}
-      title="Change theme (auto, light, dark)"
+      aria-label={pt ? `Tema: ${label}. Clique para trocar.` : `Theme: ${label}. Click to change.`}
+      title={pt ? "Trocar o tema (automático, claro, escuro)" : "Change theme (auto, light, dark)"}
     >
       <Icon mode={mode} />
       <span>{label}</span>
@@ -67,6 +67,7 @@ export default function ThemeToggle() {
 }
 
 const LABEL: Record<Mode, string> = { system: "Auto", light: "Light", dark: "Dark" };
+const LABEL_PT: Record<Mode, string> = { system: "Auto", light: "Claro", dark: "Escuro" };
 
 function Icon({ mode }: { mode: Mode }) {
   const common = {

@@ -38,3 +38,10 @@ describe("typicalRevText", () => {
     expect(typicalRevText("Mt", null, null, null)).toBe("Typical revision —");
   });
 });
+
+describe("typical revision text in pt-BR", () => {
+  it("keeps the numbers and translates the words", () => {
+    expect(typicalRevText("Mt", 0, 2, 0, "pt-BR")).toBe("Normalmente sem mudança · 1 em 10 além de ±2,0 Mt · última sem mudança");
+    expect(typicalRevText("pp", 0.5, 2.07, -0.3, "pt-BR")).toBe("Revisão típica ±0,50 pp · 1 em 10 além de ±2,07 pp · última −0,30 pp");
+  });
+});

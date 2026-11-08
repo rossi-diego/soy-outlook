@@ -59,5 +59,5 @@ export default function EChart({ option, height = 320, ariaLabel }: EChartProps)
     if (chart.current && tokens) chart.current.setOption(option(tokens) as echarts.EChartsCoreOption, { notMerge: true });
   }, [option, tokens]);
 
-  return <div ref={ref} role="img" aria-label={ariaLabel} data-chart="ready" style={{ height, width: "100%" }} />;
+  return <div ref={ref} role="img" aria-label={ariaLabel} data-chart="ready" data-height={height} style={{ height: "100%", width: "100%" }} />;
 }

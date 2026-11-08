@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 
 import { staleReasons } from "@/lib/freshness";
 import type { Freshness } from "@/lib/types";
+import { useI18n } from "@/lib/useI18n";
 
 // The clock is read on the client only: the static HTML is built once, but "stale" depends on when it is viewed.
 const MINUTE = 60_000;
@@ -15,8 +16,9 @@ const minuteBucket = () => Math.floor(Date.now() / MINUTE);
 
 export default function FreshnessBanner({ freshness }: { freshness: Freshness }) {
   const bucket = useSyncExternalStore<number | null>(subscribe, minuteBucket, () => null);
+  const { loc, t } = useI18n();
   if (bucket === null) return null;
-  const reasons = staleReasons(freshness, new Date(bucket * MINUTE));
+  const reasons = staleReasons(freshness, new Date(bucket * MINUTE), loc);
   if (reasons.length === 0) return null;
   return (
     <div className="border-b border-warn-line/40 bg-warn-soft" role="status" data-testid="stale-banner">
@@ -25,7 +27,7 @@ export default function FreshnessBanner({ freshness }: { freshness: Freshness })
           <path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm.75 4.5v4.25a.75.75 0 0 1-1.5 0V6.5a.75.75 0 0 1 1.5 0ZM10 14.75a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" />
         </svg>
         <div className="min-w-0">
-          <p className="font-medium text-warn">These numbers may be out of date</p>
+          <p className="font-medium text-warn">{t("These numbers may be out of date", "Estes números podem estar desatualizados")}</p>
           <ul className="mt-0.5 space-y-0.5 text-ink-2">
             {reasons.map((r) => (
               <li key={r.id} data-reason={r.id}>

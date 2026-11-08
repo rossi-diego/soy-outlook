@@ -15,7 +15,7 @@
   --surface-2: #f3f2ee;
   --ink: #0b0b0b;
   --ink-2: #52514e;
-  --muted: #898781;
+  --muted: #6b6a64; /* WCAG AA: >= 4.8:1 on page, surface and surface-2 (P27) */
   --grid: #e1e0d9;
   --axis: #c3c2b7;
   --border: rgba(11, 11, 11, 0.1);
@@ -44,7 +44,7 @@
     --surface-2: #232321;
     --ink: #f0efec;
     --ink-2: #c3c2b7;
-    --muted: #898781;
+    --muted: #9a9890; /* >= 5.4:1 on the dark surfaces */
     --grid: #2c2c2a;
     --axis: #383835;
     --border: rgba(255, 255, 255, 0.1);
@@ -73,7 +73,7 @@
   --surface-2: #232321;
   --ink: #f0efec;
   --ink-2: #c3c2b7;
-  --muted: #898781;
+  --muted: #9a9890;
   --grid: #2c2c2a;
   --axis: #383835;
   --border: rgba(255, 255, 255, 0.1);
@@ -168,4 +168,63 @@ body {
   text-decoration-color: var(--axis);
   text-underline-offset: 3px;
   cursor: help;
+}
+
+/* Charts (P27): the height each chart asks for from sm up, capped at 260 px on phones. */
+.chart-box {
+  height: min(var(--chart-h, 320px), 260px);
+}
+
+@media (min-width: 640px) {
+  .chart-box {
+    height: var(--chart-h, 320px);
+  }
+}
+
+/* Tables that stack below sm (P27): each row becomes a small card and every cell carries its
+   column name (data-label), so a phone never scrolls a table sideways. */
+@media (max-width: 639.98px) {
+  table.stack-sm {
+    min-width: 0 !important;
+  }
+  table.stack-sm thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  table.stack-sm,
+  table.stack-sm tbody,
+  table.stack-sm tr,
+  table.stack-sm td {
+    display: block;
+    width: 100%;
+  }
+  table.stack-sm tr {
+    padding: 0.5rem 0;
+  }
+  table.stack-sm td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.125rem 0 !important;
+    text-align: right;
+  }
+  table.stack-sm td:first-child {
+    display: block;
+    font-weight: 500;
+    color: var(--ink);
+    text-align: left;
+  }
+  table.stack-sm td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    text-align: left;
+    font-weight: 400;
+  }
+  table.stack-sm td:first-child::before {
+    content: none;
+  }
 }

@@ -2,10 +2,12 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 
 import FreshnessBanner from "@/components/FreshnessBanner";
-import ThemeToggle, { themeBootScript } from "@/components/ThemeToggle";
+import { AsOf, LocaleToggle, MainNav, SiteFooter, SkipLink } from "@/components/SiteChrome";
+import ThemeToggle from "@/components/ThemeToggle";
 import { getMeta } from "@/lib/data";
-import { dateLabel, monthLabel } from "@/lib/format";
-import { AUTHOR, OG_IMAGE, REPO_URL, SITE_NAME, SITE_URL } from "@/lib/site";
+import { localeBootScript } from "@/lib/i18n";
+import { themeBootScript } from "@/lib/theme";
+import { AUTHOR, OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
 
 import "./globals.css";
 
@@ -26,6 +28,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: SITE_NAME,
     locale: "en_US",
+    alternateLocale: ["pt_BR"],
     url: "/",
     title: DEFAULT_TITLE,
     description: DESCRIPTION,
@@ -36,27 +39,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-const NAV = [
-  { href: "/", label: "Outlook" },
-  { href: "/wasde/", label: "This WASDE" },
-  { href: "/track-record/", label: "Track record" },
-  { href: "/methodology/", label: "Methodology" },
-];
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const meta = getMeta();
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript + localeBootScript }} />
       </head>
       <body className="min-h-screen">
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2"
-        >
-          Skip to content
-        </a>
+        <SkipLink />
         <header className="sticky top-0 z-20 border-b border-line bg-page/90 backdrop-blur">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
@@ -64,28 +55,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <img src="/icon.svg" alt="" aria-hidden width={28} height={28} className="h-7 w-7 rounded-md" />
               Soy Outlook
             </Link>
-            <nav
-              className="-mx-4 order-last flex w-[calc(100%+2rem)] items-center gap-1 overflow-x-auto whitespace-nowrap px-4 text-sm md:order-none md:mx-0 md:w-auto md:overflow-visible md:px-0"
-              aria-label="Main"
-            >
-              {NAV.map((n) => (
-                <Link
-                  key={n.href}
-                  className="rounded-md px-2.5 py-1.5 text-ink-2 hover:bg-surface-2 hover:text-ink"
-                  href={n.href}
-                >
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
-            <div className="ml-auto flex items-center gap-3 text-xs text-muted">
-              {/* The as-of date stays visible on every width; the next-WASDE date joins it from sm up. */}
-              <span data-testid="as-of">
-                <span className="hidden sm:inline">CBOT close </span>
-                <span className="sm:hidden">Close </span>
-                <strong className="text-ink">{dateLabel(meta.as_of_close)}</strong>
-                {meta.next_wasde && <span className="hidden sm:inline"> · next WASDE {dateLabel(meta.next_wasde)}</span>}
-              </span>
+            <MainNav />
+            <div className="ml-auto flex items-center gap-2 text-xs text-muted sm:gap-3">
+              <AsOf asOf={meta.as_of_close} nextWasde={meta.next_wasde} />
+              <LocaleToggle />
               <ThemeToggle />
             </div>
           </div>
@@ -95,48 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </main>
         <footer className="border-t border-line">
-          <div className="mx-auto flex max-w-6xl flex-col gap-y-2 px-4 py-6 text-xs text-muted">
-            <p className="text-sm text-ink-2">
-              Built by <strong className="text-ink">{AUTHOR.name}</strong> ·{" "}
-              <a className="underline hover:text-ink" href={AUTHOR.linkedin}>
-                LinkedIn
-              </a>{" "}
-              ·{" "}
-              <a className="underline hover:text-ink" href={AUTHOR.github}>
-                GitHub
-              </a>{" "}
-              ·{" "}
-              <Link className="underline hover:text-ink" href="/methodology/#about">
-                About
-              </Link>
-            </p>
-            <p>
-              Sources: USDA WASDE ({monthLabel(meta.latest_wasde.month)}, via{" "}
-              <a className="underline hover:text-ink" href="https://wasde-tracker.vercel.app">
-                WASDE Tracker
-              </a>
-              ), CBOT soybean futures (Yahoo Finance, delayed, front month), BCB PTAX, and a derived, stale Paranaguá
-              premium table.
-            </p>
-            <p>
-              Research and educational use only; not investment, trading or hedging advice. Ranges describe past forecast
-              errors, not a guarantee; FOB and R$ values are illustrative until you enter your own premium quote.
-            </p>
-            <p>
-              Generated {meta.generated_at.slice(0, 16).replace("T", " ")} UTC ·{" "}
-              <a className="underline hover:text-ink" href="/data/backtest.csv">
-                backtest.csv
-              </a>{" "}
-              ·{" "}
-              <a className="underline hover:text-ink" href="/data/outlook.json">
-                outlook.json
-              </a>{" "}
-              ·{" "}
-              <a className="underline hover:text-ink" href={REPO_URL}>
-                Source code
-              </a>
-            </p>
-          </div>
+          <SiteFooter wasdeMonth={meta.latest_wasde.month} generatedAt={meta.generated_at} />
         </footer>
       </body>
     </html>

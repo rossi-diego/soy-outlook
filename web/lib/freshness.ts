@@ -2,6 +2,7 @@
 // The thresholds come from meta.json (freshness.stale_after_bdays), never from this file.
 
 import { dateLabel } from "./format";
+import type { Locale } from "./i18n";
 import type { Freshness } from "./types";
 
 const CBOT_TZ = "America/Chicago";
@@ -27,25 +28,33 @@ export function businessDaysBetween(start: string, end: string): number {
 
 export type StaleReason = { id: "close" | "wasde" | "cache"; text: string };
 
-export function staleReasons(f: Freshness, now: Date): StaleReason[] {
+export function staleReasons(f: Freshness, now: Date, loc: Locale = "en"): StaleReason[] {
+  const pt = loc === "pt-BR";
+  const date = (iso: string) => dateLabel(iso, "short", loc);
   const out: StaleReason[] = [];
   const age = businessDaysBetween(f.as_of_close, chicagoDate(now));
   if (age > f.stale_after_bdays) {
     out.push({
       id: "close",
-      text: `The latest CBOT close here is ${dateLabel(f.as_of_close)}, ${age} business days ago (refresh expected within ${f.stale_after_bdays}).`,
+      text: pt
+        ? `O último fechamento da CBOT aqui é de ${date(f.as_of_close)}, há ${age} dias úteis (atualização esperada em até ${f.stale_after_bdays}).`
+        : `The latest CBOT close here is ${date(f.as_of_close)}, ${age} business days ago (refresh expected within ${f.stale_after_bdays}).`,
     });
   }
   if (f.next_wasde && now.getTime() >= Date.parse(f.next_wasde + WASDE_RELEASE_UTC)) {
     out.push({
       id: "wasde",
-      text: `The ${dateLabel(f.next_wasde)} WASDE has been released since this outlook was built; it is not in these numbers yet.`,
+      text: pt
+        ? `O WASDE de ${date(f.next_wasde)} saiu depois que esta perspectiva foi gerada; ele ainda não está nestes números.`
+        : `The ${date(f.next_wasde)} WASDE has been released since this outlook was built; it is not in these numbers yet.`,
     });
   }
   if (f.degraded) {
     out.push({
       id: "cache",
-      text: `The last refresh could not download ${f.degraded_sources.join(", ")} and used cached data.`,
+      text: pt
+        ? `A última atualização não conseguiu baixar ${f.degraded_sources.join(", ")} e usou dados em cache.`
+        : `The last refresh could not download ${f.degraded_sources.join(", ")} and used cached data.`,
     });
   }
   return out;
