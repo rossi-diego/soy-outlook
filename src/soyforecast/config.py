@@ -48,6 +48,83 @@ NOMINAL_LEVELS: tuple[float, ...] = (0.80, 0.95)
 # A band is flagged (amber) when its validation hit rate is more than this below nominal.
 COVERAGE_WARN_PP = 0.05
 
+# Range method (v2.1, P2, pre-registered 2026-11-08 before any vol-scaled result was computed).
+# Exactly three candidates, all built from the same purged window of the last CALIB_WINDOW
+# realized errors and the same chosen centring:
+#   "empirical"    - the baseline: unconditional empirical quantiles of past errors (above);
+#   "ewma_fhs"     - the one challenger, EWMA filtered historical simulation: each past error is
+#                    divided by the EWMA(lambda = EWMA_LAMBDA) daily vol at its own origin times
+#                    sqrt(trading days in h), quantiles of those standardised errors are taken,
+#                    then rescaled by the EWMA vol at today's origin (same sqrt(h) scaling);
+#   "lognormal_rv" - the naive benchmark: a lognormal band centred on the model forecast with
+#                    sd = trailing realized vol over RV_WINDOW sessions times sqrt(trading days).
+# Vol is computed from CBOT closes up to and including the origin close only. GARCH, adaptive
+# conformal, other RV windows and CVOL (no free, pinnable source) are deliberately left out.
+# Selection rule, validation split only: the same interval-score ratio as the centring rule
+# (mean 80% + 95% interval score / the baseline's, averaged over every model x horizon cell);
+# the candidate with the lowest ratio wins if that ratio is below 1, else the baseline stays.
+# Pinball loss, Kupiec/Christoffersen and coverage by vol regime (terciles of the origin vol)
+# are diagnostics only. The holdout is reported once and never used. Only the winner is
+# published as the site range; if the plain lognormal band wins, it is published and labelled so.
+RANGE_METHODS: tuple[str, ...] = ("empirical", "ewma_fhs", "lognormal_rv")
+RANGE_BASELINE = "empirical"
+RANGE_CHALLENGER = "ewma_fhs"
+RANGE_BENCHMARK = "lognormal_rv"
+EWMA_LAMBDA = 0.94
+EWMA_BURN_SESSIONS = 60  # EWMA vol is undefined until this many daily returns exist
+RV_WINDOW = 63  # one quarter of sessions
+TRADING_DAYS_PER_MONTH = 21
+VOL_REGIME_QUANTILES: tuple[float, ...] = (1 / 3, 2 / 3)
+
+# Calibration reporting (v2.1, P4, pre-registered 2026-11-08). For every hit rate (inside the
+# 80% / 95% band): the HAC standard error (Bartlett, lag h-1), a moving-block bootstrap 95% CI
+# (block length h, BOOTSTRAP_DRAWS draws, fixed seed), and n_eff = n p(1-p) / long-run variance
+# (capped at n). Upper and lower misses are reported separately. Kupiec POF and Christoffersen
+# independence are run on each of the h non-overlapping subsamples (every h-th origin) and the
+# median p-value across them is reported. MDE = (z_0.95 + z_0.80) x HAC-SE of the mean
+# absolute-error differential vs the random walk / the random walk's MAE: the smallest relative
+# improvement a one-sided 5% test would detect with 80% power.
+BOOTSTRAP_DRAWS = 2000
+BOOTSTRAP_SEED = 20261108
+MDE_ALPHA = 0.05
+MDE_POWER = 0.80
+
+# Inference rule v2 (P16, pre-registered 2026-11-08; v1 was MAE-based DM, CW Holm-adjusted
+# across the three horizons of each model, iid binomial direction test). In v2:
+#   - one primary loss, the squared log-return error (the loss Clark-West and the ridge use);
+#     the MAE in USD/t is kept as a secondary loss, reported, never used to choose;
+#   - Holm across the whole family of 9 Clark-West tests (3 challengers x 3 horizons);
+#   - a challenger replaces the random walk at h only if its family-wide Holm p is below
+#     CHAMPION_ALPHA and its validation primary loss is lower than the random walk's;
+#   - the direction test is the regression form of Pesaran-Timmermann (hit indicator on the
+#     forecast-sign indicator) with a HAC (Bartlett, lag h-1) t statistic, one-sided.
+INFERENCE_RULE_VERSION = 2
+PRIMARY_LOSS = "squared log-return error"
+SECONDARY_LOSS = "absolute error, USD/t"
+
+# Stress replay (P19, pre-registered 2026-11-08 before any episode outcome was computed).
+# Selection rule: the five CBOT soybean episodes named by the review panel (risk and stats
+# reviewers) as the market shocks a desk would replay, chosen for their narrative, not their
+# size; no episode is added or removed after seeing its return. Each starts at the first CBOT
+# session of its month and is replayed over each horizon h: the realized log return from that
+# close to the last close on or before start + h months is applied to today's price. An episode
+# window that has not fully happened is not shown. Illustrative scenarios, not probabilities.
+STRESS_EPISODES: tuple[tuple[str, str, str], ...] = (
+    ("2018-06", "Trade war", "China's retaliatory tariff on US soybeans, announced mid-June 2018."),
+    ("2020-07", "China buying", "Record Chinese purchases of US new crop from the summer of 2020."),
+    ("2021-05", "May 2021 correction", "The May 2021 peak and the fall that followed."),
+    ("2022-02", "Ukraine invasion", "Russia's invasion of Ukraine on 24 February 2022."),
+    ("2024-07", "2024 sell-off", "The July 2024 slide on a large US crop outlook."),
+)
+STRESS_HISTOGRAM_STEP = 0.025  # bin width of the full h-month return distribution (log return)
+
+# Reference contract (P10 minimum step, 2026-11-08). The site's price is the Yahoo continuous
+# front month; the contract a hedge would use for horizon h is the first soybean contract
+# (F H K N Q U X) whose first notice day (last business day of the month before delivery) falls
+# after the target date. A window "crosses a roll" when that contract differs from the one the
+# same rule gives at the origin. Targets are not rebuilt on specific contracts (roadmap v2.1).
+CONTRACT_LETTERS: dict[int, str] = {1: "F", 3: "H", 5: "K", 7: "N", 8: "Q", 9: "U", 11: "X"}
+
 # Premium defaults: the derived monthly table is "stale" once its source series ended more
 # than this many days before the forecast date.
 STALE_PREMIUM_DAYS = 90
@@ -76,7 +153,8 @@ ROLL_EXCLUSION_BDAYS = 3
 SOY_CONTRACT_MONTHS: tuple[int, ...] = (1, 3, 5, 7, 8, 9, 11)
 
 # Champion rule: a model replaces the random walk at a horizon only if its Clark-West
-# test against the random walk, Holm-adjusted across horizons, has p below this level.
+# test against the random walk, Holm-adjusted (v2: across all 9 tests, see
+# INFERENCE_RULE_VERSION), has p below this level.
 CHAMPION_ALPHA = 0.10
 
 # The pre-registered feature set (no data-driven feature selection).
