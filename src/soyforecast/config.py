@@ -48,6 +48,19 @@ NOMINAL_LEVELS: tuple[float, ...] = (0.80, 0.95)
 # A band is flagged (amber) when its validation hit rate is more than this below nominal.
 COVERAGE_WARN_PP = 0.05
 
+# Outlook display rules (v2.1 polish unit B), pre-registered 2026-11-08 before the per-side tail
+# split of any horizon was read. Display only: nothing is chosen or recalibrated on them.
+# - Each tail of the 80% range should miss TAIL_NOMINAL_80 of the time. The decision panel flags
+#   the tail that hurts the chosen side (lower for a producer, upper for a buyer) when its
+#   validation miss rate is more than COVERAGE_WARN_PP above that one-tail nominal.
+# - The rough 1-in-40 money figure is visually de-emphasised when each 95% tail rests on fewer
+#   than TAIL_OBS_MIN_95 past errors (tail_obs_95).
+# - The target readout states where a user-typed price sits among these levels of the tested
+#   range ("between p50 and p75"): a range position, never a probability of reaching it.
+TAIL_NOMINAL_80 = 0.10
+TAIL_OBS_MIN_95 = 2.0
+TARGET_READOUT_LEVELS: tuple[float, ...] = (0.10, 0.25, 0.50, 0.75, 0.90)
+
 # Range method (v2.1, P2, pre-registered 2026-11-08 before any vol-scaled result was computed).
 # Exactly three candidates, all built from the same purged window of the last CALIB_WINDOW
 # realized errors and the same chosen centring:

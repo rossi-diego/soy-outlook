@@ -68,6 +68,16 @@ Fixed in `src/soyforecast/config.py` and committed before any of the numbers bel
 
 **Decision panel (P18).** The published range method's quantiles are also exported on a finer grid (5% to 95% in 5% steps). It is the same method on more levels, so nothing is chosen on it. The panel on / is client-side arithmetic: side (producer long or buyer short), tonnes, hedge ratio and currency; downside vs selling (or buying) at today's close at the 1-in-10 adverse level (q10 for a producer, q90 for a buyer) and the rough 1-in-40 level (q2.5 / q97.5), times tonnes × (1 − hedge ratio). CBOT only, with premium and BRL held fixed, so the hedge is futures at today's close and the basis is unhedged. Labelled "illustrative, range-based, not VaR", with the 6-month under-coverage shown inline. No target-price probability (it reads as directional advice) and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors).
 
+## Pre-registration, 2026-11-08 (v2.1 polish unit B, display rules)
+
+Fixed in `src/soyforecast/config.py` before the per-side tail split of any horizon was read. Display only: no range, model or method is chosen on them, and the holdout plays no part.
+
+| Rule | Fixed choice |
+|---|---|
+| Side-aware tail warning | Each tail of the 80% range has a one-tail nominal miss rate of 10% (`TAIL_NOMINAL_80`). The decision panel flags the adverse tail of the chosen side (lower misses `miss_lo80` for a producer, upper misses `miss_hi80` for a buyer) when its validation rate is more than 5 points (`COVERAGE_WARN_PP`) above 10%, i.e. above 15%. Published per horizon as `coverage.tail_warn_lo80` / `tail_warn_hi80`. |
+| 1-in-40 emphasis | The rough 1-in-40 money figure is shown in muted, smaller type when `tail_obs_95` < 2 (`TAIL_OBS_MIN_95`). |
+| Target readout | A user-typed CBOT target is placed among the p10, p25, p50, p75 and p90 of the tested range (`TARGET_READOUT_LEVELS`): "below p10", "between p50 and p75", "above p90". Worded as a range position, never as a probability of reaching the price. |
+
 ## v2.1 panel round (2026-11-08)
 
 Twelve reviewer lenses (quant, stats, trader, farmer, risk, UX, dataviz, frontend, data engineering, software engineering, recruiter, skeptic) scored v2 and voted on 28 proposals in two rounds (adoption bar: two thirds). The agreed final wording of each adopted proposal was the spec; each unit was implemented, then audited against that wording by a separate reviewer.
