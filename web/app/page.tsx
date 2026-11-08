@@ -7,7 +7,7 @@ import { pageMetadata } from "@/lib/site";
 export const metadata: Metadata = pageMetadata(
   "/",
   null,
-  "Where Brazilian export soybeans could trade 1, 3 and 6 months after each USDA WASDE report: CBOT ranges labelled by the hit rate they achieved, an honest track record against 'no change', and the premium and exchange rate as your inputs.",
+  "Price-risk ranges for Brazilian export soybeans 1, 3 and 6 months after each USDA WASDE report, for budgeting and hedging: CBOT ranges labelled by the hit rate they achieved, an illustrative downside-vs-selling-today panel, and the premium and exchange rate as your inputs.",
 );
 
 export default function Home() {

@@ -1,6 +1,6 @@
 # Soy Outlook: Brazilian soybean prices after each WASDE
 
-**Where could Paranaguá export soybeans trade 1, 3 and 6 months after a USDA WASDE report, and how sure can anyone be?**
+**Price-risk ranges for Paranaguá export soybeans 1, 3 and 6 months after each USDA WASDE report, for budgeting and hedging, labelled by how often they actually held.**
 
 **[Live site → soy-outlook.vercel.app](https://soy-outlook.vercel.app)**
 
@@ -74,8 +74,8 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 
 | Page | Question it answers |
 |---|---|
-| **Outlook** | Where could FOB / CBOT / R$ per sack be in 1, 3 and 6 months, within an 80% and a 95% range? Premium and FX are your inputs. The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
-| **This WASDE** | What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. |
+| **Outlook** | How far could FOB / CBOT / R$ per sack move in 1, 3 and 6 months, within an 80% and a 95% range? Premium and FX are your inputs. A decision panel (side, tonnes, hedge ratio, USD or BRL) turns the ranges into downside vs selling today at the 1-in-10 and rough 1-in-40 levels, from a published 5–95% quantile grid; it is labelled illustrative, range-based not VaR, CBOT only with the basis unhedged, and shows the 6-month under-coverage inline. No target-price probability and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors). The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
+| **This WASDE** | How far does CBOT usually move on release day? The empirical band (±4.4 USD/t typical, ±11.6 for 1 report in 10) is drawn around today's price with its out-of-sample hit rate: scored on earlier reports only, the 1-in-10 band held 90% of 86 reports in 2016–2023 and 97% of 29 in 2024+. What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. |
 | **Track record** | Did any model beat "no change"? A one-line verdict with the smallest effect the tests could have detected, where the 80% range missed (below vs above), a dot plot of each model's error against no change, and past forecasts against actual prices (holdout shaded, misses and crop-roll windows marked). The DM/CW tests, Kupiec/Christoffersen calibration tests and the range-method comparison sit in a **For statisticians** fold. |
 | **Methodology** | Plain-language method, units, limitations and the audit of v1. |
 
@@ -198,5 +198,7 @@ Licences and terms for each source are in [DATA_LICENSES.md](DATA_LICENSES.md).
 ## Roadmap
 
 - **Contract-consistent targets (v2.1).** Rebuild the targets on specific contracts, or on a ratio-back-adjusted series with explicit roll dates, so a 3- or 6-month window no longer mixes price moves with calendar spreads. It would be pre-registered and documented as v2.1, the holdout would then be viewed a second time (and disclosed as such), and it needs legally sourceable expired-contract data, avoiding the licensing problem of the premium series.
+
+- **A volatility ladder for the release-day move (v2, pre-registered 2026-11-08 in [docs/PLAN.md](docs/PLAN.md)).** Unconditional → EWMA → HAR-RV → HAR-RV + WASDE features on |release-day return| and realized variance, scored by QLIKE and DM inside the inference-rule Holm family. The result is published even if every rung loses; the /wasde band changes only if one beats it out of sample.
 
 - **A public premium source.** A CEPEA/ESALQ-implied Paranaguá premium (R$/60 kg ÷ PTAX, minus CBOT nearby, with full lineage) would replace the derived table and make a joint CBOT × premium × FX band possible.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type Assumptions, convert, heldText, money, parseFx, rangeLabel, signed } from "./format";
+import { type Assumptions, convert, heldText, money, moveHitText, parseFx, rangeLabel, signed } from "./format";
 
 const BU_PER_T = 36.74371036414626;
 const a: Assumptions = { premium: 79, fx: 5.5, buPerT: BU_PER_T, sackKg: 60 };
@@ -62,5 +62,14 @@ describe("labels", () => {
     expect(money(null, "c_bu")).toBe("—");
     expect(signed(-1.24, 1)).toBe("−1.2");
     expect(signed(0.01, 1)).toBe("unch.");
+  });
+});
+
+describe("release-day move hit rate (P14)", () => {
+  it("states the out-of-sample hit rate with its Wilson interval", () => {
+    const s = { years: "2016-2023", n: 86, hit50: 0.5, ci50: [0.397, 0.603] as [number, number], hit90: 0.895, ci90: [0.813, 0.944] as [number, number] };
+    expect(moveHitText(s, "50")).toBe("50% of 86 reports in 2016-2023 (likely 40%–60%)");
+    expect(moveHitText(s, "90")).toBe("90% of 86 reports in 2016-2023 (likely 81%–94%)");
+    expect(moveHitText({ ...s, n: 0, hit50: null, ci50: null }, "50")).toBe("no reports yet in 2016-2023");
   });
 });

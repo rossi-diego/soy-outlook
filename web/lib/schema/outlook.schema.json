@@ -260,6 +260,9 @@
         },
         "premium_reference": {
           "$ref": "#/$defs/PremiumReference"
+        },
+        "grid": {
+          "$ref": "#/$defs/QuantileGrid"
         }
       },
       "required": [
@@ -278,7 +281,8 @@
         "q975",
         "central",
         "coverage",
-        "premium_reference"
+        "premium_reference",
+        "grid"
       ],
       "title": "Horizon",
       "type": "object"
@@ -451,6 +455,33 @@
         "c_bu"
       ],
       "title": "PricePoint",
+      "type": "object"
+    },
+    "QuantileGrid": {
+      "additionalProperties": false,
+      "description": "The published range method on a finer grid of levels (P18), US cents per bushel.",
+      "properties": {
+        "levels": {
+          "description": "Quantile levels, 0.05 to 0.95 in 0.05 steps.",
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "c_bu": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels",
+        "c_bu"
+      ],
+      "title": "QuantileGrid",
       "type": "object"
     },
     "ReturnDistribution": {

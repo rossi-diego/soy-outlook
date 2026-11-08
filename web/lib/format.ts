@@ -132,3 +132,24 @@ export function parseFx(text: string): { ok: true; value: number } | { ok: false
   if (v < FX_MIN || v > FX_MAX) return { ok: false, error: `Use a rate between ${FX_MIN} and ${FX_MAX} BRL per USD.` };
   return { ok: true, value: Math.round(v * 10000) / 10000 };
 }
+
+type MoveSplit = {
+  years: string;
+  n: number;
+  hit50: number | null;
+  ci50: [number, number] | null;
+  hit90: number | null;
+  ci90: [number, number] | null;
+};
+
+/**
+ * Out-of-sample hit rate of one release-day move band (P14), e.g. "50% of 86 reports in
+ * 2016-2023 (likely 40%–60%)". The e2e contract test rebuilds this string from the JSON.
+ */
+export function moveHitText(s: MoveSplit, level: "50" | "90"): string {
+  const hit = level === "50" ? s.hit50 : s.hit90;
+  const ci = level === "50" ? s.ci50 : s.ci90;
+  if (hit === null || s.n === 0) return `no reports yet in ${s.years}`;
+  const range = ci ? ` (likely ${pct(ci[0])}–${pct(ci[1])})` : "";
+  return `${pct(hit)} of ${s.n} reports in ${s.years}${range}`;
+}

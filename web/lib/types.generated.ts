@@ -238,6 +238,7 @@ export interface Horizon {
   central: number;
   coverage: Coverage;
   premium_reference: PremiumReference;
+  grid: QuantileGrid;
 }
 /**
  * The hedge contract for a horizon (P10); prices stay the continuous front month.
@@ -341,6 +342,19 @@ export interface PremiumReference {
   years: string;
   n_years: number;
   note: string;
+}
+/**
+ * The published range method on a finer grid of levels (P18), US cents per bushel.
+ *
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "QuantileGrid".
+ */
+export interface QuantileGrid {
+  /**
+   * Quantile levels, 0.05 to 0.95 in 0.05 steps.
+   */
+  levels: number[];
+  c_bu: number[];
 }
 /**
  * Historical stress replay (P19): illustrative scenarios, not probabilities.
@@ -703,13 +717,57 @@ export interface LatestRevisions {
   may: boolean;
 }
 /**
+ * Empirical release-day move band (P11/P14) with its out-of-sample hit rate.
+ *
  * This interface was referenced by `SiteData`'s JSON-Schema
  * via the `definition` "ReleaseMove".
  */
 export interface ReleaseMove {
   n: number;
+  levels: number[];
   typical_usd_t: number;
   one_in_ten_usd_t: number;
+  /**
+   * Median |release-day move|, percent.
+   */
+  typical_pct: number;
+  /**
+   * 90th percentile |release-day move|, percent.
+   */
+  one_in_ten_pct: number;
+  min_past: number;
+  rule: string;
+  hit_rate: MoveHitRate;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "MoveHitRate".
+ */
+export interface MoveHitRate {
+  validation: MoveHitSplit;
+  holdout: MoveHitSplit;
+  all: MoveHitSplit;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "MoveHitSplit".
+ */
+export interface MoveHitSplit {
+  years: string;
+  n: number;
+  /**
+   * Share of reports inside the typical move.
+   */
+  hit50: number | null;
+  /**
+   * Wilson 95% interval.
+   */
+  ci50: [number, number] | null;
+  /**
+   * Share of reports inside the 1-in-10 move.
+   */
+  hit90: number | null;
+  ci90: [number, number] | null;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
+import ReleaseMoveBand from "@/components/ReleaseMoveBand";
 import WasdeWhatIf from "@/components/WasdeWhatIf";
-import { getMeta, getWasde } from "@/lib/data";
-import { dateLabel, monthLabel, num, signed } from "@/lib/format";
+import { getMeta, getOutlook, getWasde } from "@/lib/data";
+import { dateLabel, monthLabel, num, pct, signed } from "@/lib/format";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata: Metadata = pageMetadata(
@@ -14,6 +15,7 @@ export const metadata: Metadata = pageMetadata(
 export default function WasdePage() {
   const meta = getMeta();
   const w = getWasde();
+  const p0UsdT = (getOutlook().last.c_bu / 100) * meta.consts.bu_per_t;
   return (
     <div className="space-y-8">
       <section className="space-y-3">
@@ -31,10 +33,14 @@ export default function WasdePage() {
             <strong className="text-ink">Next WASDE ({dateLabel(w.next_release)}):</strong> typical release-day move ±
             {num(w.reaction.release_move.typical_usd_t, 1)} USD/t; 1 report in 10 moves more than ±
             {num(w.reaction.release_move.one_in_ten_usd_t, 1)} USD/t ({w.reaction.release_move.n} reports,{" "}
-            {w.reaction.years}).
+            {w.reaction.years}; the 1-in-10 band held{" "}
+            {pct(w.reaction.release_move.hit_rate.all.hit90)} of {w.reaction.release_move.hit_rate.all.n} reports out of
+            sample).
           </p>
         )}
       </section>
+
+      <ReleaseMoveBand move={w.reaction.release_move} p0UsdT={p0UsdT} nextRelease={w.next_release} />
 
       <section className="card overflow-x-auto p-5">
         <h2 className="mb-3 text-lg font-semibold">

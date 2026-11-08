@@ -13,16 +13,22 @@ from scipy import stats
 from soyforecast.config import (
     CALIB_WINDOW,
     FEATURES,
+    HOLDOUT_START,
     HORIZONS,
     INTERVAL_BASELINE,
     PLACEBO_LAG_SESSIONS,
+    QUANTILE_GRID,
     QUANTILES,
     RANGE_BASELINE,
     REACTION_ALPHA,
     REACTION_EXPECTED_SIGN,
+    RELEASE_MOVE_LEVELS,
+    RELEASE_MOVE_MIN_PAST,
     ROLL_EXCLUSION_BDAYS,
     SOY_CONTRACT_MONTHS,
     SPLIT_SAMPLE_BREAK,
+    VALIDATION_END,
+    VALIDATION_START,
 )
 from soyforecast.evaluation.backtest import eligible, interval_offsets
 from soyforecast.evaluation.stats import holm
@@ -58,7 +64,10 @@ def live_forecast(
         g = g.sort_values("origin").tail(CALIB_WINDOW)
         resid = (g["y"] - g["pred"]).to_numpy()
         past_vol = g[vol_col].to_numpy(dtype=float) if vol_col in g else np.full(len(g), np.nan)
-        qs = interval_offsets(resid, past_vol, float(live[vol_col]), h, method, centring)
+        vol_now = float(live[vol_col])
+        qs = interval_offsets(resid, past_vol, vol_now, h, method, centring)
+        # P18: the same method on a finer grid (5% to 95%), for the decision panel.
+        grid = interval_offsets(resid, past_vol, vol_now, h, method, centring, QUANTILE_GRID)
         p0 = float(live["p0_c_bu"])
         target = anchor + pd.DateOffset(months=h)
         row: dict[str, Any] = {
@@ -84,6 +93,10 @@ def live_forecast(
         }
         for q in QUANTILES:
             row[f"q{round(q * 1000):03d}"] = round(p0 * float(np.exp(pred + qs[q])), 2)
+        row["grid"] = {
+            "levels": list(QUANTILE_GRID),
+            "c_bu": [round(p0 * float(np.exp(pred + grid[q])), 2) for q in QUANTILE_GRID],
+        }
         out.append(row)
     return out
 
@@ -301,11 +314,7 @@ def release_day_reaction(
             "previous": profile["previous"],
             "may": profile["may"],
         },
-        "release_move": {
-            "n": len(abs_r),
-            "typical_usd_t": round(float(np.median(abs_r)) * usd_t_now, 1),
-            "one_in_ten_usd_t": round(float(np.quantile(abs_r, 0.9)) * usd_t_now, 1),
-        },
+        "release_move": release_move_band(data, usd_t_now),
         "robustness": {
             "placebo": {
                 "lag_sessions": PLACEBO_LAG_SESSIONS,
@@ -324,6 +333,83 @@ def release_day_reaction(
                 "items": _coef_items(no_roll, usd_t_now),
             },
         },
+    }
+
+
+def wilson(k: int, n: int, z: float = 1.959964) -> tuple[float, float]:
+    """Wilson score interval for a binomial share k/n (95% by default)."""
+    if n == 0:
+        return (float("nan"), float("nan"))
+    p = k / n
+    den = 1 + z**2 / n
+    mid = (p + z**2 / (2 * n)) / den
+    half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / den
+    return (float(mid - half), float(mid + half))
+
+
+def release_move_hits(data: pd.DataFrame) -> pd.DataFrame:
+    """Out-of-sample score of the release-day move band (P14, config.RELEASE_MOVE_*).
+
+    Each report from VALIDATION_START on is compared with the band built from earlier reports
+    only (expanding window, at least RELEASE_MOVE_MIN_PAST of them). One row per scored report:
+    its date, split, |log return|, and per level the band and whether |r| stayed inside it.
+    """
+    d = data.sort_values("release_date").reset_index(drop=True)
+    abs_r = d["r"].abs().to_numpy(dtype=float)
+    rows = []
+    for i, day in enumerate(pd.to_datetime(d["release_date"])):
+        if day < VALIDATION_START or i < RELEASE_MOVE_MIN_PAST:
+            continue
+        past = abs_r[:i]  # strictly earlier reports: no look-ahead
+        row: dict[str, Any] = {
+            "release_date": day,
+            "split": "holdout" if day >= HOLDOUT_START else "validation",
+            "abs_r": abs_r[i],
+        }
+        for lv in RELEASE_MOVE_LEVELS:
+            band = float(np.quantile(past, lv))
+            row[f"band_{round(lv * 100)}"] = band
+            row[f"hit_{round(lv * 100)}"] = bool(abs_r[i] <= band)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def release_move_band(data: pd.DataFrame, usd_t_now: float) -> dict[str, Any]:
+    """The typical and 1-in-10 release-day move in USD/t, with their out-of-sample hit rates."""
+    abs_r = data["r"].abs().to_numpy(dtype=float)
+    scored = release_move_hits(data)
+    splits: dict[str, Any] = {}
+    for name, years in (
+        ("validation", f"{VALIDATION_START.year}-{VALIDATION_END.year}"),
+        ("holdout", f"{HOLDOUT_START.year}+"),
+        ("all", f"{VALIDATION_START.year}+"),
+    ):
+        sub = scored if name == "all" or scored.empty else scored[scored["split"] == name]
+        n = len(sub)
+        out: dict[str, Any] = {"years": years, "n": n}
+        for lv in RELEASE_MOVE_LEVELS:
+            key = str(round(lv * 100))
+            k = int(sub[f"hit_{key}"].sum()) if n else 0
+            lo, hi = wilson(k, n)
+            out[f"hit{key}"] = round(k / n, 3) if n else None
+            out[f"ci{key}"] = [round(lo, 3), round(hi, 3)] if n else None
+        splits[name] = out
+    typical, one_in_ten = (float(np.quantile(abs_r, lv)) for lv in RELEASE_MOVE_LEVELS)
+    return {
+        "n": len(abs_r),
+        "levels": list(RELEASE_MOVE_LEVELS),
+        "typical_usd_t": round(typical * usd_t_now, 1),
+        "one_in_ten_usd_t": round(one_in_ten * usd_t_now, 1),
+        "typical_pct": round(typical * 100, 2),
+        "one_in_ten_pct": round(one_in_ten * 100, 2),
+        "min_past": RELEASE_MOVE_MIN_PAST,
+        "rule": (
+            "Band: median and 90th percentile of |release-day log return| over every usable "
+            "report. Hit rate: each report from "
+            f"{VALIDATION_START.year} on scored against the band from earlier reports only "
+            f"(at least {RELEASE_MOVE_MIN_PAST}); Wilson 95% intervals."
+        ),
+        "hit_rate": splits,
     }
 
 

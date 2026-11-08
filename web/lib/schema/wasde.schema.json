@@ -105,6 +105,123 @@
       "title": "LatestRevisions",
       "type": "object"
     },
+    "MoveHitRate": {
+      "additionalProperties": false,
+      "properties": {
+        "validation": {
+          "$ref": "#/$defs/MoveHitSplit"
+        },
+        "holdout": {
+          "$ref": "#/$defs/MoveHitSplit"
+        },
+        "all": {
+          "$ref": "#/$defs/MoveHitSplit"
+        }
+      },
+      "required": [
+        "validation",
+        "holdout",
+        "all"
+      ],
+      "title": "MoveHitRate",
+      "type": "object"
+    },
+    "MoveHitSplit": {
+      "additionalProperties": false,
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "hit50": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Share of reports inside the typical move."
+        },
+        "ci50": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Wilson 95% interval."
+        },
+        "hit90": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Share of reports inside the 1-in-10 move."
+        },
+        "ci90": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "years",
+        "n",
+        "hit50",
+        "ci50",
+        "hit90",
+        "ci90"
+      ],
+      "title": "MoveHitSplit",
+      "type": "object"
+    },
     "Placebo": {
       "additionalProperties": false,
       "properties": {
@@ -320,21 +437,57 @@
     },
     "ReleaseMove": {
       "additionalProperties": false,
+      "description": "Empirical release-day move band (P11/P14) with its out-of-sample hit rate.",
       "properties": {
         "n": {
           "type": "integer"
         },
+        "levels": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "type": "array"
+        },
         "typical_usd_t": {
+          "minimum": 0,
           "type": "number"
         },
         "one_in_ten_usd_t": {
+          "minimum": 0,
           "type": "number"
+        },
+        "typical_pct": {
+          "description": "Median |release-day move|, percent.",
+          "minimum": 0,
+          "type": "number"
+        },
+        "one_in_ten_pct": {
+          "description": "90th percentile |release-day move|, percent.",
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_past": {
+          "type": "integer"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "hit_rate": {
+          "$ref": "#/$defs/MoveHitRate"
         }
       },
       "required": [
         "n",
+        "levels",
         "typical_usd_t",
-        "one_in_ten_usd_t"
+        "one_in_ten_usd_t",
+        "typical_pct",
+        "one_in_ten_pct",
+        "min_past",
+        "rule",
+        "hit_rate"
       ],
       "title": "ReleaseMove",
       "type": "object"

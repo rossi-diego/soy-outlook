@@ -10,7 +10,7 @@ import { AUTHOR, OG_IMAGE, REPO_URL, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const DESCRIPTION =
-  "Where Brazilian export soybeans could trade 1, 3 and 6 months after each USDA WASDE report: tested ranges labelled by their hit rate, an honest track record against 'no change', and what each WASDE revision has been worth on release day.";
+  "Price-risk ranges for Brazilian export soybeans 1, 3 and 6 months after each USDA WASDE report, for budgeting and hedging: tested ranges labelled by their hit rate, an honest track record against 'no change', and what each WASDE revision has been worth on release day.";
 const DEFAULT_TITLE = `${SITE_NAME}: Brazilian soybean prices after each WASDE`;
 
 export const metadata: Metadata = {

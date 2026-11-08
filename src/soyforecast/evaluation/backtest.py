@@ -8,6 +8,7 @@ is applied on dates, never on row counts.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, cast
 
 import numpy as np
@@ -108,7 +109,9 @@ def run_backtest(
 
 
 def residual_quantiles(
-    residuals: np.ndarray, centring: str = INTERVAL_BASELINE
+    residuals: np.ndarray,
+    centring: str = INTERVAL_BASELINE,
+    levels: Sequence[float] = QUANTILES,
 ) -> dict[float, float]:
     """Empirical quantiles of past errors (linear interpolation), optionally median-centred.
 
@@ -120,7 +123,7 @@ def residual_quantiles(
         r = r - np.median(r)
     elif centring != "raw":
         raise ValueError(f"unknown centring {centring!r}; expected one of {INTERVAL_CENTRINGS}")
-    return {q: float(np.quantile(r, q)) for q in QUANTILES}
+    return {q: float(np.quantile(r, q)) for q in levels}
 
 
 def horizon_scale(h: int) -> float:
@@ -135,6 +138,7 @@ def interval_offsets(
     h: int,
     method: str = RANGE_BASELINE,
     centring: str = INTERVAL_BASELINE,
+    levels: Sequence[float] = QUANTILES,
 ) -> dict[float, float]:
     """Quantile offsets (log-return units) around the model forecast for one range method.
 
@@ -142,21 +146,22 @@ def interval_offsets(
     ewma_fhs     - past errors standardised by the EWMA vol at their own origin, quantiles,
                    then rescaled by today's EWMA vol (filtered historical simulation);
     lognormal_rv - normal quantiles of the log return with sd = today's realized vol.
-    See config.RANGE_METHODS; vols are daily and scaled by sqrt(trading days in h).
+    See config.RANGE_METHODS; vols are daily and scaled by sqrt(trading days in h). `levels`
+    are the quantile levels returned (the published QUANTILES, or the finer QUANTILE_GRID).
     """
     if method == "empirical":
-        return residual_quantiles(past_resid, centring)
-    nan = dict.fromkeys(QUANTILES, float("nan"))
+        return residual_quantiles(past_resid, centring, levels)
+    nan = dict.fromkeys(levels, float("nan"))
     scale = horizon_scale(h)
     if method == "ewma_fhs":
         z = np.asarray(past_resid, float) / (np.asarray(past_vol, float) * scale)
         if not np.isfinite(vol_now) or not np.isfinite(z).all():
             return nan
-        return {q: v * vol_now * scale for q, v in residual_quantiles(z, centring).items()}
+        return {q: v * vol_now * scale for q, v in residual_quantiles(z, centring, levels).items()}
     if method == "lognormal_rv":
         if not np.isfinite(vol_now):
             return nan
-        return {q: float(sps.norm.ppf(q)) * vol_now * scale for q in QUANTILES}
+        return {q: float(sps.norm.ppf(q)) * vol_now * scale for q in levels}
     raise ValueError(f"unknown range method {method!r}; expected one of {RANGE_METHODS}")
 
 

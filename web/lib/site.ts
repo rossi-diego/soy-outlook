@@ -15,7 +15,7 @@ export const OG_IMAGE = {
   url: "/og.png",
   width: 1200,
   height: 630,
-  alt: "Soy Outlook: where could Brazilian export soybeans trade? Tested on every WASDE since 2016, no model beats no-change.",
+  alt: "Soy Outlook: price-risk ranges for Brazilian export soybeans, for budgeting and hedging. Tested on every WASDE since 2016, no model beats no-change.",
 };
 
 /** Per-page metadata: title (templated in the root layout), description, canonical URL and social cards. */

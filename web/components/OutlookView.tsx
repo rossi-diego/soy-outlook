@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import Chart from "@/components/Chart";
+import DecisionPanel from "@/components/DecisionPanel";
 import StressReplay from "@/components/StressReplay";
 import { axisCommon, baseOption, type Tokens } from "@/lib/chart";
 import {
@@ -379,8 +380,12 @@ export default function OutlookView({ meta, outlook }: Props) {
           After the {monthLabel(meta.latest_wasde.month)} WASDE · CBOT close {dateLabel(outlook.as_of_close)}
         </p>
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-          Where could Brazilian export soybeans trade in the next six months?
+          Price-risk ranges for Brazilian export soybeans, 1 to 6 months ahead
         </h1>
+        <p className="max-w-3xl text-base leading-relaxed text-ink-2" data-testid="hero-framing">
+          For budgeting and hedging: how far CBOT soybeans could move from today, in ranges labelled by the hit rate they
+          actually achieved. A risk range, not a price call.
+        </p>
         <p className="max-w-3xl text-lg leading-relaxed text-ink-2" data-testid="headline">
           {unit === "c_bu" ? (
             <>
@@ -515,6 +520,8 @@ export default function OutlookView({ meta, outlook }: Props) {
           <HorizonCard key={h.h} h={h} unit={unit} a={todayA} origin={originNote} />
         ))}
       </section>
+
+      <DecisionPanel horizons={outlook.horizons} p0={last} buPerT={meta.consts.bu_per_t} fx={fx} />
 
       <section className="card space-y-3 p-5" data-testid="hero-chart">
         <div className="flex flex-wrap items-center justify-between gap-3">

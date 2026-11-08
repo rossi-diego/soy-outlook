@@ -22,7 +22,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.json_schema import GenerateJsonSchema
 
-from soyforecast.config import HORIZONS
+from soyforecast.config import HORIZONS, QUANTILE_GRID, RELEASE_MOVE_LEVELS
 
 SCHEMA_VERSION = 3  # v3: range method (P2), calibration stats (P4), inference rule v2 (P16)
 
@@ -258,6 +258,23 @@ class HorizonContract(Contract):
     series: str
 
 
+class QuantileGrid(Contract):
+    """The published range method on a finer grid of levels (P18), US cents per bushel."""
+
+    levels: list[Probability] = Field(description="Quantile levels, 0.05 to 0.95 in 0.05 steps.")
+    c_bu: list[float]
+
+    @model_validator(mode="after")
+    def _grid(self) -> QuantileGrid:
+        if [round(x, 4) for x in self.levels] != [round(x, 4) for x in QUANTILE_GRID]:
+            raise ValueError(f"grid levels must be {list(QUANTILE_GRID)}")
+        if len(self.c_bu) != len(self.levels):
+            raise ValueError("grid: one price per level")
+        if any(a > b for a, b in itertools.pairwise(self.c_bu)):
+            raise ValueError(f"grid quantiles are not monotone: {self.c_bu}")
+        return self
+
+
 class Horizon(Contract):
     h: int
     model: ModelId
@@ -275,6 +292,7 @@ class Horizon(Contract):
     central: float
     coverage: Coverage
     premium_reference: PremiumReference
+    grid: QuantileGrid
 
     @model_validator(mode="after")
     def _monotone(self) -> Horizon:
@@ -283,6 +301,14 @@ class Horizon(Contract):
             raise ValueError(f"horizon {self.h}: quantiles are not monotone: {qs}")
         if not qs[0] <= self.central <= qs[-1]:
             raise ValueError(f"horizon {self.h}: central value outside the 95% range")
+        # The grid is the same method: it must agree with the headline quantiles and sit
+        # strictly inside the 95% range.
+        g = dict(zip((round(x, 2) for x in self.grid.levels), self.grid.c_bu, strict=True))
+        for level, field in ((0.1, "q100"), (0.5, "q500"), (0.9, "q900")):
+            if abs(g[level] - getattr(self, field)) > 0.011:
+                raise ValueError(f"horizon {self.h}: grid {level} differs from {field}")
+        if not (qs[0] <= self.grid.c_bu[0] and self.grid.c_bu[-1] <= qs[-1]):
+            raise ValueError(f"horizon {self.h}: grid outside the 95% range")
         return self
 
 
@@ -552,10 +578,41 @@ class LatestRevisions(Contract):
     may: bool
 
 
-class ReleaseMove(Contract):
+class MoveHitSplit(Contract):
+    years: str
     n: int
-    typical_usd_t: float
-    one_in_ten_usd_t: float
+    hit50: Probability | None = Field(description="Share of reports inside the typical move.")
+    ci50: tuple[Probability, Probability] | None = Field(description="Wilson 95% interval.")
+    hit90: Probability | None = Field(description="Share of reports inside the 1-in-10 move.")
+    ci90: tuple[Probability, Probability] | None
+
+
+class MoveHitRate(Contract):
+    validation: MoveHitSplit
+    holdout: MoveHitSplit
+    all: MoveHitSplit
+
+
+class ReleaseMove(Contract):
+    """Empirical release-day move band (P11/P14) with its out-of-sample hit rate."""
+
+    n: int
+    levels: list[Probability]
+    typical_usd_t: float = Field(ge=0)
+    one_in_ten_usd_t: float = Field(ge=0)
+    typical_pct: float = Field(ge=0, description="Median |release-day move|, percent.")
+    one_in_ten_pct: float = Field(ge=0, description="90th percentile |release-day move|, percent.")
+    min_past: int
+    rule: str
+    hit_rate: MoveHitRate
+
+    @model_validator(mode="after")
+    def _band(self) -> ReleaseMove:
+        if [round(x, 4) for x in self.levels] != [round(x, 4) for x in RELEASE_MOVE_LEVELS]:
+            raise ValueError(f"release move levels must be {list(RELEASE_MOVE_LEVELS)}")
+        if self.one_in_ten_usd_t < self.typical_usd_t:
+            raise ValueError("release move: the 1-in-10 band is narrower than the typical one")
+        return self
 
 
 class Placebo(Contract):
