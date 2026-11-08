@@ -59,11 +59,13 @@ function HorizonCard({
   unit,
   a,
   hit,
+  origin,
 }: {
   h: Horizon;
   unit: Unit;
   a: Assumptions;
   hit: { cover80: number | null; n: number | null };
+  origin: string;
 }) {
   const c = (v: number) => convert(v, unit, a);
   const isRw = h.model === "rw";
@@ -99,11 +101,18 @@ function HorizonCard({
       <p className="mt-auto border-t border-line pt-3 text-xs text-muted">
         {hit.cover80 !== null
           ? `In 2016–2023 the 80% range held the actual CBOT price ${pct(hit.cover80)} of the time (${hit.n} reports).`
-          : "Hit rate not available yet."}
+          : "Hit rate not available yet."}{" "}
+        {origin}
       </p>
     </article>
   );
 }
+
+// P15: how far the live forecast is from the release-day origins the ranges were tested on.
+const issuedLabel = (month: string, days: number) =>
+  days <= 0
+    ? `Issued on the ${month} WASDE release day`
+    : `Issued from the ${month} WASDE, ${days} day${days === 1 ? "" : "s"} after its release`;
 
 const signed0 = (v: number) => (v > 0 ? `+${num(v)}` : v < 0 ? `−${num(Math.abs(v))}` : "0");
 
@@ -120,6 +129,8 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
   const championAllRw = outlook.horizons.every((h) => h.model === "rw");
   const h1 = outlook.horizons[0];
   const todayA: Assumptions = { ...base, premium };
+  const issued = issuedLabel(MONTHS[Number(meta.latest_wasde.month.slice(5, 7)) - 1], meta.days_since_report);
+  const originNote = `${issued}; ranges are calibrated at release-day closes.`;
 
   // Chart: the CBOT leg only (the part that is forecast), in ¢/bu or USD/t.
   const chartUnit: Unit = unit === "c_bu" ? "c_bu" : "usd_t";
@@ -227,6 +238,10 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
           forecast errors would put it between <strong className="text-ink">{headline.lo}</strong> and{" "}
           <strong className="text-ink">{headline.hi}</strong>.
         </p>
+        <p className="max-w-3xl text-sm text-muted">
+          {issued}. The ranges are calibrated on forecasts made at the close of WASDE release days, so treat them as
+          approximate {meta.days_since_report > 0 ? "this far from one" : "between reports"}.
+        </p>
       </section>
 
       {championAllRw && (
@@ -305,6 +320,7 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
             unit={unit}
             a={{ ...base, premium }}
             hit={hitRates[String(h.h)]}
+            origin={originNote}
           />
         ))}
       </section>
@@ -330,11 +346,21 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
             The Paranaguá premium has no free, licensed public feed. The default is a monthly median derived from a
             terminal export the author holds ({dateLabel(meta.premium_source.first)} –{" "}
             {dateLabel(meta.premium_source.last)}; original source and CBOT contract not recorded). Only the 12 monthly
-            statistics are published. Historical median by shipment month, not validated:{" "}
+            statistics are published. Last quote in the source: {signed0(outlook.premium_last.c_bu)}¢/bu on{" "}
+            {dateLabel(outlook.premium_last.date)}, {meta.premium_source.days_since_last} days before this forecast.
+          </p>
+          <p>
+            For reference only, the median by shipment month since {premiumDefault.years.split("-")[0]} (
+            {outlook.horizons[0]?.premium_reference.note}):{" "}
             {outlook.horizons
-              .map((h) => `${MONTHS[h.premium_reference.month - 1]} ${signed0(h.premium_reference.median)}`)
+              .map(
+                (h) =>
+                  `${MONTHS[h.premium_reference.month - 1]} ${signed0(h.premium_reference.median)} (p10–p90 ${signed0(
+                    h.premium_reference.p10,
+                  )}/${signed0(h.premium_reference.p90)})`,
+              )
               .join(", ")}{" "}
-            ¢/bu. Replace it with your broker&apos;s quote.
+            ¢/bu. The forecast holds one premium flat instead. Replace it with your broker&apos;s quote.
           </p>
         </div>
         <div className="card space-y-2 p-5 text-sm leading-relaxed text-ink-2">

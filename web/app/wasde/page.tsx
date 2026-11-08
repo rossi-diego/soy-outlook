@@ -17,11 +17,18 @@ export default function WasdePage() {
         </p>
         <h1 className="max-w-3xl text-3xl font-semibold tracking-tight">What did the latest WASDE change, and what is that worth?</h1>
         <p className="max-w-3xl text-ink-2">
-          USDA publishes at 12:00 ET and CBOT soybeans close at 13:20 CT, so the market prices a report the same day. Over{" "}
-          {w.reaction.n_reports} reports, the typical release-day move was {num(w.reaction.abs_move_usd_t_median, 1)} USD/t
-          either way. Below: the lines that matter for soybeans and what the market has paid, on average, for each
+          USDA publishes at 12:00 ET and CBOT soybeans close at 13:20 CT, so the market prices a report the same day.
+          Below: the lines that matter for soybeans and what the market has paid, on average, for each
           revision.
         </p>
+        {w.next_release && (
+          <p className="max-w-3xl text-sm text-ink-2">
+            <strong className="text-ink">Next WASDE ({dateLabel(w.next_release)}):</strong> typical release-day move ±
+            {num(w.reaction.release_move.typical_usd_t, 1)} USD/t; 1 report in 10 moves more than ±
+            {num(w.reaction.release_move.one_in_ten_usd_t, 1)} USD/t ({w.reaction.release_move.n} reports,{" "}
+            {w.reaction.years}).
+          </p>
+        )}
       </section>
 
       <section className="card overflow-x-auto p-5">

@@ -21,6 +21,7 @@ from soyforecast.models.live import (
     near_roll,
     release_day_events,
     release_day_reaction,
+    round_p,
 )
 
 
@@ -89,6 +90,13 @@ def test_holm_accepts_named_hypotheses():
     assert adj["c"] == pytest.approx(0.16)
     assert adj["d"] == pytest.approx(0.6)  # step-down keeps the adjusted p monotone
     assert all(adj[k] >= p for k, p in {"a": 0.01, "d": 0.5}.items())
+
+
+def test_round_p_never_publishes_a_tiny_p_as_zero():
+    assert round_p(0.1234) == 0.123
+    assert round_p(0.001) == 0.001
+    assert round_p(2.3456e-10) == pytest.approx(2.3e-10)
+    assert round_p(2.3456e-10) > 0
 
 
 def test_near_roll_uses_contract_last_trading_days():

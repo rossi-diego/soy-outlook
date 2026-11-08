@@ -29,7 +29,8 @@ export default function Methodology() {
         <p>
           The Paranaguá FOB price is the CBOT soybean price plus the Paranaguá premium. The CBOT part is public and
           forecast here. The premium has no free, licensed feed, so it is <strong className="text-ink">your input</strong>,
-          with a seasonal default.
+          with a default: the historical median for the current calendar month, held flat for every horizon and
+          flagged stale because its source ends in {meta.premium_source.last.slice(0, 4)}.
         </p>
         <p>
           Technically: for every WASDE release since July 2010, the target is the log change of the CBOT front-month close

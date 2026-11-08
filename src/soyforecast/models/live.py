@@ -145,6 +145,11 @@ def _joint_p(res: Any) -> float:
     return float(res.f_test(restriction).pvalue)
 
 
+def round_p(p: float) -> float:
+    """Three decimals, but keep two significant digits below 0.001 so a tiny p is not 0.0."""
+    return round(p, 3) if p >= 0.001 else float(f"{p:.2g}")
+
+
 def _coef_items(res: Any, usd_t_now: float) -> list[dict[str, Any]]:
     p_holm = holm({f: float(res.pvalues[f]) for f in REACTION_FEATURES})
     return [
@@ -233,7 +238,7 @@ def release_day_reaction(
         "n_reports": int(res.nobs),
         "years": _years(data),
         "r2": round(float(res.rsquared), 3),
-        "joint_p": round(_joint_p(res), 3),
+        "joint_p": round_p(_joint_p(res)),
         "abs_move_usd_t_median": round(float(np.median(abs_r) * usd_t_now), 2),
         "alpha": REACTION_ALPHA,
         "adjustment": "Holm across the six revision coefficients",
@@ -252,7 +257,7 @@ def release_day_reaction(
                 "lag_sessions": PLACEBO_LAG_SESSIONS,
                 "n_reports": int(placebo.nobs),
                 "r2": round(float(placebo.rsquared), 3),
-                "joint_p": round(_joint_p(placebo), 3),
+                "joint_p": round_p(_joint_p(placebo)),
                 "items": _coef_items(placebo, usd_t_now),
             },
             "split_sample": _split_sample(data, usd_t_now),
@@ -261,7 +266,7 @@ def release_day_reaction(
                 "n_excluded": int(data["near_roll"].sum()),
                 "n_reports": int(no_roll.nobs),
                 "r2": round(float(no_roll.rsquared), 3),
-                "joint_p": round(_joint_p(no_roll), 3),
+                "joint_p": round_p(_joint_p(no_roll)),
                 "items": _coef_items(no_roll, usd_t_now),
             },
         },

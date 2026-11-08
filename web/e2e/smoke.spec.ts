@@ -43,3 +43,14 @@ test("pages never scroll horizontally", async ({ page }) => {
     expect(overflow, url).toBeLessThanOrEqual(0);
   }
 });
+
+test("origin flag and next-WASDE move follow the published data", async ({ page }) => {
+  const meta = await (await page.request.get("/data/meta.json")).json();
+  const wasde = await (await page.request.get("/data/wasde.json")).json();
+  await page.goto("/");
+  await expect(page.getByText(new RegExp(`${meta.days_since_report} days after its release`)).first()).toBeVisible();
+  await page.goto("/wasde/");
+  const move = wasde.reaction.release_move;
+  await expect(page.getByText(new RegExp(`±\s*${move.typical_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
+  await expect(page.getByText(new RegExp(`±\s*${move.one_in_ten_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
+});
