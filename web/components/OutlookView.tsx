@@ -118,16 +118,24 @@ function HorizonCard({
           <span className={`block text-xs ${cov.warn95 ? "text-warn" : "text-muted"}`} data-testid="held95">
             {heldText(cov, "95")}
           </span>
+          {cov.warn95 && (
+            <Badge warn title="Validation hit rate more than 5 percentage points below the nominal 95%">
+              below 95%
+            </Badge>
+          )}
         </dd>
         {unit !== "c_bu" && (
           <>
             <dt className="text-ink-2">Premium used</dt>
-            <dd className="tabular text-right text-ink-2">{signed0(a.premium)}¢/bu</dd>
+            <dd className="tabular text-right text-ink-2">
+              {signed0(a.premium)}¢/bu
+              <span className="block text-xs text-muted">{signedUsd(usdT(a.premium))} USD/t, held flat</span>
+            </dd>
             <dt className="text-ink-2">Premium p10–p90</dt>
             <dd className="tabular text-right text-ink-2" data-testid="premium-band">
               {signedUsd(usdT(ref.p10))} / {signedUsd(usdT(ref.p90))} USD/t
               <span className="block text-xs text-muted">
-                {MONTHS[ref.month - 1]} {ref.years}, {ref.note}
+                {MONTHS[ref.month - 1]} shipments {ref.years}: {signedUsd(usdT(ref.median))} USD/t ({ref.note})
               </span>
             </dd>
           </>
@@ -427,9 +435,9 @@ export default function OutlookView({ meta, outlook }: Props) {
           <p>
             Revisions move the price on release day, and after that they are priced in. The{" "}
             <Link className="underline hover:text-ink" href="/wasde/">
-              This WASDE
+              This WASDE page
             </Link>{" "}
-            page shows the latest revisions and the historical average reaction to each one, with a calculator for your
+            shows the latest revisions and the historical average reaction to each one, with a calculator for your
             own what-ifs. Next report: {meta.next_wasde ? dateLabel(meta.next_wasde, "long") : "see USDA calendar"}.
           </p>
         </div>

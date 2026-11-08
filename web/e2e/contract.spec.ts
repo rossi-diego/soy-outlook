@@ -29,6 +29,7 @@ test("range labels carry the published hit rates, never a fixed '8 in 10'", asyn
     await expect(card.getByTestId("label80")).toContainText(label80);
     await expect(card.getByTestId("held95")).toHaveText(held(h.coverage, "cover95"));
     await expect(card.getByText("below 80%")).toHaveCount(h.coverage.warn80 ? 1 : 0);
+    await expect(card.getByText("below 95%")).toHaveCount(h.coverage.warn95 ? 1 : 0);
   }
   const h3 = (outlook.horizons as { h: number; coverage: Cov }[]).find((h) => h.h === 3)!;
   await expect(page.getByTestId("hero-range-label")).toHaveText(
@@ -57,6 +58,9 @@ test("FOB headline is an explicit sum with the stale, illustrative default premi
     await expect(page.getByTestId(`horizon-${h.h}`).getByTestId("premium-band")).toContainText(
       `${signed0(toUsdT(h.premium_reference.p10))} / ${signed0(toUsdT(h.premium_reference.p90))} USD/t`,
     );
+    await expect(page.getByTestId(`horizon-${h.h}`).getByTestId("premium-band")).toContainText(
+      `${signed0(toUsdT(h.premium_reference.median))} USD/t (${h.premium_reference.note})`,
+    );
   }
   // Entering a quote replaces "assumed" and drops the stale and illustrative badges; CBOT units drop the FOB rows.
   await page.getByLabel(/Paranaguá premium/).fill("120");
@@ -73,7 +77,7 @@ test("what-if shows an 80% prediction interval from the published covariance", a
   // With no surprise entered, the interval is the residual noise alone: ±1.2816 × resid sd.
   const half = (1.2815515655446004 * r.resid_sd_usd_t).toFixed(1);
   const pi = page.getByTestId("pi80");
-  await expect(pi).toContainText(`−${half} to ${half} USD/t`);
+  await expect(pi).toContainText(`−${half} to +${half} USD/t`);
   await expect(pi).toContainText("direction unclear");
   const flagged = r.items.filter((it: { weak: boolean; wrong_sign: boolean }) => it.weak || it.wrong_sign).length;
   await expect(page.locator('[data-flagged="true"]')).toHaveCount(flagged);

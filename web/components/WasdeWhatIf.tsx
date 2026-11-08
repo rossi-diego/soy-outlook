@@ -13,7 +13,7 @@ const RANGE: Record<string, number> = { pp: 3, Mt: 10 };
 /** Two-sided 80% normal quantile. */
 const Z80 = 1.2815515655446004;
 /** One decimal with a true minus sign. */
-const fmt1 = (v: number) => (v < 0 ? `−${num(-v, 1)}` : num(v, 1));
+const fmt1 = (v: number) => (v < 0 ? `−${num(-v, 1)}` : v > 0 ? `+${num(v, 1)}` : num(v, 1));
 
 /**
  * 80% prediction interval of the release-day move for a vector of surprises m:
