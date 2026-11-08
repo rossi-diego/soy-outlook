@@ -276,10 +276,7 @@ def test_cli_offline_flag_does_not_leak_into_the_environment(tmp_path, monkeypat
 def test_cli_ingest_offline_on_fixtures(tmp_path, monkeypatch):
     import shutil
 
-    from soyforecast.config import ROOT
-
     shutil.copytree(FIXTURES, tmp_path / "data" / "bronze")
-    shutil.copytree(ROOT / "data" / "seed", tmp_path / "data" / "seed")
     monkeypatch.setenv("SOY_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SOY_WEB_DATA_DIR", str(tmp_path / "web"))
     res = CliRunner().invoke(app, ["--json-logs", "ingest", "--offline"])

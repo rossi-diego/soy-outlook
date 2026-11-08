@@ -72,24 +72,6 @@ def ingest(offline: bool = OFFLINE_OPTION, update_pin: bool = UPDATE_PIN_OPTION)
     _guarded(lambda: do_ingest(settings, update_pin=update_pin))
 
 
-RAW_PREMIUM_OPTION = typer.Option(..., help="Private daily premium export (date, premium_c_bu).")
-
-
-@app.command("derive-premium")
-def derive_premium(
-    raw: Path = RAW_PREMIUM_OPTION,
-    offline: bool = typer.Option(True, help="Use cached bronze files only."),
-) -> None:
-    """Rebuild data/seed/paranagua_premium_monthly.{csv,meta.json} from a raw export.
-
-    The raw file stays outside the repository; only the derived table and card are committed.
-    """
-    from soyforecast.pipeline import derive_premium as do_derive
-
-    settings = _settings(offline)
-    _guarded(lambda: do_derive(settings, raw))
-
-
 def _github_output(**values: object) -> None:
     """Expose step outputs to GitHub Actions (no-op outside a workflow)."""
     import os

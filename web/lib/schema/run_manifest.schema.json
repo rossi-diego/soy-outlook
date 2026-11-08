@@ -32,52 +32,6 @@
       "title": "GitState",
       "type": "object"
     },
-    "InputFile": {
-      "additionalProperties": false,
-      "properties": {
-        "file": {
-          "type": "string"
-        },
-        "sha256": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "bytes": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "snapshot": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "file",
-        "sha256",
-        "bytes",
-        "snapshot"
-      ],
-      "title": "InputFile",
-      "type": "object"
-    },
     "LockState": {
       "additionalProperties": false,
       "properties": {
@@ -113,20 +67,12 @@
         },
         "ptax": {
           "$ref": "#/$defs/SeriesInput"
-        },
-        "premium_table": {
-          "$ref": "#/$defs/InputFile"
-        },
-        "premium_card": {
-          "$ref": "#/$defs/InputFile"
         }
       },
       "required": [
         "wasde",
         "prices",
-        "ptax",
-        "premium_table",
-        "premium_card"
+        "ptax"
       ],
       "title": "RunInputs",
       "type": "object"

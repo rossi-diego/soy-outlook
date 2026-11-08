@@ -4,7 +4,6 @@ import { expect, type Page, test } from "@playwright/test";
 // so a hard-coded "8 in 10" or a stale hit rate cannot ship.
 
 const pct = (v: number) => `${(v * 100).toFixed(0)}%`;
-const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const signed0 = (v: number) => (v > 0 ? `+${Math.round(v)}` : v < 0 ? `−${Math.round(Math.abs(v))}` : "0");
 
 type Split = { years: string; cover80: number; cover95: number; n: number } | null;
@@ -37,37 +36,90 @@ test("range labels carry the published hit rates, never a fixed '8 in 10'", asyn
   );
 });
 
-test("FOB headline is an explicit sum with the stale, illustrative default premium", async ({ page }) => {
+test("no premium is shipped: CBOT-only units until the user types a premium, which is remembered", async ({ page }) => {
   const meta = await json(page, "meta.json");
   const outlook = await json(page, "outlook.json");
-  const d = outlook.premium_now_default;
+  const track = await json(page, "track_record.json");
+  const manifest = await json(page, "run_manifest.json");
+  // The contract carries no premium data at all (owner decision: no licensed source).
+  for (const doc of [meta, outlook, track, manifest.inputs])
+    expect(Object.keys(doc).filter((k) => /premium|fob/i.test(k))).toEqual([]);
+  for (const h of outlook.horizons) expect(Object.keys(h).filter((k) => /premium/i.test(k))).toEqual([]);
+  expect((await page.request.get("/paranagua_premium_monthly.csv")).status()).toBe(404);
+  expect((await page.request.get("/data/paranagua_premium_monthly.csv")).status()).toBe(404);
+
   await page.goto("/");
   const headline = page.getByTestId("headline");
-  await expect(headline).toContainText(`assumed premium ${signed0(d.median)}¢/bu`);
-  await expect(headline).toContainText(new RegExp(`median ${esc(d.years)}; data end`));
-  await expect(headline).toContainText("= FOB");
-  await expect(headline.getByText("stale", { exact: true })).toHaveCount(meta.premium_source.stale ? 1 : 0);
-  await expect(headline.getByText("illustrative", { exact: true })).toHaveCount(d.illustrative ? 1 : 0);
-  await expect(headline).toContainText("CBOT price risk only; premium and BRL held fixed");
-  // The slider thumb sits on the headline premium.
-  await expect(page.getByLabel(/Paranaguá premium/)).toHaveValue(String(d.median));
-  // Every card: the bridge line, the CBOT-only label and the premium p10-p90 in USD/t.
-  await expect(page.getByText(/^FOB = CBOT \+ your premium/)).toHaveCount(outlook.horizons.length);
+  const toUsdT = (cBu: number) => Math.round((cBu / 100) * meta.consts.bu_per_t).toLocaleString("en-US");
+  // Default (English): USD/t is CBOT only, labelled, with no FOB anywhere and an empty premium field.
+  await expect(page.getByRole("radio", { name: "CBOT USD/t" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "FOB USD/t" })).toHaveCount(0);
+  await expect(headline).toContainText(`= $${toUsdT(outlook.last.c_bu)}/t`);
+  await expect(headline).toContainText("(CBOT only, excl. premium)");
+  await expect(headline).not.toContainText("FOB");
+  const input = page.getByLabel(/Paranaguá premium/);
+  await expect(input).toHaveValue("");
+  await expect(page.getByTestId("premium-help")).toContainText(
+    "Enter your broker's Paranaguá premium in ¢/bu vs the named CBOT contract",
+  );
   for (const h of outlook.horizons) {
-    const toUsdT = (v: number) => (v / 100) * meta.consts.bu_per_t;
-    await expect(page.getByTestId(`horizon-${h.h}`).getByTestId("premium-band")).toContainText(
-      `${signed0(toUsdT(h.premium_reference.p10))} / ${signed0(toUsdT(h.premium_reference.p90))} USD/t`,
-    );
-    await expect(page.getByTestId(`horizon-${h.h}`).getByTestId("premium-band")).toContainText(
-      `${signed0(toUsdT(h.premium_reference.median))} USD/t (${h.premium_reference.note})`,
-    );
+    const card = page.getByTestId(`horizon-${h.h}`);
+    await expect(card.getByTestId("basis-label")).toHaveText("CBOT only, excl. premium");
+    await expect(card.getByTestId("premium-row")).toHaveCount(0);
   }
-  // Entering a quote replaces "assumed" and drops the stale and illustrative badges; CBOT units drop the FOB rows.
-  await page.getByLabel(/Paranaguá premium/).fill("120");
-  await expect(headline).toContainText("your premium +120¢/bu");
-  await expect(headline.getByText("illustrative", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/^FOB = CBOT \+ your premium/)).toHaveCount(0);
+  await expect(page.getByText("About the premium")).toHaveCount(0);
+  await expect(page.getByText(/assumed premium|historical median/i)).toHaveCount(0);
+  await expect(page.getByText("stale", { exact: true })).toHaveCount(0);
+  // No FOB chart view without a premium; the decision panel and stress replay still render.
+  await expect(page.getByTestId("hero-chart").getByRole("radio", { name: "FOB shift" })).toHaveCount(0);
+  await expect(page.getByTestId("decision-footnote")).toBeVisible();
+  await expect(page.getByTestId("stress-replay")).toBeVisible();
+
+  // A bad value is rejected inline; a typed premium turns USD/t into FOB, with the sum shown.
+  await input.fill("abc");
+  await input.press("Enter");
+  await expect(page.getByTestId("premium-help")).toContainText("Enter a premium between");
+  await input.fill("+80");
+  await input.press("Enter");
+  await expect(page.getByRole("radio", { name: "FOB USD/t" })).toBeChecked();
+  await expect(headline).toContainText("your premium +80¢/bu");
+  await expect(headline).toContainText(`= FOB $${toUsdT(outlook.last.c_bu + 80)}/t`);
+  await expect(headline).toContainText("CBOT price risk only; your premium held fixed");
+  await expect(page.getByText(/^FOB = CBOT \+ your premium/)).toHaveCount(outlook.horizons.length);
+  await expect(page.getByTestId("horizon-1").getByTestId("premium-row")).toContainText("+80¢/bu");
+  await expect(page.getByTestId("hero-chart").getByRole("radio", { name: "FOB shift" })).toBeVisible();
+
+  // Remembered per viewer across a reload; Clear goes back to CBOT only and forgets it.
+  await page.reload();
+  await expect(page.getByLabel(/Paranaguá premium/)).toHaveValue("80");
+  await expect(headline).toContainText("your premium +80¢/bu");
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(headline).toContainText("(CBOT only, excl. premium)");
+  await page.reload();
+  await expect(page.getByLabel(/Paranaguá premium/)).toHaveValue("");
+  // CBOT ¢/bu drops the premium field and every FOB row.
   await page.getByRole("radio", { name: "CBOT ¢/bu" }).click();
-  await expect(page.getByText("CBOT price risk only; premium and BRL held fixed")).toHaveCount(0);
+  await expect(page.getByLabel(/Paranaguá premium/)).toHaveCount(0);
+});
+
+test("a throwing localStorage still lets the user enter a premium", async ({ page }) => {
+  await page.addInitScript(() => {
+    const boom = () => {
+      throw new Error("storage disabled");
+    };
+    Storage.prototype.getItem = boom;
+    Storage.prototype.setItem = boom;
+    Storage.prototype.removeItem = boom;
+  });
+  await page.goto("/");
+  const input = page.getByLabel(/Paranaguá premium/);
+  await expect(input).toHaveValue("");
+  await input.fill("50");
+  await input.press("Enter");
+  await expect(page.getByTestId("headline")).toContainText("your premium +50¢/bu");
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByTestId("headline")).toContainText("(CBOT only, excl. premium)");
 });
 
 test("what-if shows an 80% prediction interval from the published covariance", async ({ page }) => {

@@ -10,6 +10,7 @@ import RadioGroup from "@/components/RadioGroup";
 import StressReplay from "@/components/StressReplay";
 import { axisCommon, baseOption, isNarrow, type Tokens } from "@/lib/chart";
 import { type Assumptions, convert, decimalsFor, parseBasis, parseFx, premiumUsdT, type Unit } from "@/lib/format";
+import { parsePremium, premiumInputText, usePremium } from "@/lib/premium";
 import type { Horizon, Meta, Outlook } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
 
@@ -36,6 +37,7 @@ function HorizonCard({
   a,
   origin,
   local,
+  fob,
 }: {
   h: Horizon;
   unit: Unit;
@@ -43,12 +45,13 @@ function HorizonCard({
   origin: string;
   /** A port-to-interior discount is applied: the R$ value is an estimate at the user's location. */
   local: boolean;
+  /** The user entered a premium, so USD/t and R$/sack are FOB; otherwise they are CBOT only. */
+  fob: boolean;
 }) {
-  const { t, f, d } = useI18n();
+  const { t, f } = useI18n();
   const c = (v: number) => convert(v, unit, a);
   const isRw = h.model === "rw";
   const cov = h.coverage;
-  const ref = h.premium_reference;
   const usdT = (v: number) => premiumUsdT(v, a.buPerT);
   const ci80 = f.ci(cov.validation, "80");
   const ci95 = f.ci(cov.validation, "95", false);
@@ -85,7 +88,11 @@ function HorizonCard({
         <p className="tabular text-2xl font-semibold tracking-tight">
           {f.num(c(h.q100), dec)} – {f.num(c(h.q900), dec)}
         </p>
-        {unit !== "c_bu" && <p className="mt-0.5 text-xs text-muted">{cbotOnly(t)}</p>}
+        {unit !== "c_bu" && (
+          <p className="mt-0.5 text-xs text-muted" data-testid="basis-label">
+            {basisNote(t, unit, fob)}
+          </p>
+        )}
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
         <dt className="text-ink-2">{t("Central", "Central")}</dt>
@@ -137,21 +144,13 @@ function HorizonCard({
               : `${t("price series stays on", "a série de preços fica em")} ${ct.front_at_origin}`}
           </span>
         </dd>
-        {unit !== "c_bu" && (
+        {unit !== "c_bu" && fob && (
           <>
-            <dt className="text-ink-2">{t("Premium used", "Prêmio usado")}</dt>
-            <dd className="tabular text-right text-ink-2">
+            <dt className="text-ink-2">{t("Your premium", "Seu prêmio")}</dt>
+            <dd className="tabular text-right text-ink-2" data-testid="premium-row">
               {f.signed0(a.premium)}¢/bu
               <span className="block text-xs text-muted">
-                {f.signed0(usdT(a.premium))} USD/t{t(", held flat", ", mantido constante")}
-              </span>
-            </dd>
-            <dt className="text-ink-2">{t("Premium p10–p90", "Prêmio p10–p90")}</dt>
-            <dd className="tabular text-right text-ink-2" data-testid="premium-band">
-              {f.signed0(usdT(ref.p10))} / {f.signed0(usdT(ref.p90))} USD/t
-              <span className="block text-xs text-muted">
-                {t(`${f.monthAbbr(ref.month)} shipments`, `Embarques de ${f.monthAbbr(ref.month)}`)} {ref.years}:{" "}
-                {f.signed0(usdT(ref.median))} USD/t ({d(ref.note)})
+                {f.signed0(usdT(a.premium))} USD/t{t(", your input, held flat", ", informado por você, mantido constante")}
               </span>
             </dd>
             {unit === "brl_sack" && local && (
@@ -166,7 +165,7 @@ function HorizonCard({
           </>
         )}
       </dl>
-      <p className="text-xs leading-relaxed text-ink-2">{fobBridge(t)}</p>
+      {unit !== "c_bu" && fob && <p className="text-xs leading-relaxed text-ink-2">{fobBridge(t)}</p>}
       <p className="mt-auto border-t border-line pt-3 text-xs leading-relaxed text-muted">
         {t(
           <>
@@ -186,8 +185,16 @@ function HorizonCard({
   );
 }
 
-// P1 phase 1: the band is CBOT risk only; premium and FX uncertainty are not in it.
-const cbotOnly = (t: T) => t("CBOT price risk only; premium and BRL held fixed", "Só o risco de preço da CBOT; prêmio e câmbio fixos");
+// P1 phase 1: the band is CBOT risk only; premium and FX uncertainty are not in it. With no
+// premium entered (no premium data ships with the site), USD/t and R$/sack are CBOT alone.
+const basisNote = (t: T, unit: Unit, fob: boolean) =>
+  fob
+    ? unit === "brl_sack"
+      ? t("CBOT price risk only; your premium and BRL held fixed", "Só o risco de preço da CBOT; seu prêmio e câmbio fixos")
+      : t("CBOT price risk only; your premium held fixed", "Só o risco de preço da CBOT; seu prêmio fixo")
+    : unit === "brl_sack"
+      ? t("CBOT only, excl. premium; BRL held fixed", "Só CBOT, sem prêmio; câmbio fixo")
+      : t("CBOT only, excl. premium", "Só CBOT, sem prêmio");
 const fobBridge = (t: T) =>
   t(
     "FOB = CBOT + your premium; CBOT unchanged, FOB changes only through the premium you enter.",
@@ -206,12 +213,14 @@ const issuedLabel = (t: T, month: string, days: number) =>
 type HistSpan = "18m" | "3y";
 const HIST_MONTHS: Record<HistSpan, number> = { "18m": 18, "3y": 36 };
 
-function useUnitOptions(): { id: Unit; label: string; short: string }[] {
+function useUnitOptions(fob: boolean): { id: Unit; label: string; short: string }[] {
   const { t } = useI18n();
   // Short labels on phones (P27) are a substring of the full name, which stays the accessible name.
+  // USD/t and R$/sack are FOB only once the user enters a premium; until then they are CBOT only.
+  const basis = fob ? "FOB" : "CBOT";
   return [
-    { id: "usd_t", label: "FOB USD/t", short: "USD/t" },
-    { id: "brl_sack", label: t("FOB R$/sack", "FOB R$/saca"), short: t("R$/sack", "R$/saca") },
+    { id: "usd_t", label: `${basis} USD/t`, short: "USD/t" },
+    { id: "brl_sack", label: t(`${basis} R$/sack`, `${basis} R$/saca`), short: t("R$/sack", "R$/saca") },
     { id: "c_bu", label: "CBOT ¢/bu", short: "¢/bu" },
   ];
 }
@@ -221,8 +230,22 @@ export default function OutlookView({ meta, outlook }: Props) {
   // R$/sack is the default unit only under pt-BR (P20); an explicit choice wins in either locale.
   const [unitChoice, setUnitChoice] = useState<Unit | null>(null);
   const unit: Unit = unitChoice ?? (pt ? "brl_sack" : "usd_t");
-  const unitOptions = useUnitOptions();
-  const [premiumOverride, setPremiumOverride] = useState<number | null>(null);
+  // The premium is the user's input only: empty by default, kept per viewer (lib/premium.ts).
+  const [premiumInput, setPremiumInput] = usePremium();
+  const fob = premiumInput !== null;
+  const premium = premiumInput ?? 0;
+  const unitOptions = useUnitOptions(fob);
+  const [premiumText, setPremiumText] = useState<string | null>(null);
+  const [premiumError, setPremiumError] = useState<string | null>(null);
+  const premiumShown = premiumText ?? premiumInputText(premiumInput, f.loc);
+  const commitPremium = (text: string = premiumShown) => {
+    const r = parsePremium(text, f.loc);
+    if (r.ok) {
+      setPremiumInput(r.value);
+      setPremiumText(null);
+      setPremiumError(null);
+    } else setPremiumError(r.error);
+  };
   const fxDefault = Math.round(meta.fx_default.value * 100) / 100;
   // FX is typed as text and parsed on blur, so a half-typed "5," never snaps back to the default.
   const [fx, setFx] = useState<number>(fxDefault);
@@ -253,28 +276,22 @@ export default function OutlookView({ meta, outlook }: Props) {
   const [chartView, setChartView] = useState<"cbot" | "fob">("cbot");
 
   const last = outlook.last.c_bu;
-  const local = unit === "brl_sack" && basis > 0;
-  const base = { fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg, basis: unit === "brl_sack" ? basis : 0 };
+  // The port-to-interior discount only makes sense on a FOB price, so it needs a premium too.
+  const basisOn = unit === "brl_sack" && fob;
+  const local = basisOn && basis > 0;
+  const base = { fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg, basis: basisOn ? basis : 0 };
   // One premium for the headline and every horizon: with CBOT unchanged, FOB is unchanged.
-  const premiumDefault = outlook.premium_now_default;
-  const usingDefault = premiumOverride === null;
-  const premium = premiumOverride ?? premiumDefault.median;
-  const stale = usingDefault && meta.premium_source.stale;
   const championAllRw = outlook.horizons.every((h) => h.model === "rw");
   const h3 = outlook.horizons.find((h) => h.h === 3) ?? outlook.horizons[0];
   const todayA: Assumptions = { ...base, premium };
-  const defaultMonth = f.monthAbbr(premiumDefault.month);
   const issued = issuedLabel(t, f.monthAbbr(Number(meta.latest_wasde.month.slice(5, 7))), meta.days_since_report);
   const originNote = `${issued}${t("; ranges are calibrated at release-day closes.", "; as faixas são calibradas nos fechamentos dos dias de divulgação.")}`;
-  const staleTitle = t(
-    `Premium source ends ${f.date(meta.premium_source.last)}, ${meta.premium_source.days_since_last} days before this forecast (stale after ${meta.premium_source.stale_after_days}).`,
-    `A fonte do prêmio termina em ${f.date(meta.premium_source.last)}, ${meta.premium_source.days_since_last} dias antes desta previsão (desatualizada após ${meta.premium_source.stale_after_days}).`,
-  );
   const fobWord = local ? t("est. local price", "preço estimado na sua praça") : "FOB";
 
   // Chart (P21): CBOT ¢/bu by default. The FOB view is the same picture shifted by the one flat
-  // premium (and scaled by FX for R$/sack): a constant shift, never a historical FOB series.
-  const fobView = chartView === "fob" && unit !== "c_bu";
+  // premium the user typed (and scaled by FX for R$/sack): a constant shift, never a historical
+  // FOB series. Without a premium there is no FOB view.
+  const fobView = chartView === "fob" && unit !== "c_bu" && fob;
   const chartUnit: Unit = fobView ? unit : "c_bu";
   const chartA: Assumptions = { premium: fobView ? premium : 0, fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg, basis: fobView ? base.basis : 0 };
   const option = useCallback(
@@ -421,23 +438,22 @@ export default function OutlookView({ meta, outlook }: Props) {
             <>
               {t("CBOT soybeans closed at", "A soja na CBOT fechou a")} <strong className="text-ink">{f.money(last, "c_bu")}</strong>.
             </>
-          ) : (
+          ) : !fob ? (
             <>
-              CBOT <strong className="text-ink">{f.money(last, "c_bu")}</strong> +{" "}
-              {usingDefault ? t("assumed premium", "prêmio assumido") : t("your premium", "seu prêmio")}{" "}
-              <strong className="text-ink">{f.signed0(premium)}¢/bu</strong>
-              {usingDefault && (
+              {t("CBOT soybeans closed at", "A soja na CBOT fechou a")} <strong className="text-ink">{f.money(last, "c_bu")}</strong>{" "}
+              = <strong className="text-ink">{f.money(convert(last, unit, todayA), unit)}</strong>
+              {unit === "brl_sack" && (
                 <span className="text-base">
                   {" "}
-                  ({t(`${defaultMonth} median`, `mediana de ${defaultMonth}`)} {premiumDefault.years};{" "}
-                  {t("data end", "dados até")} {f.date(premiumDefault.source_last)})
+                  {t("at", "a")} {f.num(fx, 2)} BRL/USD
                 </span>
-              )}
-              {stale && (
-                <Badge warn title={staleTitle}>
-                  {t("stale", "desatualizado")}
-                </Badge>
-              )}
+              )}{" "}
+              <span className="text-base">({t("CBOT only, excl. premium", "só CBOT, sem prêmio")})</span>.
+            </>
+          ) : (
+            <>
+              CBOT <strong className="text-ink">{f.money(last, "c_bu")}</strong> + {t("your premium", "seu prêmio")}{" "}
+              <strong className="text-ink">{f.signed0(premium)}¢/bu</strong>
               {local && (
                 <>
                   {" "}
@@ -451,11 +467,6 @@ export default function OutlookView({ meta, outlook }: Props) {
                   {t("at", "a")} {f.num(fx, 2)} BRL/USD
                 </span>
               )}
-              {usingDefault && premiumDefault.illustrative && (
-                <Badge title={t("Illustrative until you enter a premium quote below", "Ilustrativo até você informar uma cotação de prêmio abaixo")}>
-                  {t("illustrative", "ilustrativo")}
-                </Badge>
-              )}
               .
             </>
           )}{" "}
@@ -465,7 +476,7 @@ export default function OutlookView({ meta, outlook }: Props) {
           </span>{" "}
           {t("is", "vai de")} <strong className="text-ink">{range.lo}</strong> {t("to", "a")}{" "}
           <strong className="text-ink">{range.hi}</strong>
-          {unit !== "c_bu" && <span className="text-base"> ({cbotOnly(t)})</span>}.
+          {unit !== "c_bu" && fob && <span className="text-base"> ({basisNote(t, unit, fob)})</span>}.
         </p>
         <p className="max-w-3xl text-sm text-muted">
           {issued}.{" "}
@@ -517,45 +528,49 @@ export default function OutlookView({ meta, outlook }: Props) {
           <RadioGroup legend={t("Price unit", "Unidade de preço")} value={unit} onChange={setUnitChoice} options={unitOptions} />
         </div>
         {unit !== "c_bu" && (
-          <div className="min-w-64 flex-1 space-y-1">
-            <label htmlFor="premium" className="flex justify-between text-xs font-medium uppercase tracking-wide text-muted">
-              <span>{t("Paranaguá premium (your input)", "Prêmio de Paranaguá (você informa)")}</span>
-              <span className="tabular normal-case text-ink">
-                {usingDefault ? `${t(`${defaultMonth} median`, `mediana de ${defaultMonth}`)} ${f.signed0(premium)}¢/bu` : `${f.signed0(premium)}¢/bu`}
-                {stale && (
-                  <Badge warn title={staleTitle}>
-                    {t("stale", "desatualizado")}
-                  </Badge>
-                )}
-              </span>
+          <div className="w-full max-w-sm space-y-1 sm:w-72" data-testid="premium-input">
+            <label htmlFor="premium" className="text-xs font-medium uppercase tracking-wide text-muted">
+              {t("Paranaguá premium, ¢/bu (optional)", "Prêmio de Paranaguá, ¢/bu (opcional)")}
             </label>
-            <input
-              id="premium"
-              type="range"
-              min={-100}
-              max={250}
-              step={1}
-              value={premium}
-              aria-valuetext={`${f.signed0(premium)} ${t("cents per bushel", "centavos por bushel")}${
-                usingDefault ? t(`, ${defaultMonth} median (default)`, `, mediana de ${defaultMonth} (padrão)`) : ""
-              }`}
-              onChange={(e) => setPremiumOverride(Number(e.target.value))}
-              className="w-full accent-[var(--accent)]"
-            />
-            <p className="text-xs text-muted">
-              {t(
-                `Default: the ${defaultMonth} median, ${premiumDefault.years}, held flat for every horizon. Last quote in the source: ${f.signed0(
-                  outlook.premium_last.c_bu,
-                )}¢/bu on ${f.date(outlook.premium_last.date)}, ${meta.premium_source.days_since_last} days ago.`,
-                `Padrão: a mediana de ${defaultMonth}, ${premiumDefault.years}, mantida constante em todos os horizontes. Última cotação na fonte: ${f.signed0(
-                  outlook.premium_last.c_bu,
-                )}¢/bu em ${f.date(outlook.premium_last.date)}, há ${meta.premium_source.days_since_last} dias.`,
-              )}{" "}
-              {!usingDefault && (
-                <button type="button" className="underline hover:text-ink" onClick={() => setPremiumOverride(null)}>
-                  {t("Reset", "Restaurar")}
+            <div className="flex gap-2">
+              <input
+                id="premium"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder={t("e.g. 80 or -12", "ex.: 80 ou -12")}
+                value={premiumShown}
+                onChange={(e) => setPremiumText(e.target.value)}
+                onBlur={() => commitPremium()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitPremium();
+                }}
+                aria-invalid={premiumError !== null}
+                aria-describedby="premium-help"
+                className={`tabular w-full rounded-md border bg-surface px-2 py-1.5 ${premiumError ? "border-warn-line" : "border-line"}`}
+              />
+              {fob && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md border border-line px-2.5 text-xs text-ink-2 hover:bg-surface-2 hover:text-ink"
+                  onClick={() => commitPremium("")}
+                >
+                  {t("Clear", "Limpar")}
                 </button>
               )}
+            </div>
+            <p
+              id="premium-help"
+              className={`text-xs ${premiumError ? "font-medium text-warn" : "text-muted"}`}
+              role={premiumError ? "alert" : undefined}
+              data-testid="premium-help"
+            >
+              {premiumError
+                ? premiumError
+                : t(
+                    "Enter your broker's Paranaguá premium in ¢/bu vs the named CBOT contract. Empty = CBOT only; kept in this browser only.",
+                    "Informe o prêmio de Paranaguá do seu corretor em ¢/bu sobre o contrato CBOT indicado. Vazio = só CBOT; fica salvo só neste navegador.",
+                  )}
             </p>
           </div>
         )}
@@ -590,7 +605,7 @@ export default function OutlookView({ meta, outlook }: Props) {
             )}
           </div>
         )}
-        {unit === "brl_sack" && (
+        {basisOn && (
           <div className="w-56 space-y-1">
             <label htmlFor="basis" className="text-xs font-medium uppercase tracking-wide text-muted">
               {t("Port-to-interior discount (R$/sack)", "Desconto porto-interior (R$/sc)")}
@@ -625,7 +640,7 @@ export default function OutlookView({ meta, outlook }: Props) {
 
       <section className="grid gap-4 md:grid-cols-3" aria-label={t("Forecast by horizon", "Previsão por horizonte")}>
         {outlook.horizons.map((h) => (
-          <HorizonCard key={h.h} h={h} unit={unit} a={todayA} origin={originNote} local={local} />
+          <HorizonCard key={h.h} h={h} unit={unit} a={todayA} origin={originNote} local={local} fob={fob} />
         ))}
       </section>
 
@@ -638,7 +653,7 @@ export default function OutlookView({ meta, outlook }: Props) {
             {t(": recent closes and the tested ranges ahead", ": fechamentos recentes e as faixas testadas à frente")}
           </h2>
           <div className="flex flex-wrap gap-2">
-            {unit !== "c_bu" && (
+            {unit !== "c_bu" && fob && (
               <RadioGroup
                 size="sm"
                 legend={t("Chart unit", "Unidade do gráfico")}
@@ -723,18 +738,20 @@ export default function OutlookView({ meta, outlook }: Props) {
               one or two past errors each, so read it as rough; amber marks a range that held more than 5 points below its
               nominal level. The dashed &ldquo;no change&rdquo; line is the central forecast. Hover a whisker for its limits;
               the hit rate each range achieved is on the cards above. Ranges come from the errors of the last{" "}
-              {meta.calibration_window} out-of-sample forecasts. FOB is (CBOT + premium) × {f.num(meta.consts.bu_per_t, 4)}{" "}
-              bu/t ÷ 100; reais per sack are port FOB at your exchange rate (FOB includes fobbing, the port loading cost), not
-              a farm-gate price.
+              {meta.calibration_window} out-of-sample forecasts. FOB is (CBOT + your premium) × {f.num(meta.consts.bu_per_t, 4)}{" "}
+              bu/t ÷ 100; with no premium entered, USD/t and R$/sack are the CBOT price alone. Reais per sack use your
+              exchange rate; with a premium they are port FOB (which includes fobbing, the port loading cost), not a farm-gate
+              price.
             </>,
             <>
               Marcas em 1, 3 e 6 meses: grossa = faixa nominal de 80%, fina tracejada = faixa nominal de 95%, cujas caudas se
               apoiam em um ou dois erros passados cada, então leia-a como aproximada; âmbar marca uma faixa que acertou mais de
               5 pontos abaixo do seu nível nominal. A linha tracejada &ldquo;sem variação&rdquo; é a previsão central. Passe o
               cursor sobre uma marca para ver os limites; a taxa de acerto de cada faixa está nos cartões acima. As faixas vêm
-              dos erros das últimas {meta.calibration_window} previsões fora da amostra. FOB = (CBOT + prêmio) ×{" "}
-              {f.num(meta.consts.bu_per_t, 4)} bu/t ÷ 100; reais por saca são valor FOB no porto ao seu câmbio (o FOB inclui
-              o fobbing, custo de embarque no porto), não preço na fazenda.
+              dos erros das últimas {meta.calibration_window} previsões fora da amostra. FOB = (CBOT + o seu prêmio) ×{" "}
+              {f.num(meta.consts.bu_per_t, 4)} bu/t ÷ 100; sem prêmio informado, USD/t e R$/saca são só o preço da CBOT. Reais
+              por saca usam o seu câmbio; com prêmio, são valor FOB no porto (que inclui o fobbing, custo de embarque no
+              porto), não preço na fazenda.
             </>,
           )}
         </p>
@@ -742,41 +759,7 @@ export default function OutlookView({ meta, outlook }: Props) {
 
       <StressReplay stress={outlook.stress} buPerT={meta.consts.bu_per_t} />
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="card space-y-2 p-5 text-sm leading-relaxed text-ink-2">
-          <h2 className="text-base font-semibold text-ink">{t("About the premium", "Sobre o prêmio")}</h2>
-          <p>
-            {t(
-              `The Paranaguá premium has no free, licensed public feed. The default is a monthly median derived from a terminal export the author holds (${f.date(
-                meta.premium_source.first,
-              )} – ${f.date(meta.premium_source.last)}; original source and CBOT contract not recorded). Only the 12 monthly statistics are published. Last quote in the source: ${f.signed0(
-                outlook.premium_last.c_bu,
-              )}¢/bu on ${f.date(outlook.premium_last.date)}, ${meta.premium_source.days_since_last} days before this forecast.`,
-              `O prêmio de Paranaguá não tem fonte pública gratuita e licenciada. O padrão é uma mediana mensal derivada de uma exportação de terminal que o autor possui (${f.date(
-                meta.premium_source.first,
-              )} – ${f.date(meta.premium_source.last)}; fonte original e contrato CBOT não registrados). Só as 12 estatísticas mensais são publicadas. Última cotação na fonte: ${f.signed0(
-                outlook.premium_last.c_bu,
-              )}¢/bu em ${f.date(outlook.premium_last.date)}, ${meta.premium_source.days_since_last} dias antes desta previsão.`,
-            )}
-          </p>
-          <p>
-            {t("For reference only, the median by shipment month", "Apenas como referência, a mediana por mês de embarque")} (
-            {d(outlook.horizons[0]?.premium_reference.note ?? "")}):{" "}
-            {outlook.horizons
-              .map(
-                (h) =>
-                  `${f.monthAbbr(h.premium_reference.month)} ${f.signed0(h.premium_reference.median)} (p10–p90 ${f.signed0(
-                    h.premium_reference.p10,
-                  )}/${f.signed0(h.premium_reference.p90)}, ${h.premium_reference.years})`,
-              )
-              .join(", ")}{" "}
-            ¢/bu.{" "}
-            {t(
-              "The forecast holds one premium flat instead. Replace it with your broker's quote.",
-              "A previsão mantém um único prêmio constante. Substitua pela cotação do seu corretor.",
-            )}
-          </p>
-        </div>
+      <section>
         <div className="card space-y-2 p-5 text-sm leading-relaxed text-ink-2">
           <h2 className="text-base font-semibold text-ink">{t("What the WASDE does", "O que o WASDE faz")}</h2>
           <p>

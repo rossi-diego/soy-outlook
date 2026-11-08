@@ -43,7 +43,6 @@ from soyforecast.config import (
     RANGE_METHODS,
     RV_WINDOW,
     SECONDARY_LOSS,
-    STALE_PREMIUM_DAYS,
     VALIDATION_END,
     VALIDATION_START,
     Settings,
@@ -101,26 +100,6 @@ def _r(x: float, d: int = 2) -> float | None:
     return None if x is None or not np.isfinite(x) else round(float(x), d)
 
 
-def _premium_source(a: Artefacts) -> dict[str, Any]:
-    """What the site needs to label the premium default honestly (P8/P9)."""
-    anchor = pd.Timestamp(a.live["anchor_date"])
-    card = a.premium.card
-    return {
-        "kind": "derived monthly table",
-        "name": card["name"],
-        "unit": card["unit"],
-        "contract_convention": card["contract_convention"],
-        "method": card["method"],
-        "licence": card["licence"],
-        "first": card["series"]["first"],
-        "last": card["series"]["last"],
-        "valid_until": card["valid_until"],
-        "days_since_last": int((anchor - a.premium.last_date).days),
-        "stale_after_days": STALE_PREMIUM_DAYS,
-        "stale": a.premium.is_stale(anchor),
-    }
-
-
 def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
     release = pd.Timestamp(a.live["release_date"])
@@ -152,7 +131,6 @@ def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
             "date": a.ptax.index[-1],
             "source": "Banco Central do Brasil, PTAX selling rate (SGS 1)",
         },
-        "premium_source": _premium_source(a),
         "splits": {
             "oos_start": OOS_START,
             "validation": [VALIDATION_START, VALIDATION_END],
@@ -244,34 +222,16 @@ def _coverage(a: Artefacts, model: str, h: int) -> dict[str, Any]:
     return out
 
 
-def _premium_row(a: Artefacts, month: int) -> dict[str, Any]:
-    stat = a.premium.stat
-    return {
-        "month": month,
-        "median": _r(stat(month, "median"), 0),
-        "p10": _r(stat(month, "p10"), 0),
-        "p90": _r(stat(month, "p90"), 0),
-        "years": a.premium.years_label(month),
-        "n_years": int(stat(month, "n_years")),
-    }
-
-
 def build_outlook(a: Artefacts) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
     horizons = []
     for row in a.forecast:
-        target = pd.Timestamp(row["target_date"])
         h = int(row["h"])
         horizons.append(
             {
                 **row,
                 "central": _r(float(a.live["p0_c_bu"]) * math.exp(float(row["mean_logret"]))),
                 "coverage": _coverage(a, str(row["model"]), h),
-                # Reference text only: the default premium is held flat at premium_now_default.
-                "premium_reference": {
-                    **_premium_row(a, int(target.month)),
-                    "note": "historical median, not validated",
-                },
             }
         )
     weekly = a.prices[a.prices.index >= "2016-01-01"].resample("W-FRI").last().dropna()
@@ -280,17 +240,7 @@ def build_outlook(a: Artefacts) -> dict[str, Any]:
         "last": {"date": anchor, "c_bu": _r(float(a.live["p0_c_bu"]))},
         "horizons": horizons,
         "history": [{"date": d, "c_bu": _r(v)} for d, v in weekly.items()],
-        "premium_last": {"date": a.premium.last_date, "c_bu": _r(a.premium.last_c_bu, 0)},
         "stress": a.stress,
-        # One premium for the headline and every horizon (P6): with CBOT unchanged, FOB
-        # changes only through the premium the user enters.
-        "premium_now_default": {
-            **_premium_row(a, int(anchor.month)),
-            "basis": "calendar-month median",
-            "source_last": a.premium.last_date,
-            "stale": a.premium.is_stale(anchor),
-            "illustrative": True,
-        },
     }
 
 
@@ -330,8 +280,6 @@ def build_track_record(a: Artefacts) -> dict[str, Any]:
     return {
         "metrics": metric_rows,
         "tests": a.tests.replace({np.nan: None}).to_dict(orient="records"),
-        "fob_illustrative": a.premium.card.get("fob_illustrative_frozen", {}).get("rows", []),
-        "fob_illustrative_note": a.premium.card.get("fob_illustrative_frozen", {}).get("note"),
         "interval_choice": a.interval_choice.replace({np.nan: None}).to_dict(orient="records"),
         # P2: the three pre-registered range methods; only `chosen` is published as the range.
         "range_choice": _records(a.range_choice),

@@ -58,7 +58,7 @@ test("390 px: WASDE and tests tables stack into labelled rows", async ({ page })
 
 test("390 px: segmented controls use short labels and keep their full names", async ({ page }) => {
   await page.goto("/");
-  const usd = page.getByRole("radio", { name: "FOB USD/t" });
+  const usd = page.getByRole("radio", { name: "CBOT USD/t" });
   await expect(usd).toBeChecked();
   const label = usd.locator("xpath=..");
   expect((await label.innerText()).trim()).toBe("USD/t");

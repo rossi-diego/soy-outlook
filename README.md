@@ -18,13 +18,13 @@ Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 
 - **Honest forecast evaluation.** Rolling-origin backtest on every WASDE since 2010 with point-in-time data, purging by date, a validation/holdout split and a model-selection rule fixed in advance (Clark-West, Holm-adjusted).
 - **A null result reported as a finding.** No model beats "no change" for CBOT soybeans; the site is built around that, showing ranges labelled by the hit rate they actually achieved instead of a direction call.
-- **Market-risk judgement.** FOB = CBOT + port premium, with the premium and FX as explicit inputs, a stale-input badge, and bands labelled "CBOT price risk only" until a joint band is earned.
+- **Market-risk judgement.** FOB = CBOT + port premium, with the premium a user input only (no unlicensed premium data is shipped), FX an explicit input, and bands labelled "CBOT price risk only" until a joint band is earned.
 - **Statistics that survive scrutiny.** A release-day event study with HC1 errors, a Holm adjustment, placebo, split-sample and roll-exclusion checks, and an 80% prediction interval in the what-if.
 - **Built for both audiences.** English by default (USD/t), with a client-side Portuguese (pt-BR) toggle that follows the browser language and switches to R$/saca, Brazilian number and date formats and an optional, user-supplied port-to-interior discount; numbers and caveats are identical in both, which an end-to-end test checks on every page.
 - **Accessible and mobile-first.** WCAG AA contrast, native radio groups, slider value text and a data table under every chart; an axe gate in CI (zero serious or critical violations on every route, both themes, both locales) and 390 px phone screenshots below.
 - **End-to-end engineering.** Typed Python package (bronze → silver → gold → publish), structured logging, 80%+ test coverage, a static Next.js site with a Playwright contract test that keeps the copy in line with the JSON, CI and Docker.
 
-![Outlook page: three cards with the 80% range for 1, 3 and 6 months in USD per tonne FOB, a no-direction-signal note, unit and premium controls, and a fan chart of the CBOT price](docs/screenshots/outlook-light.png)
+![Outlook page: three cards with the 80% range for 1, 3 and 6 months in USD per tonne, a no-direction-signal note, unit and premium controls, and a fan chart of the CBOT price](docs/screenshots/outlook-light.png)
 
 ---
 
@@ -34,7 +34,7 @@ The Paranaguá FOB price is the CBOT soybean price plus a port premium. This pro
 
 1. **A tested range, labelled by what it achieved.** Over 2016–2023, the 1-month 80% range held the actual price 80% of the time; on the holdout it held 84%. The 6-month 80% range held only 71% in validation, and the site says so next to it.
 2. **The size of a WASDE release-day move, and an honest read of what drives it.** The typical release-day move is about ±4.5 USD/t (1.0% of the price), and 1 report in 10 moves CBOT by more than ±11.6 USD/t. The revisions jointly explain 18% of those moves, but no single revision coefficient survives a Holm adjustment across the six tested (the strongest, US soybean stocks-to-use, has Holm p = 0.11), and that one is unstable: about −5.7 USD/t per pp in 2010–2017, −0.6 from 2018 (difference p = 0.001).
-3. **The premium and the exchange rate as explicit inputs.** That turns the CBOT range into FOB USD/t or R$ per sack. The default premium is one stale monthly median held flat, so "CBOT unchanged" means FOB unchanged.
+3. **The premium and the exchange rate as explicit inputs.** With no premium the ranges read in CBOT ¢/bu, CBOT USD/t or CBOT R$ per sack at PTAX, labelled "CBOT only, excl. premium". Type your broker's premium and they become FOB USD/t or FOB R$ per sack, with that one premium held flat, so "CBOT unchanged" means FOB unchanged. There is no premium default: no licensed source exists, so none is shipped.
 
 | CBOT, USD/t, mean absolute error | 1 month | 3 months | 6 months |
 |---|---|---|---|
@@ -76,7 +76,7 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 
 | Page | Question it answers |
 |---|---|
-| **Outlook** | How far could FOB / CBOT / R$ per sack move in 1, 3 and 6 months, within an 80% and a 95% range? Premium and FX are your inputs. A decision panel (side, tonnes, hedge ratio, USD or BRL) turns the ranges into downside vs selling today at the 1-in-10 and rough 1-in-40 levels, from a published 5–95% quantile grid; it is labelled illustrative, range-based not VaR, CBOT only with the basis unhedged, and shows the 6-month under-coverage inline. No target-price probability and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors). The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
+| **Outlook** | How far could CBOT (¢/bu, USD/t, R$ per sack) move in 1, 3 and 6 months, within an 80% and a 95% range? FX is your input, and FOB appears once you type a premium (empty by default, kept in your browser only). A decision panel (side, tonnes, hedge ratio, USD or BRL) turns the ranges into downside vs selling today at the 1-in-10 and rough 1-in-40 levels, from a published 5–95% quantile grid; it is labelled illustrative, range-based not VaR, CBOT only with the basis unhedged, and shows the 6-month under-coverage inline. No target-price probability and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors). The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
 | **This WASDE** | How far does CBOT usually move on release day? The empirical band (±4.5 USD/t typical, ±11.6 for 1 report in 10) is drawn around today's price with its out-of-sample hit rate: scored on earlier reports only, the 1-in-10 band held 90% of 86 reports in 2016–2023 and 97% of 29 in 2024+. What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. |
 | **Track record** | Did any model beat "no change"? A one-line verdict with the smallest effect the tests could have detected, where the 80% range missed (below vs above), a dot plot of each model's error against no change, and past forecasts against actual prices (holdout shaded, misses and crop-roll windows marked). The DM/CW tests, Kupiec/Christoffersen calibration tests and the range-method comparison sit in a **For statisticians** fold. |
 | **Methodology** | Plain-language method, units, limitations and the audit of v1. |
@@ -105,7 +105,7 @@ flowchart LR
         A[WASDE history<br/>wasde-monthly-report release<br/>as-published vintages]
         B[CBOT ZS=F<br/>Yahoo, validated cache]
         C[BCB PTAX<br/>SGS 1]
-        D[Premium: derived<br/>12-row monthly table]
+        D[Premium: user input<br/>typed in the browser, no data shipped]
     end
     subgraph Pipeline["soyforecast (Python)"]
         E[bronze<br/>parquet + sha256 manifest]
@@ -120,8 +120,8 @@ flowchart LR
     A --> E
     B --> E
     C --> E
-    D --> E
     E --> F --> G --> H --> I --> J
+    D -.-> J
 ```
 
 **Rules that keep it honest:**
@@ -149,7 +149,7 @@ soyforecast run                                     # writes web/public/data/*.j
 cd web && npm ci && npm run build && npx serve out  # or: npm run dev
 ```
 
-The repository ships the latest `web/public/data`, so `cd web && npm ci && npm run dev` works without running the pipeline. No API keys are needed. WASDE, CBOT and PTAX are fetched from public sources; the premium default comes from a committed, derived 12-row table (see [DATA_LICENSES.md](DATA_LICENSES.md)). The optional settings are listed in `.env.example`.
+The repository ships the latest `web/public/data`, so `cd web && npm ci && npm run dev` works without running the pipeline. No API keys are needed. WASDE, CBOT and PTAX are fetched from public sources; no premium data is shipped: the premium is a user input (see [DATA_LICENSES.md](DATA_LICENSES.md)). The optional settings are listed in `.env.example`.
 
 ## Development
 
@@ -176,23 +176,23 @@ Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](
 
 ```
 ├── src/soyforecast/
-│   ├── ingest/       wasde.py · prices.py (validated cache) · fx.py (PTAX) · premium.py (derived table + data card)
+│   ├── ingest/       wasde.py · prices.py (validated cache) · fx.py (PTAX)
 │   ├── features/     vintages.py (projected MY, revisions) · dataset.py (origins, targets, roll flags) · vol.py (EWMA / realized vol at each close) · contracts.py (reference contract, roll crossing)
 │   ├── models/       ladder.py (rw, drift, arima, ridge) · live.py (forecast, release-day reaction) · stress.py (historical stress replay)
 │   ├── evaluation/   backtest.py (purging, range methods and their rule, centring rule, calibration stats, champion) · stats.py (DM-HLN, Clark-West, Holm, HAC / block-bootstrap hit-rate CIs, Kupiec, Christoffersen, MDE, Pesaran-Timmermann)
 │   ├── publish/      schema.py (pydantic site contract) · web_json.py (validated, staged publish) · archive.py (append-only outlook archive) · lineage.py (run manifest) · validate.py (refresh gate)
 │   ├── pipeline.py · cli.py · errors.py (exit codes) · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
-├── tests/            109 tests: no look-ahead, intervals, event study, premium card, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
+├── tests/            106 tests: no look-ahead, intervals, event study, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
 │   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources
-├── data/seed/        paranagua_premium_monthly.csv + .meta.json (derived premium table and data card, the only committed data)
+├── data/wasde.lock.json  WASDE input pin (release tag + sha256), the only committed data; no premium data is shipped
 └── notebooks/archive/  v1 notebooks, kept for the audit trail
 ```
 
 ## Limitations
 
-- **Premium source.** It has no public, licensed feed. The default is derived from a private terminal export with unrecorded vendor and contract convention that stops in June 2025, so it is flagged stale. Only 12 monthly statistics are committed; the daily export was removed from the working tree (earlier commits still hold it, see [DATA_LICENSES.md](DATA_LICENSES.md)). On the site the premium is a user input, and FOB is illustrative until you enter a quote.
+- **Premium source.** It has no public, licensed feed, so the repository ships no premium data, raw or derived, and the site has no premium default: FOB appears only once you type a quote. Earlier commits still hold a former terminal export and a derived table (see [DATA_LICENSES.md](DATA_LICENSES.md)).
 - **Forecast origin.** Ranges are tested from WASDE release-day closes. The live forecast is issued from the latest close, some days after the report (`days_since_report` in `meta.json`).
 - **Contract rolls.** The continuous front month jumps at expiry. Windows that cross a roll partly measure a calendar spread; the July–September rolls (old crop to new crop) are the largest. Metrics without those windows are in `metrics.csv` (`subset = no_crop_roll`), and the conclusion is the same. Each outlook card names its reference (hedge) contract, the first contract whose first notice day is after the target date (today: F27, H27, N27), and flags a window in which the continuous front month itself rolls, at a contract's last trading day (`contract.crosses_roll` in `outlook.json`, `roll_cross` on every backtest row). On 6 Nov 2026 the front month was X26 (last trade 13 Nov), so all three windows crossed a roll.
 - **Stress replay.** `outlook.json` also replays five episodes fixed in advance (Jun 2018 trade war, Jul 2020 China buying, May 2021 correction, Feb 2022 Ukraine, Jul 2024 sell-off) on today's price, next to the full distribution of h-month returns since 2004. They are illustrative scenarios, not probabilities, and CBOT only: no premium is added, and the R$/sack figure converts the CBOT price at today's PTAX.
@@ -207,12 +207,12 @@ Licences and terms for each source are in [DATA_LICENSES.md](DATA_LICENSES.md).
 - USDA WASDE, via [WASDE Tracker](https://github.com/rossi-diego/wasde-monthly-report): every report since July 2010, as published.
 - CBOT soybean futures, Yahoo Finance `ZS=F` (delayed CME data). The response checks follow [soybean-crush-margin](https://github.com/rossi-diego/soybean-crush-margin).
 - Banco Central do Brasil, PTAX selling rate (SGS series 1).
-- Paranaguá premium: a derived 12-row monthly table (median, p10, p90 per calendar month) with a data card, `data/seed/paranagua_premium_monthly.*`. Not public data.
+- Paranaguá premium: not distributed; a user input only.
 
 ## Roadmap
 
-- **Contract-consistent targets (v2.1).** Rebuild the targets on specific contracts, or on a ratio-back-adjusted series with explicit roll dates, so a 3- or 6-month window no longer mixes price moves with calendar spreads. It would be pre-registered and documented as v2.1, the holdout would then be viewed a second time (and disclosed as such), and it needs legally sourceable expired-contract data, avoiding the licensing problem of the premium series.
+- **Contract-consistent targets (v2.1).** Rebuild the targets on specific contracts, or on a ratio-back-adjusted series with explicit roll dates, so a 3- or 6-month window no longer mixes price moves with calendar spreads. It would be pre-registered and documented as v2.1, the holdout would then be viewed a second time (and disclosed as such), and it needs legally sourceable expired-contract data, avoiding the licensing problem that kept a premium series out of the repository.
 
 - **A volatility ladder for the release-day move (v2, pre-registered 2026-11-08 in [docs/PLAN.md](docs/PLAN.md)).** Unconditional → EWMA → HAR-RV → HAR-RV + WASDE features on |release-day return| and realized variance, scored by QLIKE and DM inside the inference-rule Holm family. The result is published even if every rung loses; the /wasde band changes only if one beats it out of sample.
 
-- **A public premium source.** A CEPEA/ESALQ-implied Paranaguá premium (R$/60 kg ÷ PTAX, minus CBOT nearby, with full lineage) would replace the derived table and make a joint CBOT × premium × FX band possible.
+- **A public premium source.** A CEPEA/ESALQ-implied Paranaguá premium (R$/60 kg ÷ PTAX, minus CBOT nearby, with full lineage) as an optional reference next to the user's own quote.

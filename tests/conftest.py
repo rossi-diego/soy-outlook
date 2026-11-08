@@ -50,12 +50,11 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 def fixture_run(tmp_path_factory) -> tuple[Any, Any]:
     """One offline pipeline run on the committed synthetic fixtures (what CI does), shared by
     every test that needs artefacts: (Artefacts, Settings). Treat both as read-only."""
-    from soyforecast.config import ROOT, Settings
+    from soyforecast.config import Settings
     from soyforecast.pipeline import run
 
     base = tmp_path_factory.mktemp("ci")
     shutil.copytree(FIXTURES, base / "data" / "bronze")
-    shutil.copytree(ROOT / "data" / "seed", base / "data" / "seed")
     settings = Settings(data_dir=base / "data", web_data_dir=base / "web", offline=True)
     return run(settings), settings
 

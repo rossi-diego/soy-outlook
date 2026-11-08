@@ -283,66 +283,6 @@
       "title": "LatestWasde",
       "type": "object"
     },
-    "PremiumSource": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "unit": {
-          "type": "string"
-        },
-        "contract_convention": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string"
-        },
-        "licence": {
-          "type": "string"
-        },
-        "first": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "last": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "valid_until": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "days_since_last": {
-          "type": "integer"
-        },
-        "stale_after_days": {
-          "type": "integer"
-        },
-        "stale": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "kind",
-        "name",
-        "unit",
-        "contract_convention",
-        "method",
-        "licence",
-        "first",
-        "last",
-        "valid_until",
-        "days_since_last",
-        "stale_after_days",
-        "stale"
-      ],
-      "title": "PremiumSource",
-      "type": "object"
-    },
     "SourceStatus": {
       "additionalProperties": false,
       "description": "live: downloaded this run; offline: cache on purpose; cache: a download failed or was\nrejected and the cache was used.",
@@ -465,7 +405,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 3,
+      "const": 4,
       "type": "integer"
     },
     "version": {
@@ -510,9 +450,6 @@
     },
     "fx_default": {
       "$ref": "#/$defs/FxDefault"
-    },
-    "premium_source": {
-      "$ref": "#/$defs/PremiumSource"
     },
     "splits": {
       "$ref": "#/$defs/Splits"
@@ -579,7 +516,6 @@
     "wasde_source",
     "consts",
     "fx_default",
-    "premium_source",
     "splits",
     "champion",
     "champion_alpha",

@@ -12,7 +12,7 @@ Soybean stakeholders (export traders, crushers, co-ops, risk teams) need an hone
 | Topic | Decision | Why |
 |---|---|---|
 | Target | Log return of the CBOT front-month close, release day → last session ≤ t + h months | Public, live data; the premium has no licensed public feed |
-| Premium / FX | Visible user inputs (v2.1: one current-month median held flat for every horizon, flagged stale; PTAX) | Seed premium has no provenance and ends 2025-06; v2.1 commits only a derived 12-row monthly table (DATA_LICENSES.md) |
+| Premium / FX | Visible user inputs: the premium is typed by the user, empty by default (FOB only once entered); PTAX default for FX | Owner decision 2026-11-08: no licensed premium source, so no premium data (raw or derived) is shipped (DATA_LICENSES.md) |
 | Ranges | Calibrated on CBOT errors only; never on FOB errors applied to an assumed premium | Consistency (ML reviewer) |
 | Features | Fixed set of 11: US soy/corn stocks-to-use, revisions (US, Brazil, Argentina, China, World), momentum, May dummy | No selection leakage |
 | Marketing year | Rank MYs within each report (latest = projected); `proj` flag is missing in 2010 | Data reviewer |
@@ -76,16 +76,16 @@ Twelve reviewer lenses (quant, stats, trader, farmer, risk, UX, dataviz, fronten
 
 | Wave | Proposals | What shipped |
 |---|---|---|
-| 1 · honesty and operations | P9, P6, P8, P15, P3, P11, P5, P1 (phase 1), P26, P23 | Raw premium export removed; only a derived 12-row monthly table with a validated data card is committed. Flat stale-flagged premium default and an explicit-sum headline. Origin-distance flag. Ranges renamed "empirical quantiles of past errors", centring pre-registered and chosen on validation. Event study with Holm, HC1 covariance, placebo, split-sample and roll-exclusion checks; what-if with an 80% prediction interval. Range labels built from measured coverage, amber below nominal. "CBOT price risk only" label on FOB/R$ bands. Author, metadata, OG card. Hermetic CI, gated scheduled refresh, freshness banner and an append-only outlook archive. |
+| 1 · honesty and operations | P9, P6, P8, P15, P3, P11, P5, P1 (phase 1), P26, P23 | Raw premium export removed; later (2026-11-08) the derived monthly table too, making the premium a user input only. Explicit-sum FOB headline once a premium is typed. Origin-distance flag. Ranges renamed "empirical quantiles of past errors", centring pre-registered and chosen on validation. Event study with Holm, HC1 covariance, placebo, split-sample and roll-exclusion checks; what-if with an 80% prediction interval. Range labels built from measured coverage, amber below nominal. "CBOT price risk only" label on FOB/R$ bands. Author, metadata, OG card. Hermetic CI, gated scheduled refresh, freshness banner and an append-only outlook archive. |
 | 2 · rigour and contracts | P25, P24, P4, P2, P16, P19, P10 (minimum step), P21, P22, P13, P28 | Pydantic site contract with staged publish and generated TS types. Pinned WASDE input, PTAX checks, uv.lock, run manifest and snapshots. Overlap-aware calibration (CIs, n_eff, tail split, Kupiec, Christoffersen, MDE). Pre-registered vol-scaled range challengers (the baseline won). Inference rule v2. Stress replay. Reference contract and roll flags. Hero chart whiskers, Track record verdict and "For statisticians" fold, realistic what-if sliders, lazy charts and a size budget. |
 | 3 · decision use and audience | P18, P14, P20, P27 | Decision panel (downside vs selling today at 1-in-10 and rough 1-in-40, illustrative, not VaR). Release-day move band with an out-of-sample hit rate and the pre-registered v2 volatility ladder. pt-BR toggle with R$/saca and an optional user-entered port-to-interior discount. WCAG AA, axe gate in CI and a tested 390 px layout. |
 
 **Rejected (2).** P12, measuring surprise instead of revision (25% support): applying a revision beta to user-entered surprises is inconsistent, and analyst-poll data has provenance and licence problems; P11's relabelling covers it. P17, a second pre-registered feature set (8%): designed after seeing v1's null result, it would read as specification search.
 
-**Unresolved (1).** P7, a premium curve by shipment month tied to a named contract (58%). Its agreed part, one FOB bridge line per card, shipped with P6, and each card shows the shipment-month median as reference text only. Whether to add an opt-in seasonal premium path stays open; without a sourced premium series (the owner confirmed there is no alternative source) it would invent provenance.
+**Unresolved (1).** P7, a premium curve by shipment month tied to a named contract (58%). Its agreed part, one FOB bridge line per card, shipped with P6, and the shipment-month median reference text was removed with the premium data (2026-11-08). Whether to add an opt-in seasonal premium path stays open; without a sourced premium series (the owner confirmed there is no alternative source) it would invent provenance.
 
 **Still partial, by design.**
-- P1 phase 2 (a joint CBOT × PTAX × premium band with a coverage backtest) needs a premium series with documented provenance. The cards show the seasonal p10-p90 premium as a separate band instead.
+- P1 phase 2 (a joint CBOT × PTAX × premium band with a coverage backtest) needs a premium series with documented provenance. Since 2026-11-08 the premium is a user input only and no premium band is shown; a CBOT x PTAX band does not need a premium and stays possible.
 - P10: targets are not rebuilt on specific contracts; that is the v2.1 roadmap item.
 - P14: the volatility ladder is pre-registered only (v2).
 - P13: the optional display-only US yield/area/production/export lines need new ingest work.

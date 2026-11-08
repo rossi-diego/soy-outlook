@@ -35,7 +35,7 @@ e2e: web
 all: run test web
 
 ci-offline:         ## What ci.yml does: offline run on the synthetic fixtures into .ci/, then the gate
-	rm -rf .ci && mkdir -p .ci/data && cp -r tests/fixtures/bronze .ci/data/bronze && cp -r data/seed .ci/data/seed
+	rm -rf .ci && mkdir -p .ci/data && cp -r tests/fixtures/bronze .ci/data/bronze
 	SOY_DATA_DIR=.ci/data SOY_WEB_DATA_DIR=.ci/web-data soyforecast run --offline
 	soyforecast validate --data .ci/web-data --allow-stale
 

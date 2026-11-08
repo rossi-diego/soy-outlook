@@ -1,5 +1,5 @@
 // Decision panel arithmetic (P18), pre-registered in docs/PLAN.md (2026-11-08).
-// Illustrative and range-based, not VaR: CBOT only, premium and BRL held fixed, so the hedge is
+// Illustrative and range-based, not VaR: CBOT only (no premium), BRL held fixed, so the hedge is
 // futures at today's close and the basis stays unhedged. No target-price probability.
 
 import type { Locale } from "./i18n";

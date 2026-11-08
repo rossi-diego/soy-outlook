@@ -24,7 +24,9 @@ from pydantic.json_schema import GenerateJsonSchema
 
 from soyforecast.config import HORIZONS, QUANTILE_GRID, RELEASE_MOVE_LEVELS
 
-SCHEMA_VERSION = 3  # v3: range method (P2), calibration stats (P4), inference rule v2 (P16)
+# v3: range method (P2), calibration stats (P4), inference rule v2 (P16)
+# v4: no premium data at all (owner decision 2026-11-08); the premium is a user input only
+SCHEMA_VERSION = 4
 
 ModelId = Literal["rw", "drift", "arima", "ridge"]
 RangeMethod = Literal["empirical", "ewma_fhs", "lognormal_rv"]
@@ -89,21 +91,6 @@ class FxDefault(Contract):
     source: str
 
 
-class PremiumSource(Contract):
-    kind: str
-    name: str
-    unit: str
-    contract_convention: str
-    method: str
-    licence: str
-    first: IsoDate
-    last: IsoDate
-    valid_until: IsoDate
-    days_since_last: int
-    stale_after_days: int
-    stale: bool
-
-
 class Splits(Contract):
     oos_start: IsoDate
     validation: tuple[IsoDate, IsoDate]
@@ -146,7 +133,7 @@ class FeatureMeta(Contract):
 
 
 class Meta(Contract):
-    schema_version: Literal[3]
+    schema_version: Literal[4]
     version: str
     generated_at: str
     as_of_close: IsoDate
@@ -158,7 +145,6 @@ class Meta(Contract):
     wasde_source: WasdeSource
     consts: Consts
     fx_default: FxDefault
-    premium_source: PremiumSource
     splits: Splits
     champion: dict[str, ModelId]
     champion_alpha: float
@@ -176,30 +162,6 @@ class Meta(Contract):
 class PricePoint(Contract):
     date: IsoDate
     c_bu: float
-
-
-class PremiumMonth(Contract):
-    month: int = Field(ge=1, le=12)
-    median: float
-    p10: float
-    p90: float
-    years: str = Field(description='e.g. "2015-2024", derived from the data.')
-    n_years: int
-
-
-class PremiumReference(PremiumMonth):
-    """Reference text only ("historical median, not validated"); never used as the default."""
-
-    note: str
-
-
-class PremiumNowDefault(PremiumMonth):
-    """The one premium used for the headline and every horizon until the user enters a quote."""
-
-    basis: str
-    source_last: IsoDate
-    stale: bool
-    illustrative: bool
 
 
 class Nominal(Contract):
@@ -291,7 +253,6 @@ class Horizon(Contract):
     q975: float
     central: float
     coverage: Coverage
-    premium_reference: PremiumReference
     grid: QuantileGrid
 
     @model_validator(mode="after")
@@ -366,9 +327,7 @@ class Outlook(Contract):
     last: PricePoint
     horizons: list[Horizon]
     history: list[PricePoint] = Field(min_length=1)
-    premium_last: PricePoint
     stress: Stress
-    premium_now_default: PremiumNowDefault
 
     @model_validator(mode="after")
     def _all_horizons(self) -> Outlook:
@@ -460,15 +419,6 @@ class PathRow(Contract):
         return self
 
 
-class FobRow(Contract):
-    split: str
-    model: ModelId
-    h: int
-    n: int
-    mae_usd_t: float
-    mape_pct: float
-
-
 class IntervalChoiceRow(Contract):
     centring: str
     split: str
@@ -528,8 +478,6 @@ class RangeRegimeRow(Contract):
 class TrackRecord(Contract):
     metrics: list[MetricRow] = Field(min_length=1)
     tests: list[TestRow]
-    fob_illustrative: list[FobRow]
-    fob_illustrative_note: str | None
     interval_choice: list[IntervalChoiceRow]
     range_choice: list[RangeChoiceRow]
     range_diagnostics: list[RangeDiagnosticRow]
@@ -784,8 +732,6 @@ class RunInputs(Contract):
     wasde: WasdeInput
     prices: SeriesInput
     ptax: SeriesInput
-    premium_table: InputFile
-    premium_card: InputFile
 
 
 class GitState(Contract):

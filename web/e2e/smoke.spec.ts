@@ -6,7 +6,7 @@ test("outlook shows three horizons and switches units", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /In 1 month/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: /In 6 months/ })).toBeVisible();
   await expect(page.locator('[role="img"] svg').first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("radio", { name: "FOB R$/sack" }).click();
+  await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
   await expect(page.getByLabel("BRL per USD")).toBeVisible();
   await expect(page.getByText(/R\$ [\d,.]+\/sc/).first()).toBeVisible();
 });

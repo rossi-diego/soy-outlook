@@ -42,16 +42,17 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
         <h1 className="text-3xl font-semibold tracking-tight">Metodologia</h1>
         <p className="text-ink-2">
           Linguagem simples primeiro; o detalhe técnico vem em cada seção. Os dados de CBOT, WASDE e câmbio são públicos e
-          reconstruídos pelo pipeline de código aberto a cada execução. O prêmio de Paranaguá não é: o seu padrão vem de uma
-          tabela mensal de 12 linhas derivada de uma exportação privada de terminal (veja Dados e licenças abaixo).
+          reconstruídos pelo pipeline de código aberto a cada execução. O prêmio de Paranaguá não tem fonte licenciada, então
+          nenhum dado de prêmio é distribuído: ele é só um número que você informa (veja Dados e licenças abaixo).
         </p>
 
         <Block title="O que é previsto">
           <p>
             O preço FOB Paranaguá é o preço da soja na CBOT mais o prêmio de Paranaguá. A parte CBOT é pública e prevista aqui.
             O prêmio não tem fonte gratuita e licenciada, então ele é <strong className="text-ink">informado por você</strong>,
-            com um padrão: a mediana histórica do mês corrente, mantida constante em todos os horizontes e marcada como
-            desatualizada porque a sua fonte termina em {meta.premium_source.last.slice(0, 4)}.
+            sem valor padrão: até você digitar a cotação do seu corretor, a página mostra a CBOT em ¢/bu, em USD/t e em R$/saca
+            pela PTAX (só CBOT, sem prêmio); o FOB aparece só depois que você informa um prêmio, mantido constante em todos os
+            horizontes.
           </p>
           <p>
             Tecnicamente: para cada divulgação do WASDE desde julho de 2010, o alvo é a variação logarítmica do fechamento do
@@ -142,11 +143,12 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
 
         <Block title="Unidades">
           <p>
-            FOB USD/t = (CBOT ¢/bu + prêmio ¢/bu) ÷ 100 × {f.num(meta.consts.bu_per_t, 4)} bushels por tonelada (exato: 1 bu de
-            soja = 60 lb, 1 lb = 0,45359237 kg). Reais por saca de {meta.consts.sack_kg} kg = USD/t × 0,06 × reais por dólar; o
-            câmbio padrão é a PTAX de venda do Banco Central. São valores FOB no porto, que incluem o fobbing (custo de
-            elevação e embarque), não preços na fazenda nem o preço pago ao vendedor no porto. O desconto porto-interior
-            opcional é um número seu, sem padrão regional.
+            FOB USD/t = (CBOT ¢/bu + o seu prêmio ¢/bu) ÷ 100 × {f.num(meta.consts.bu_per_t, 4)} bushels por tonelada (exato: 1
+            bu de soja = 60 lb, 1 lb = 0,45359237 kg); sem prêmio, o mesmo cálculo com prêmio zero dá a CBOT em USD/t. Reais por
+            saca de {meta.consts.sack_kg} kg = USD/t × 0,06 × reais por dólar; o câmbio padrão é a PTAX de venda do Banco
+            Central. Com prêmio, são valores FOB no porto, que incluem o fobbing (custo de elevação e embarque), não preços na
+            fazenda nem o preço pago ao vendedor no porto. O desconto porto-interior opcional é um número seu, sem padrão
+            regional, e só se aplica ao FOB.
           </p>
         </Block>
 
@@ -175,10 +177,9 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
               pesquisa sob os termos deles; o histórico bruto de preços não é redistribuído no repositório.
             </li>
             <li>
-              Prêmio de Paranaguá: só é publicada uma tabela derivada com 12 medianas mensais e percentis 10/90. A exportação
-              diária de onde ela veio ({f.date(meta.premium_source.first)} – {f.date(meta.premium_source.last)}) tem fornecedor e
-              convenção de contrato não registrados e não é redistribuída. Convenção de contrato:{" "}
-              {meta.premium_source.contract_convention === "unknown" ? "desconhecida" : meta.premium_source.contract_convention}.
+              Prêmio de Paranaguá: não é distribuído. Não há fonte licenciada, então o repositório não traz dados de prêmio,
+              nem brutos nem derivados; o prêmio é só o número que você digita, guardado apenas no seu navegador. Uma série
+              pública (por exemplo, um prêmio implícito do CEPEA) está no roteiro.
             </li>
           </ul>
           <p>
@@ -197,9 +198,8 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
           {links}
           <p>
             <strong className="text-ink">Aviso.</strong> Uso apenas para pesquisa e educação; não é recomendação de
-            investimento, de operação ou de hedge, nem oferta de compra ou venda de nada. Os preços da CBOT têm atraso, o
-            prêmio padrão é uma mediana histórica desatualizada, e os valores FOB e em R$ são ilustrativos até você informar a
-            sua própria cotação. As faixas descrevem o tamanho dos erros de previsão passados; não são garantia sobre preços
+            investimento, de operação ou de hedge, nem oferta de compra ou venda de nada. Os preços da CBOT têm atraso, e os
+            valores FOB só aparecem com a cotação de prêmio que você mesmo informar. As faixas descrevem o tamanho dos erros de previsão passados; não são garantia sobre preços
             futuros. Sem vínculo com o USDA, a CME Group, o Banco Central do Brasil ou qualquer trading.
           </p>
         </Block>
@@ -222,16 +222,16 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
       <h1 className="text-3xl font-semibold tracking-tight">Methodology</h1>
       <p className="text-ink-2">
         Plain language first; the technical detail follows in each section. The CBOT, WASDE and exchange-rate data are
-        public and rebuilt by the open-source pipeline on every run. The Paranaguá premium is not: its default comes from
-        a 12-row monthly table derived from a private terminal export (see Data and licences below).
+        public and rebuilt by the open-source pipeline on every run. The Paranaguá premium has no licensed source, so no
+        premium data is distributed: it is only a number you enter (see Data and licences below).
       </p>
 
       <Block title="What is forecast">
         <p>
           The Paranaguá FOB price is the CBOT soybean price plus the Paranaguá premium. The CBOT part is public and
           forecast here. The premium has no free, licensed feed, so it is <strong className="text-ink">your input</strong>,
-          with a default: the historical median for the current calendar month, held flat for every horizon and
-          flagged stale because its source ends in {meta.premium_source.last.slice(0, 4)}.
+          with no default: until you type your broker&apos;s quote, the page shows CBOT in ¢/bu, in USD/t and in R$/sack at
+          PTAX (CBOT only, excl. premium); FOB appears only once you enter a premium, held flat for every horizon.
         </p>
         <p>
           Technically: for every WASDE release since July 2010, the target is the log change of the CBOT front-month close
@@ -317,11 +317,12 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
 
       <Block title="Units">
         <p>
-          FOB USD/t = (CBOT ¢/bu + premium ¢/bu) ÷ 100 × {f.num(meta.consts.bu_per_t, 4)} bushels per tonne (exact: 1 bu of
-          soybeans = 60 lb, 1 lb = 0.45359237 kg). Reais per {meta.consts.sack_kg} kg sack = USD/t × 0.06 × BRL per USD;
-          the default rate is the Banco Central PTAX selling rate. These are port FOB values, which include fobbing (port
-          elevation and loading), not farm-gate prices nor what a seller is paid at the port. The optional port-to-interior
-          discount is your own number, with no regional default.
+          FOB USD/t = (CBOT ¢/bu + your premium ¢/bu) ÷ 100 × {f.num(meta.consts.bu_per_t, 4)} bushels per tonne (exact: 1
+          bu of soybeans = 60 lb, 1 lb = 0.45359237 kg); with no premium, the same sum with a zero premium is CBOT in USD/t.
+          Reais per {meta.consts.sack_kg} kg sack = USD/t × 0.06 × BRL per USD; the default rate is the Banco Central PTAX
+          selling rate. With a premium these are port FOB values, which include fobbing (port elevation and loading), not
+          farm-gate prices nor what a seller is paid at the port. The optional port-to-interior discount is your own
+          number, with no regional default, and applies to FOB only.
         </p>
       </Block>
 
@@ -347,10 +348,9 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
             under their terms; the raw price history is not redistributed in the repository.
           </li>
           <li>
-            Paranaguá premium: only a derived table of 12 monthly medians and 10th/90th percentiles is published. The
-            daily export it came from ({f.date(meta.premium_source.first)} – {f.date(meta.premium_source.last)}) has
-            unrecorded vendor and contract convention and is not redistributed. Contract convention:{" "}
-            {meta.premium_source.contract_convention}.
+            Paranaguá premium: not distributed. There is no licensed source, so the repository ships no premium data, raw
+            or derived; the premium is only the number you type, kept in your browser. A public series (for example a
+            CEPEA-implied premium) is on the roadmap.
           </li>
         </ul>
         <p>
@@ -368,8 +368,8 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
         {links}
         <p>
           <strong className="text-ink">Disclaimer.</strong> Research and educational use only; not investment, trading or
-          hedging advice, and not an offer to buy or sell anything. CBOT prices are delayed, the premium default is a stale
-          historical median, and FOB and R$ values are illustrative until you enter your own quote. The ranges describe
+          hedging advice, and not an offer to buy or sell anything. CBOT prices are delayed, and FOB values appear only with
+          a premium quote you enter yourself. The ranges describe
           how large past forecast errors were; they are not a guarantee about future prices. No affiliation with USDA,
           CME Group, Banco Central do Brasil or any trading company.
         </p>

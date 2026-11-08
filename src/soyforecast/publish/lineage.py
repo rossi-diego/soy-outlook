@@ -124,8 +124,6 @@ def build_run_manifest(a: Artefacts, settings: Settings, now: datetime) -> dict[
             },
             "prices": {**_file(bronze / "zs_daily.parquet"), **_series_span(a.prices)},
             "ptax": {**_file(bronze / "ptax_daily.parquet"), **_series_span(a.ptax)},
-            "premium_table": _file(settings.premium_table),
-            "premium_card": _file(settings.premium_card),
         },
         "sources": a.sources.as_dict(),
     }

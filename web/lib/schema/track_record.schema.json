@@ -1,45 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
-    "FobRow": {
-      "additionalProperties": false,
-      "properties": {
-        "split": {
-          "type": "string"
-        },
-        "model": {
-          "enum": [
-            "rw",
-            "drift",
-            "arima",
-            "ridge"
-          ],
-          "type": "string"
-        },
-        "h": {
-          "type": "integer"
-        },
-        "n": {
-          "type": "integer"
-        },
-        "mae_usd_t": {
-          "type": "number"
-        },
-        "mape_pct": {
-          "type": "number"
-        }
-      },
-      "required": [
-        "split",
-        "model",
-        "h",
-        "n",
-        "mae_usd_t",
-        "mape_pct"
-      ],
-      "title": "FobRow",
-      "type": "object"
-    },
     "IntervalChoiceRow": {
       "additionalProperties": false,
       "properties": {
@@ -1027,22 +988,6 @@
       },
       "type": "array"
     },
-    "fob_illustrative": {
-      "items": {
-        "$ref": "#/$defs/FobRow"
-      },
-      "type": "array"
-    },
-    "fob_illustrative_note": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "interval_choice": {
       "items": {
         "$ref": "#/$defs/IntervalChoiceRow"
@@ -1092,8 +1037,6 @@
   "required": [
     "metrics",
     "tests",
-    "fob_illustrative",
-    "fob_illustrative_note",
     "interval_choice",
     "range_choice",
     "range_diagnostics",

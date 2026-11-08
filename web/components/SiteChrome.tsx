@@ -111,14 +111,14 @@ export function SiteFooter({
           WASDE Tracker
         </a>
         {t(
-          "), CBOT soybean futures (Yahoo Finance, delayed, front month), BCB PTAX, and a derived, stale Paranaguá premium table.",
-          "), futuros de soja da CBOT (Yahoo Finance, com atraso, primeiro vencimento), PTAX do BCB e uma tabela derivada e desatualizada do prêmio de Paranaguá.",
+          "), CBOT soybean futures (Yahoo Finance, delayed, front month) and BCB PTAX. No premium data: the Paranaguá premium is your input.",
+          "), futuros de soja da CBOT (Yahoo Finance, com atraso, primeiro vencimento) e PTAX do BCB. Sem dados de prêmio: o prêmio de Paranaguá é informado por você.",
         )}
       </p>
       <p>
         {t(
-          "Research and educational use only; not investment, trading or hedging advice. Ranges describe past forecast errors, not a guarantee; FOB and R$ values are illustrative until you enter your own premium quote.",
-          "Uso apenas para pesquisa e educação; não é recomendação de investimento, de operação ou de hedge. As faixas descrevem erros de previsão passados, não uma garantia; os valores FOB e em R$ são ilustrativos até você informar a sua cotação de prêmio.",
+          "Research and educational use only; not investment, trading or hedging advice. Ranges describe past forecast errors, not a guarantee; FOB values appear only once you enter your own premium quote.",
+          "Uso apenas para pesquisa e educação; não é recomendação de investimento, de operação ou de hedge. As faixas descrevem erros de previsão passados, não uma garantia; os valores FOB só aparecem depois que você informa a sua cotação de prêmio.",
         )}
       </p>
       <p>

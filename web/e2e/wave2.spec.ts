@@ -24,6 +24,10 @@ test("hero chart: CBOT by default, 18-month/3-year toggle, labelled FOB shift (P
   if ([1, 3, 6].every((h) => meta.champion[String(h)] === "rw")) {
     await expect(page.getByTestId("validation-start")).toHaveText(meta.splits.validation[0].slice(0, 4));
   }
+  // No premium entered: no FOB view at all. Typing one adds the labelled FOB shift.
+  await expect(chart.getByRole("radio", { name: "FOB shift" })).toHaveCount(0);
+  await page.getByLabel(/Paranaguá premium/).fill("80");
+  await page.getByLabel(/Paranaguá premium/).press("Enter");
   await chart.getByRole("radio", { name: "FOB shift" }).click();
   await expect(caption).toContainText("constant shift");
   await expect(caption).toContainText("not a historical FOB series");
@@ -57,9 +61,8 @@ test("track record: verdict, breach strip, rival copy, derived labels and the st
   await expect(page.getByTestId("calib-min")).toHaveText(String(meta.calib_min));
   await expect(page.getByText(/Average miss by horizon/)).toHaveCount(0);
 
-  const fob = page.getByTestId("fob-table");
-  await expect(fob.getByRole("columnheader", { name: "Validation" })).toBeVisible();
-  await expect(fob.getByRole("columnheader", { name: "Holdout" })).toBeVisible();
+  // The frozen FOB backtest went with the premium data (owner decision: no licensed source).
+  await expect(page.getByTestId("fob-table")).toHaveCount(0);
 
   const fold = page.getByTestId("for-statisticians");
   await expect(fold.getByTestId("tests-table")).toHaveCount(0);
@@ -106,7 +109,7 @@ test("stress replay is folded, labelled and lists the pre-registered episodes (P
 
 test("FX is typed as text, checked on blur, with an inline error outside 3-9 (P28)", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("radio", { name: "FOB R$/sack" }).click();
+  await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
   const fx = page.getByLabel("BRL per USD");
   await fx.fill("12");
   await fx.blur();
@@ -145,7 +148,8 @@ test("charts load after the page, behind a fixed-height skeleton (P28)", async (
   await page.route(/_next\/static\/chunks\/.*\.js$/, async (route) => {
     const res = await route.fetch();
     const body = await res.text();
-    if (body.includes("zrender")) await new Promise((r) => setTimeout(r, 1500));
+    // The ECharts chunk: minification may drop the literal "zrender", so match either name.
+    if (/zrender|echarts/.test(body)) await new Promise((r) => setTimeout(r, 1500));
     await route.fulfill({ response: res, body });
   });
   await page.goto("/");

@@ -698,61 +698,6 @@ export default function TrackRecordView({ meta, view, archive }: { meta: Meta; v
         </p>
       </section>
 
-      <section className="card space-y-3 p-5 text-sm">
-        <h2 className="text-base font-semibold">{t("Paranaguá FOB, illustrative", "FOB Paranaguá, ilustrativo")}</h2>
-        <p className="text-ink-2">
-          {t(
-            `Where the premium history exists (to ${f.date(meta.premium_source.last)}), FOB = CBOT forecast + premium held at its value on the report day, for no change only. Computed once from the daily series, which is no longer published.`,
-            `Onde existe histórico do prêmio (até ${f.date(meta.premium_source.last)}), FOB = previsão da CBOT + prêmio mantido no valor do dia do relatório, só para o sem variação. Calculado uma vez a partir da série diária, que não é mais publicada.`,
-          )}
-        </p>
-        <div className="overflow-x-auto">
-          <table className="stack-sm w-full min-w-[28rem]" data-testid="fob-table">
-            <thead>
-              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-                <th className="py-2 font-medium">{t("Horizon", "Horizonte")}</th>
-                <th className="py-2 text-right font-medium">{t("Validation", "Validação")}</th>
-                <th className="py-2 text-right font-medium">Holdout</th>
-              </tr>
-            </thead>
-            <tbody>
-              {HS.map((hh) => {
-                const cell = (split: string) => {
-                  const r = view.fob.find((x) => x.model === "rw" && x.h === hh && x.split === split);
-                  return r ? (
-                    <>
-                      {f.num(r.mae_usd_t, 1)} USD/t{" "}
-                      <span className="text-muted">
-                        ({f.num(r.mape_pct, 1)}%, {f.num(r.n)} {t("reports", "relatórios")})
-                      </span>
-                    </>
-                  ) : (
-                    "—"
-                  );
-                };
-                return (
-                  <tr key={hh} className="border-b border-line last:border-0">
-                    <td className="py-1.5">{f.horizon(hh)}</td>
-                    <td data-label={t("Validation", "Validação")} className="tabular py-1.5 text-right">
-                      {cell("validation")}
-                    </td>
-                    <td data-label="Holdout" className="tabular py-1.5 text-right">
-                      {cell("holdout")}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-muted">
-          {t(
-            "Average miss (mean absolute error). Holdout FOB covers few reports; read it as indicative only.",
-            "Erro médio (erro absoluto médio). O FOB do holdout cobre poucos relatórios; leia como apenas indicativo.",
-          )}
-        </p>
-      </section>
-
       <ForStatisticians meta={meta} view={view} testsBy={testsBy} valYears={valYears} holdYears={holdYears} />
     </div>
   );

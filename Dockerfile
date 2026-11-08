@@ -2,8 +2,7 @@
 #
 # Two stages: the builder resolves exactly the versions in uv.lock into a virtualenv; the runtime
 # image gets only that virtualenv and runs as an unprivileged user. No data is baked in: data/
-# (bronze cache, the WASDE pin and the derived premium table in data/seed) and web/public/data
-# are mounted by docker-compose, so the premium table is never copied into an image layer.
+# (bronze cache and the WASDE pin) and web/public/data are mounted by docker-compose.
 
 FROM python:3.12-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.10.9 /uv /usr/local/bin/uv

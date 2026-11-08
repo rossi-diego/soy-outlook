@@ -34,10 +34,26 @@ const UNIT_LONG_PT: Record<Unit, string> = {
   brl_sack: "FOB Paranaguá, reais por saca de 60 kg",
 };
 
-export const unitLong = (u: Unit, loc: Locale = "en") => (loc === "pt-BR" ? UNIT_LONG_PT : UNIT_LONG)[u];
+// With no premium entered, USD/t and R$/sack are the CBOT price alone, converted (no FOB).
+const UNIT_LONG_CBOT: Record<Unit, string> = {
+  c_bu: UNIT_LONG.c_bu,
+  usd_t: "CBOT soybeans in US dollars per tonne, CBOT only, excl. premium",
+  brl_sack: "CBOT soybeans in reais per 60 kg sack, CBOT only, excl. premium",
+};
+
+const UNIT_LONG_CBOT_PT: Record<Unit, string> = {
+  c_bu: UNIT_LONG_PT.c_bu,
+  usd_t: "Soja na CBOT em dólares por tonelada, só CBOT, sem prêmio",
+  brl_sack: "Soja na CBOT em reais por saca de 60 kg, só CBOT, sem prêmio",
+};
+
+/** Long unit name; `fob` = a premium was entered, so USD/t and R$/sack are Paranaguá FOB. */
+export const unitLong = (u: Unit, loc: Locale = "en", fob = true) =>
+  (fob ? (loc === "pt-BR" ? UNIT_LONG_PT : UNIT_LONG) : loc === "pt-BR" ? UNIT_LONG_CBOT_PT : UNIT_LONG_CBOT)[u];
 
 /**
- * premium: ¢/bu added to CBOT for the FOB units. basis: an optional, user-supplied
+ * premium: ¢/bu added to CBOT for the FOB units, typed by the user (0 = CBOT only: no premium
+ * data ships with the site). basis: an optional, user-supplied
  * port-to-interior discount in R$/sack (P20), subtracted only from the R$/sack value; 0 = port FOB.
  */
 export type Assumptions = { premium: number; fx: number; buPerT: number; sackKg: number; basis?: number };
@@ -246,7 +262,7 @@ export function fmt(loc: Locale) {
     monthAbbr: (m: number) => monthAbbr(m, loc),
     horizon: (h: number) => horizonLabel(h, loc),
     unit: (u: Unit) => unitLabel(u, loc),
-    unitLong: (u: Unit) => unitLong(u, loc),
+    unitLong: (u: Unit, fob = true) => unitLong(u, loc, fob),
     held: (cov: CoverageLike, level: "80" | "95") => heldText(cov, level, loc),
     range: (cov: CoverageLike, level: "80" | "95") => rangeLabel(cov, level, loc),
     ci: (split: CiSplit, level: "80" | "95", withCount = true) => ciText(split, level, withCount, loc),

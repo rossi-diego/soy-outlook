@@ -258,9 +258,6 @@
         "coverage": {
           "$ref": "#/$defs/Coverage"
         },
-        "premium_reference": {
-          "$ref": "#/$defs/PremiumReference"
-        },
         "grid": {
           "$ref": "#/$defs/QuantileGrid"
         }
@@ -281,7 +278,6 @@
         "q975",
         "central",
         "coverage",
-        "premium_reference",
         "grid"
       ],
       "title": "Horizon",
@@ -342,101 +338,6 @@
         "95"
       ],
       "title": "Nominal",
-      "type": "object"
-    },
-    "PremiumNowDefault": {
-      "additionalProperties": false,
-      "description": "The one premium used for the headline and every horizon until the user enters a quote.",
-      "properties": {
-        "month": {
-          "maximum": 12,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "median": {
-          "type": "number"
-        },
-        "p10": {
-          "type": "number"
-        },
-        "p90": {
-          "type": "number"
-        },
-        "years": {
-          "description": "e.g. \"2015-2024\", derived from the data.",
-          "type": "string"
-        },
-        "n_years": {
-          "type": "integer"
-        },
-        "basis": {
-          "type": "string"
-        },
-        "source_last": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "stale": {
-          "type": "boolean"
-        },
-        "illustrative": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "month",
-        "median",
-        "p10",
-        "p90",
-        "years",
-        "n_years",
-        "basis",
-        "source_last",
-        "stale",
-        "illustrative"
-      ],
-      "title": "PremiumNowDefault",
-      "type": "object"
-    },
-    "PremiumReference": {
-      "additionalProperties": false,
-      "description": "Reference text only (\"historical median, not validated\"); never used as the default.",
-      "properties": {
-        "month": {
-          "maximum": 12,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "median": {
-          "type": "number"
-        },
-        "p10": {
-          "type": "number"
-        },
-        "p90": {
-          "type": "number"
-        },
-        "years": {
-          "description": "e.g. \"2015-2024\", derived from the data.",
-          "type": "string"
-        },
-        "n_years": {
-          "type": "integer"
-        },
-        "note": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "month",
-        "median",
-        "p10",
-        "p90",
-        "years",
-        "n_years",
-        "note"
-      ],
-      "title": "PremiumReference",
       "type": "object"
     },
     "PricePoint": {
@@ -676,14 +577,8 @@
       "minItems": 1,
       "type": "array"
     },
-    "premium_last": {
-      "$ref": "#/$defs/PricePoint"
-    },
     "stress": {
       "$ref": "#/$defs/Stress"
-    },
-    "premium_now_default": {
-      "$ref": "#/$defs/PremiumNowDefault"
     }
   },
   "required": [
@@ -691,9 +586,7 @@
     "last",
     "horizons",
     "history",
-    "premium_last",
-    "stress",
-    "premium_now_default"
+    "stress"
   ],
   "title": "Outlook",
   "type": "object"

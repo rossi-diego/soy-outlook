@@ -74,8 +74,7 @@ const PT_DATA: Record<string, string> = {
   "CBOT soybeans, change over the past month": "Soja na CBOT, variação no último mês",
   "CBOT soybeans, change over the past 3 months": "Soja na CBOT, variação nos últimos 3 meses",
   "May report (new marketing year starts)": "Relatório de maio (começa o novo ano-safra)",
-  // premium and stress copy
-  "historical median, not validated": "mediana histórica, não validada",
+  // stress copy
   "illustrative scenarios, not probabilities": "cenários ilustrativos, não probabilidades",
   "Five episodes named before any outcome was computed; each starts at the first CBOT session of its month; the realized h-month return is applied to today's price.":
     "Cinco episódios nomeados antes de qualquer resultado ser calculado; cada um começa no primeiro pregão da CBOT do seu mês; o retorno realizado em h meses é aplicado ao preço de hoje.",

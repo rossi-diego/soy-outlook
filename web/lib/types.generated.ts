@@ -17,7 +17,7 @@ export interface SiteData {
  * via the `definition` "Meta".
  */
 export interface Meta {
-  schema_version: 3;
+  schema_version: 4;
   version: string;
   generated_at: string;
   as_of_close: string;
@@ -32,7 +32,6 @@ export interface Meta {
   wasde_source: WasdeSource;
   consts: Consts;
   fx_default: FxDefault;
-  premium_source: PremiumSource;
   splits: Splits;
   champion: {
     [k: string]: "rw" | "drift" | "arima" | "ridge";
@@ -115,24 +114,6 @@ export interface FxDefault {
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
- * via the `definition` "PremiumSource".
- */
-export interface PremiumSource {
-  kind: string;
-  name: string;
-  unit: string;
-  contract_convention: string;
-  method: string;
-  licence: string;
-  first: string;
-  last: string;
-  valid_until: string;
-  days_since_last: number;
-  stale_after_days: number;
-  stale: boolean;
-}
-/**
- * This interface was referenced by `SiteData`'s JSON-Schema
  * via the `definition` "Splits".
  */
 export interface Splits {
@@ -205,9 +186,7 @@ export interface Outlook {
    * @minItems 1
    */
   history: [PricePoint, ...PricePoint[]];
-  premium_last: PricePoint;
   stress: Stress;
-  premium_now_default: PremiumNowDefault;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -237,7 +216,6 @@ export interface Horizon {
   q975: number;
   central: number;
   coverage: Coverage;
-  premium_reference: PremiumReference;
   grid: QuantileGrid;
 }
 /**
@@ -326,24 +304,6 @@ export interface CoverageSplit {
   n_eff95: number | null;
 }
 /**
- * Reference text only ("historical median, not validated"); never used as the default.
- *
- * This interface was referenced by `SiteData`'s JSON-Schema
- * via the `definition` "PremiumReference".
- */
-export interface PremiumReference {
-  month: number;
-  median: number;
-  p10: number;
-  p90: number;
-  /**
-   * e.g. "2015-2024", derived from the data.
-   */
-  years: string;
-  n_years: number;
-  note: string;
-}
-/**
  * The published range method on a finer grid of levels (P18), US cents per bushel.
  *
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -418,27 +378,6 @@ export interface ReturnDistribution {
   counts: number[];
 }
 /**
- * The one premium used for the headline and every horizon until the user enters a quote.
- *
- * This interface was referenced by `SiteData`'s JSON-Schema
- * via the `definition` "PremiumNowDefault".
- */
-export interface PremiumNowDefault {
-  month: number;
-  median: number;
-  p10: number;
-  p90: number;
-  /**
-   * e.g. "2015-2024", derived from the data.
-   */
-  years: string;
-  n_years: number;
-  basis: string;
-  source_last: string;
-  stale: boolean;
-  illustrative: boolean;
-}
-/**
  * This interface was referenced by `SiteData`'s JSON-Schema
  * via the `definition` "TrackRecord".
  */
@@ -448,8 +387,6 @@ export interface TrackRecord {
    */
   metrics: [MetricRow, ...MetricRow[]];
   tests: TestRow[];
-  fob_illustrative: FobRow[];
-  fob_illustrative_note: string | null;
   interval_choice: IntervalChoiceRow[];
   range_choice: RangeChoiceRow[];
   range_diagnostics: RangeDiagnosticRow[];
@@ -530,18 +467,6 @@ export interface TestRow {
   cw_t: number | null;
   cw_p: number | null;
   cw_p_holm: number | null;
-}
-/**
- * This interface was referenced by `SiteData`'s JSON-Schema
- * via the `definition` "FobRow".
- */
-export interface FobRow {
-  split: string;
-  model: "rw" | "drift" | "arima" | "ridge";
-  h: number;
-  n: number;
-  mae_usd_t: number;
-  mape_pct: number;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -900,8 +825,6 @@ export interface RunInputs {
   wasde: WasdeInput;
   prices: SeriesInput;
   ptax: SeriesInput;
-  premium_table: InputFile;
-  premium_card: InputFile;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -930,16 +853,6 @@ export interface SeriesInput {
   rows: number;
   first: string;
   last: string;
-}
-/**
- * This interface was referenced by `SiteData`'s JSON-Schema
- * via the `definition` "InputFile".
- */
-export interface InputFile {
-  file: string;
-  sha256: string | null;
-  bytes: number | null;
-  snapshot: string | null;
 }
 /**
  * web/public/data/archive/index.json: every published outlook, scored once targets pass.

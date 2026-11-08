@@ -280,7 +280,7 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
           <>
             Each dot is one 5% step of the range (5th to 95th percentile), on one scale for all three horizons; the ringed dot
             is the 1-in-10 level, the vertical line is {vs} today, and the end labels are the shared scale&apos;s limits.
-            Illustrative and range-based, not VaR: CBOT only, with the premium and the exchange rate held fixed, so the basis
+            Illustrative and range-based, not VaR: CBOT only, excl. premium, with the exchange rate held fixed, so the basis
             is unhedged and the figures ignore freight, margin calls and contract rolls. No expected shortfall is shown,
             because each 95% tail rests on one or two of {horizons[0]?.calibration_n} overlapping past errors; and no chance
             of reaching a target price, because the ranges are not a price call.
@@ -293,7 +293,7 @@ export default function DecisionPanel({ horizons, p0, buPerT, fx }: Props) {
           <>
             Cada ponto é um passo de 5% da faixa (do percentil 5 ao 95), numa escala única para os três horizontes; o ponto
             com anel é o nível de 1 em 10, a linha vertical é {vs} hoje e os rótulos das pontas são os limites da escala
-            comum. Ilustrativo e baseado em faixas, não é VaR: só CBOT, com prêmio e câmbio fixos, então a base fica sem
+            comum. Ilustrativo e baseado em faixas, não é VaR: só CBOT, sem prêmio, com câmbio fixo, então a base fica sem
             hedge e os números ignoram frete, chamadas de margem e rolagens de contrato. Não mostramos expected shortfall,
             porque cada cauda de 95% se apoia em um ou dois dos {horizons[0]?.calibration_n} erros passados sobrepostos; nem
             a chance de atingir um preço-alvo, porque as faixas não são uma aposta de preço.

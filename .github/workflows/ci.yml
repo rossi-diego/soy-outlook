@@ -62,7 +62,6 @@ jobs:
         run: |
           mkdir -p "$SOY_DATA_DIR"
           cp -r tests/fixtures/bronze "$SOY_DATA_DIR/bronze"
-          cp -r data/seed "$SOY_DATA_DIR/seed"
       - name: Offline pipeline run (network tripwire, every HTTP call goes to a dead proxy)
         env:
           HTTP_PROXY: http://127.0.0.1:9

@@ -59,8 +59,6 @@ export type SlimMetric = Pick<
 export type TrackView = {
   metrics: SlimMetric[];
   tests: TrackRecord["tests"];
-  fob: TrackRecord["fob_illustrative"];
-  fobNote: string | null;
   rangeChoice: TrackRecord["range_choice"];
   /** Hit rates of each range candidate (no change), by split and horizon. */
   rangeDiag: { method: string; split: string; h: number; c80: number; c95: number }[];
@@ -135,8 +133,6 @@ export function buildTrackView(track: TrackRecord, buPerT: number): TrackView {
       cw_p: r4(r.cw_p),
       cw_p_holm: r4(r.cw_p_holm),
     })) as TrackRecord["tests"],
-    fob: track.fob_illustrative,
-    fobNote: track.fob_illustrative_note,
     rangeChoice: track.range_choice,
     rangeDiag: track.range_diagnostics
       .filter((r) => r.model === "rw")

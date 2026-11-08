@@ -129,21 +129,16 @@ STRESS_HISTOGRAM_STEP = 0.025  # bin width of the full h-month return distributi
 # Targets are not rebuilt on specific contracts (roadmap v2.1).
 CONTRACT_LETTERS: dict[int, str] = {1: "F", 3: "H", 5: "K", 7: "N", 8: "Q", 9: "U", 11: "X"}
 
-# Premium defaults: the derived monthly table is "stale" once its source series ended more
-# than this many days before the forecast date.
-STALE_PREMIUM_DAYS = 90
-
 # Decision panel (v2.1, P18, pre-registered 2026-11-08 before the grid was computed). The
 # published range method's quantiles on a finer grid, 5% to 95% in 5% steps, so the panel
 # never needs a raw residual vector. It is the same method on more levels, not a new one, and
 # nothing is chosen on it. The panel itself is client-side arithmetic on these quantiles:
 # downside vs selling (producer) or buying (buyer) at today's close, at the 1-in-10 adverse
 # level (q10 / q90) and the rough 1-in-40 level (q2.5 / q97.5), times tonnes x (1 - hedge
-# ratio), CBOT only with premium and BRL held fixed. Labelled illustrative and range-based,
+# ratio), CBOT only with BRL held fixed (no port premium). Labelled illustrative and range-based,
 # not VaR. No target-price probability and no expected shortfall is published: the 95% tails
 # rest on about 1.5 of 60 overlapping errors each, too few for a tail average.
 QUANTILE_GRID: tuple[float, ...] = tuple(round(0.05 * i, 2) for i in range(1, 20))
-PREMIUM_PROFILE_FIRST_YEAR = 2015
 
 # Release-day event study (v2.1, pre-registered 2026-11-07). The six revision coefficients are
 # Holm-adjusted as one family; a coefficient is quoted as a headline only if its adjusted p is
@@ -266,16 +261,6 @@ class Settings:
     @property
     def gold(self) -> Path:
         return self.data_dir / "gold"
-
-    @property
-    def premium_table(self) -> Path:
-        """Derived 12-row monthly premium profile (the raw daily export is not in the repo)."""
-        return self.data_dir / "seed" / "paranagua_premium_monthly.csv"
-
-    @property
-    def premium_card(self) -> Path:
-        """Data card and provenance note for the derived premium table."""
-        return self.data_dir / "seed" / "paranagua_premium_monthly.meta.json"
 
     def ensure(self) -> None:
         for p in (self.bronze, self.silver, self.gold, self.web_data_dir):

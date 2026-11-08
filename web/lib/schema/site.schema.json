@@ -459,45 +459,6 @@
       "title": "FeatureMeta",
       "type": "object"
     },
-    "FobRow": {
-      "additionalProperties": false,
-      "properties": {
-        "split": {
-          "type": "string"
-        },
-        "model": {
-          "enum": [
-            "rw",
-            "drift",
-            "arima",
-            "ridge"
-          ],
-          "type": "string"
-        },
-        "h": {
-          "type": "integer"
-        },
-        "n": {
-          "type": "integer"
-        },
-        "mae_usd_t": {
-          "type": "number"
-        },
-        "mape_pct": {
-          "type": "number"
-        }
-      },
-      "required": [
-        "split",
-        "model",
-        "h",
-        "n",
-        "mae_usd_t",
-        "mape_pct"
-      ],
-      "title": "FobRow",
-      "type": "object"
-    },
     "ForwardRow": {
       "additionalProperties": false,
       "properties": {
@@ -713,9 +674,6 @@
         "coverage": {
           "$ref": "#/$defs/Coverage"
         },
-        "premium_reference": {
-          "$ref": "#/$defs/PremiumReference"
-        },
         "grid": {
           "$ref": "#/$defs/QuantileGrid"
         }
@@ -736,7 +694,6 @@
         "q975",
         "central",
         "coverage",
-        "premium_reference",
         "grid"
       ],
       "title": "Horizon",
@@ -827,52 +784,6 @@
         "v1"
       ],
       "title": "InferenceRule",
-      "type": "object"
-    },
-    "InputFile": {
-      "additionalProperties": false,
-      "properties": {
-        "file": {
-          "type": "string"
-        },
-        "sha256": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "bytes": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "snapshot": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "file",
-        "sha256",
-        "bytes",
-        "snapshot"
-      ],
-      "title": "InputFile",
       "type": "object"
     },
     "IntervalChoiceRow": {
@@ -1078,7 +989,7 @@
       "additionalProperties": false,
       "properties": {
         "schema_version": {
-          "const": 3,
+          "const": 4,
           "type": "integer"
         },
         "version": {
@@ -1123,9 +1034,6 @@
         },
         "fx_default": {
           "$ref": "#/$defs/FxDefault"
-        },
-        "premium_source": {
-          "$ref": "#/$defs/PremiumSource"
         },
         "splits": {
           "$ref": "#/$defs/Splits"
@@ -1192,7 +1100,6 @@
         "wasde_source",
         "consts",
         "fx_default",
-        "premium_source",
         "splits",
         "champion",
         "champion_alpha",
@@ -1760,14 +1667,8 @@
           "minItems": 1,
           "type": "array"
         },
-        "premium_last": {
-          "$ref": "#/$defs/PricePoint"
-        },
         "stress": {
           "$ref": "#/$defs/Stress"
-        },
-        "premium_now_default": {
-          "$ref": "#/$defs/PremiumNowDefault"
         }
       },
       "required": [
@@ -1775,9 +1676,7 @@
         "last",
         "horizons",
         "history",
-        "premium_last",
-        "stress",
-        "premium_now_default"
+        "stress"
       ],
       "title": "Outlook",
       "type": "object"
@@ -1912,161 +1811,6 @@
         "items"
       ],
       "title": "Placebo",
-      "type": "object"
-    },
-    "PremiumNowDefault": {
-      "additionalProperties": false,
-      "description": "The one premium used for the headline and every horizon until the user enters a quote.",
-      "properties": {
-        "month": {
-          "maximum": 12,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "median": {
-          "type": "number"
-        },
-        "p10": {
-          "type": "number"
-        },
-        "p90": {
-          "type": "number"
-        },
-        "years": {
-          "description": "e.g. \"2015-2024\", derived from the data.",
-          "type": "string"
-        },
-        "n_years": {
-          "type": "integer"
-        },
-        "basis": {
-          "type": "string"
-        },
-        "source_last": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "stale": {
-          "type": "boolean"
-        },
-        "illustrative": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "month",
-        "median",
-        "p10",
-        "p90",
-        "years",
-        "n_years",
-        "basis",
-        "source_last",
-        "stale",
-        "illustrative"
-      ],
-      "title": "PremiumNowDefault",
-      "type": "object"
-    },
-    "PremiumReference": {
-      "additionalProperties": false,
-      "description": "Reference text only (\"historical median, not validated\"); never used as the default.",
-      "properties": {
-        "month": {
-          "maximum": 12,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "median": {
-          "type": "number"
-        },
-        "p10": {
-          "type": "number"
-        },
-        "p90": {
-          "type": "number"
-        },
-        "years": {
-          "description": "e.g. \"2015-2024\", derived from the data.",
-          "type": "string"
-        },
-        "n_years": {
-          "type": "integer"
-        },
-        "note": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "month",
-        "median",
-        "p10",
-        "p90",
-        "years",
-        "n_years",
-        "note"
-      ],
-      "title": "PremiumReference",
-      "type": "object"
-    },
-    "PremiumSource": {
-      "additionalProperties": false,
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "unit": {
-          "type": "string"
-        },
-        "contract_convention": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string"
-        },
-        "licence": {
-          "type": "string"
-        },
-        "first": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "last": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "valid_until": {
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "type": "string"
-        },
-        "days_since_last": {
-          "type": "integer"
-        },
-        "stale_after_days": {
-          "type": "integer"
-        },
-        "stale": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "kind",
-        "name",
-        "unit",
-        "contract_convention",
-        "method",
-        "licence",
-        "first",
-        "last",
-        "valid_until",
-        "days_since_last",
-        "stale_after_days",
-        "stale"
-      ],
-      "title": "PremiumSource",
       "type": "object"
     },
     "PricePoint": {
@@ -2802,20 +2546,12 @@
         },
         "ptax": {
           "$ref": "#/$defs/SeriesInput"
-        },
-        "premium_table": {
-          "$ref": "#/$defs/InputFile"
-        },
-        "premium_card": {
-          "$ref": "#/$defs/InputFile"
         }
       },
       "required": [
         "wasde",
         "prices",
-        "ptax",
-        "premium_table",
-        "premium_card"
+        "ptax"
       ],
       "title": "RunInputs",
       "type": "object"
@@ -3347,22 +3083,6 @@
           },
           "type": "array"
         },
-        "fob_illustrative": {
-          "items": {
-            "$ref": "#/$defs/FobRow"
-          },
-          "type": "array"
-        },
-        "fob_illustrative_note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "interval_choice": {
           "items": {
             "$ref": "#/$defs/IntervalChoiceRow"
@@ -3412,8 +3132,6 @@
       "required": [
         "metrics",
         "tests",
-        "fob_illustrative",
-        "fob_illustrative_note",
         "interval_choice",
         "range_choice",
         "range_diagnostics",
