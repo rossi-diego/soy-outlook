@@ -11,6 +11,7 @@ type Props = { reaction: Wasde["reaction"]; buPerT: number; lines: Wasde["lines"
 const STEP: Record<string, number> = { pp: 0.1, Mt: 0.5 };
 const RANGE: Record<string, number> = { pp: 3, Mt: 10 };
 
+// Strength uses the Holm-adjusted p-value: the six coefficients are one family of tests.
 function strength(p: number): { label: string; tone: string } {
   if (p < 0.05) return { label: "clear", tone: "text-ink" };
   if (p < 0.1) return { label: "weak", tone: "text-ink-2" };
@@ -37,7 +38,7 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
       <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
         {reaction.items.map((it) => {
           const v = moves[it.feature] ?? 0;
-          const s = strength(it.p_value);
+          const s = strength(it.p_holm);
           return (
             <div key={it.feature} className="space-y-1">
               <label htmlFor={it.feature} className="flex items-baseline justify-between gap-2 text-sm">

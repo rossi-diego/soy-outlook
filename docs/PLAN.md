@@ -12,7 +12,7 @@ Soybean stakeholders (export traders, crushers, co-ops, risk teams) need an hone
 | Topic | Decision | Why |
 |---|---|---|
 | Target | Log return of the CBOT front-month close, release day → last session ≤ t + h months | Public, live data; the premium has no licensed public feed |
-| Premium / FX | Visible user inputs (seasonal median default; PTAX) | Seed premium has no provenance and ends 2025-06 |
+| Premium / FX | Visible user inputs (v2.1: one current-month median held flat for every horizon, flagged stale; PTAX) | Seed premium has no provenance and ends 2025-06; v2.1 commits only a derived 12-row monthly table (DATA_LICENSES.md) |
 | Ranges | Calibrated on CBOT errors only; never on FOB errors applied to an assumed premium | Consistency (ML reviewer) |
 | Features | Fixed set of 11: US soy/corn stocks-to-use, revisions (US, Brazil, Argentina, China, World), momentum, May dummy | No selection leakage |
 | Marketing year | Rank MYs within each report (latest = projected); `proj` flag is missing in 2010 | Data reviewer |

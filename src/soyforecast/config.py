@@ -30,6 +30,51 @@ CALIB_WINDOW = 60
 CALIB_MIN = 24
 QUANTILES: tuple[float, ...] = (0.025, 0.10, 0.50, 0.90, 0.975)
 
+# Interval construction (v2.1, pre-registered 2026-11-07 before any v2.1 result was computed).
+# The method is named for what it is: empirical quantiles (linear interpolation) of the last
+# CALIB_WINDOW realized out-of-sample errors. It is not split-conformal: overlapping h-month
+# windows are not exchangeable, and at n = 60 the finite-sample conformal rank would make the
+# 95% bound equal to the largest past error. Two centrings compete:
+#   "raw"    - the errors as they are (the v2.0 baseline);
+#   "median" - errors minus their median, so the band is centred on the model forecast and
+#              does not carry a drift that the random-walk comparison rejected.
+# Selection rule, validation split only: for every model and horizon, the mean of the 80% plus
+# the 95% interval score (Gneiting-Raftery, log-return units) is divided by the baseline's; the
+# challenger replaces the baseline only if the average ratio is below 1. Holdout is reported.
+INTERVAL_METHOD = "empirical quantiles of past errors"
+INTERVAL_CENTRINGS: tuple[str, ...] = ("raw", "median")
+INTERVAL_BASELINE = "raw"
+NOMINAL_LEVELS: tuple[float, ...] = (0.80, 0.95)
+# A band is flagged (amber) when its validation hit rate is more than this below nominal.
+COVERAGE_WARN_PP = 0.05
+
+# Premium defaults: the derived monthly table is "stale" once its source series ended more
+# than this many days before the forecast date.
+STALE_PREMIUM_DAYS = 90
+PREMIUM_PROFILE_FIRST_YEAR = 2015
+
+# Release-day event study (v2.1, pre-registered 2026-11-07). The six revision coefficients are
+# Holm-adjusted as one family; a coefficient is quoted as a headline only if its adjusted p is
+# below REACTION_ALPHA. Expected signs (for flagging, never for dropping a coefficient):
+REACTION_ALPHA = 0.05
+REACTION_EXPECTED_SIGN: dict[str, int] = {
+    "rev_us_soy_stu": -1,
+    "rev_us_corn_stu": -1,
+    "rev_br_soy_prod": -1,
+    "rev_ar_soy_prod": -1,
+    "rev_cn_soy_imports": 1,
+    "rev_world_soy_es": -1,
+}
+# Robustness checks reported next to the main fit (the main fit is never replaced by them):
+# placebo = the same regression on the one-session return ending PLACEBO_LAG_SESSIONS sessions
+# before each release; split sample = reports before vs from SPLIT_SAMPLE_BREAK; roll
+# exclusion = drop release days within ROLL_EXCLUSION_BDAYS business days of the last trading
+# day (business day before the 15th) of any soybean contract (F, H, K, N, Q, U, X).
+PLACEBO_LAG_SESSIONS = 5
+SPLIT_SAMPLE_BREAK = pd.Timestamp("2018-01-01")
+ROLL_EXCLUSION_BDAYS = 3
+SOY_CONTRACT_MONTHS: tuple[int, ...] = (1, 3, 5, 7, 8, 9, 11)
+
 # Champion rule: a model replaces the random walk at a horizon only if its Clark-West
 # test against the random walk, Holm-adjusted across horizons, has p below this level.
 CHAMPION_ALPHA = 0.10
@@ -82,8 +127,14 @@ class Settings:
         return self.data_dir / "gold"
 
     @property
-    def premium_seed(self) -> Path:
-        return self.data_dir / "seed" / "paranagua_premium.csv"
+    def premium_table(self) -> Path:
+        """Derived 12-row monthly premium profile (the raw daily export is not in the repo)."""
+        return self.data_dir / "seed" / "paranagua_premium_monthly.csv"
+
+    @property
+    def premium_card(self) -> Path:
+        """Data card and provenance note for the derived premium table."""
+        return self.data_dir / "seed" / "paranagua_premium_monthly.meta.json"
 
     def ensure(self) -> None:
         for p in (self.bronze, self.silver, self.gold, self.web_data_dir):

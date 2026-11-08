@@ -11,11 +11,13 @@ venv/
 coverage.xml
 htmlcov/
 
-# Data: everything is rebuilt by the pipeline, except the premium seed
+# Data: everything is rebuilt by the pipeline, except the derived premium table and its card.
+# The raw daily premium export must never be committed (see DATA_LICENSES.md).
 data/*
 !data/seed/
 data/seed/*
-!data/seed/paranagua_premium.csv
+!data/seed/paranagua_premium_monthly.csv
+!data/seed/paranagua_premium_monthly.meta.json
 
 # Model artefacts
 *.pkl

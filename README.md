@@ -21,9 +21,9 @@ Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 
 The Paranaguá FOB price is the CBOT soybean price plus a port premium. This project forecasts the CBOT part after every WASDE since July 2010, using only what was public that day. **No model beat "no change".** That includes ARIMA, the average past change and a ridge regression on WASDE revisions, and it holds for both the 2016–2023 validation period and the untouched 2024–2026 holdout. What the project does deliver:
 
-1. **A tested range.** Over 2016–2023, the 1-month 80% range held the actual price 79% of the time; on the holdout it held 81%.
-2. **The price of a WASDE revision on release day.** For example, +1 pp of US soybean stocks-to-use has moved CBOT by −2.1 ± 0.9 USD/t on the day.
-3. **The premium and the exchange rate as explicit inputs.** That turns the CBOT range into FOB USD/t or R$ per sack.
+1. **A tested range, labelled by what it achieved.** Over 2016–2023, the 1-month 80% range held the actual price 80% of the time; on the holdout it held 84%. The 6-month 80% range held only 71% in validation, and the site says so next to it.
+2. **The size of a WASDE release-day move, and an honest read of what drives it.** The typical release-day move is about ±4.4 USD/t, and 1 report in 10 moves CBOT by more than ±11.6 USD/t. The revisions jointly explain 18% of those moves, but no single revision coefficient survives a Holm adjustment across the six tested (the strongest, US soybean stocks-to-use, has Holm p = 0.11), and that one is unstable: about −5.6 USD/t per pp in 2010–2017, −0.6 from 2018.
+3. **The premium and the exchange rate as explicit inputs.** That turns the CBOT range into FOB USD/t or R$ per sack. The default premium is one stale monthly median held flat, so "CBOT unchanged" means FOB unchanged.
 
 | CBOT, USD/t, mean absolute error | 1 month | 3 months | 6 months |
 |---|---|---|---|
@@ -32,13 +32,15 @@ The Paranaguá FOB price is the CBOT soybean price plus a port premium. This pro
 | Average past change | 20.4 | 38.0 | 52.4 |
 | WASDE ridge regression | 21.3 | 38.7 | 53.9 |
 | No change, holdout 2024-01 → 2026-10 | 14.2 | 20.3 | 31.4 |
-| 80% range hit rate, validation / holdout | 79% / 81% | 74% / 90% | 70% / 85% |
+| 80% range hit rate, validation / holdout | 80% / 84% | 75% / 90% | 71% / 85% |
+| 95% range hit rate, validation / holdout | 96% / 97% | 90% / 97% | 89% / 100% |
 
 Values as of the CBOT close of 6 Nov 2026 and the October 2026 WASDE. They regenerate on every run (`web/public/data/metrics.csv`).
 
 - **The ridge model is significantly *worse*** than no change at 1 and 6 months: Diebold-Mariano p = 0.046 and 0.017 (0.10 at 3 months).
 - **No challenger passes** the Clark-West test against no change, Holm-adjusted across horizons (all adjusted p = 1.0).
-- **The 6-month range is too narrow** in validation: it held 70% of outcomes, not 80%. The page shows these hit rates next to every range.
+- **The 6-month range is too narrow** in validation: it held 71% of outcomes, not 80%. The page shows these hit rates next to every range.
+- **How the ranges are built.** Empirical quantiles of the last 60 realized out-of-sample errors, centred on their median. The centring (raw vs median) was fixed as a two-way choice in `config.py` before the comparison was run and chosen on validation only by interval score (median: 0.974 of the raw score). On the holdout it scored 1.008, slightly worse, which is reported rather than acted on. It is *not* split-conformal: overlapping windows break exchangeability, and each 95% bound rests on one or two past errors.
 
 ## What the first version got wrong
 
@@ -76,13 +78,13 @@ flowchart LR
         A[WASDE history<br/>wasde-monthly-report release<br/>as-published vintages]
         B[CBOT ZS=F<br/>Yahoo, validated cache]
         C[BCB PTAX<br/>SGS 1]
-        D[Premium seed<br/>2004–2025]
+        D[Premium: derived<br/>12-row monthly table]
     end
     subgraph Pipeline["soyforecast (Python)"]
         E[bronze<br/>parquet + sha256 manifest]
         F[silver<br/>one row per report:<br/>projected-MY levels + revisions]
         G[gold<br/>origin × features × h-month targets<br/>purged by date]
-        H[backtest<br/>rolling origin, 4 models<br/>conformal ranges, DM / CW / Holm]
+        H[backtest<br/>rolling origin, 4 models<br/>empirical-quantile ranges, DM / CW / Holm]
         I[publish<br/>static JSON + CSV]
     end
     subgraph Serve
@@ -120,7 +122,7 @@ soyforecast run                                     # writes web/public/data/*.j
 cd web && npm ci && npm run build && npx serve out  # or: npm run dev
 ```
 
-The repository ships the latest `web/public/data`, so `cd web && npm ci && npm run dev` works without running the pipeline. No API keys are needed; every source is public. The optional settings are listed in `.env.example`.
+The repository ships the latest `web/public/data`, so `cd web && npm ci && npm run dev` works without running the pipeline. No API keys are needed. WASDE, CBOT and PTAX are fetched from public sources; the premium default comes from a committed, derived 12-row table (see [DATA_LICENSES.md](DATA_LICENSES.md)). The optional settings are listed in `.env.example`.
 
 ## Development
 
@@ -134,28 +136,36 @@ CI runs the Python checks, then the live pipeline, then the site build and Playw
 
 ```
 ├── src/soyforecast/
-│   ├── ingest/       wasde.py · prices.py (validated cache) · fx.py (PTAX) · premium.py
+│   ├── ingest/       wasde.py · prices.py (validated cache) · fx.py (PTAX) · premium.py (derived table + data card)
 │   ├── features/     vintages.py (projected MY, revisions) · dataset.py (origins, targets, roll flags)
 │   ├── models/       ladder.py (rw, drift, arima, ridge) · live.py (forecast, release-day reaction)
-│   ├── evaluation/   backtest.py (purging, conformal ranges, champion) · stats.py (DM-HLN, Clark-West, Holm)
+│   ├── evaluation/   backtest.py (purging, empirical-quantile ranges, centring rule, champion) · stats.py (DM-HLN, Clark-West, Holm)
 │   ├── publish/      web_json.py
 │   ├── pipeline.py · cli.py · config.py (pre-registered horizons, splits, features) · units.py · logs.py
-├── tests/            23 tests, 87% coverage
+├── tests/            35 tests: no look-ahead, intervals, event study, premium card, JSON contract
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
-├── data/seed/        paranagua_premium.csv (the only committed data)
+├── data/seed/        paranagua_premium_monthly.csv + .meta.json (derived premium table and data card, the only committed data)
 └── notebooks/archive/  v1 notebooks, kept for the audit trail
 ```
 
 ## Limitations
 
-- **Premium source.** It has no public, licensed feed. The seed is a terminal export with unrecorded provenance, and it stops in June 2025. On the site the premium is a user input with a seasonal default.
+- **Premium source.** It has no public, licensed feed. The default is derived from a private terminal export with unrecorded vendor and contract convention that stops in June 2025, so it is flagged stale. Only 12 monthly statistics are committed; the daily export was removed from the working tree (earlier commits still hold it, see [DATA_LICENSES.md](DATA_LICENSES.md)). On the site the premium is a user input, and FOB is illustrative until you enter a quote.
+- **Forecast origin.** Ranges are tested from WASDE release-day closes. The live forecast is issued from the latest close, some days after the report (`days_since_report` in `meta.json`).
 - **Contract rolls.** The continuous front month jumps at expiry. Windows that cross a roll partly measure a calendar spread; the July–September rolls (old crop to new crop) are the largest. Metrics without those windows are in `metrics.csv` (`subset = no_crop_roll`), and the conclusion is the same.
-- **Revisions, not surprises.** A "revision" is a change against the previous report, not against analyst expectations. Release-day sensitivities therefore understate the true surprise effect, and some coefficients (Brazil crop) have weak evidence and an unexpected sign.
+- **Revisions, not surprises.** A "revision" is a change against the previous report, not against analyst expectations. Release-day sensitivities therefore understate the true surprise effect. None of the six survives Holm adjustment; two (Brazil crop, China imports) have the unexpected sign and are flagged but kept in the what-if total, since dropping them would be post-hoc selection. A placebo on the session five days before each release finds nothing (joint p = 0.21). Excluding release days within three business days of a contract expiry (85 of 173) shrinks the US soybean coefficient to −1.1 ± 1.0 USD/t.
 - **Low power at long horizons.** 3- and 6-month windows overlap, so there are few independent outcomes, and the tests there have little power.
 - **Not investment advice.**
 
 ## Data sources
 
+Licences and terms for each source are in [DATA_LICENSES.md](DATA_LICENSES.md).
+
 - USDA WASDE, via [WASDE Tracker](https://github.com/rossi-diego/wasde-monthly-report): every report since July 2010, as published.
-- CBOT soybean futures, Yahoo Finance `ZS=F`. The response checks follow [soybean-crush-margin](https://github.com/rossi-diego/soybean-crush-margin).
+- CBOT soybean futures, Yahoo Finance `ZS=F` (delayed CME data). The response checks follow [soybean-crush-margin](https://github.com/rossi-diego/soybean-crush-margin).
 - Banco Central do Brasil, PTAX selling rate (SGS series 1).
+- Paranaguá premium: a derived 12-row monthly table (median, p10, p90 per calendar month) with a data card, `data/seed/paranagua_premium_monthly.*`. Not public data.
+
+## Roadmap
+
+- **A public premium source.** A CEPEA/ESALQ-implied Paranaguá premium (R$/60 kg ÷ PTAX, minus CBOT nearby, with full lineage) would replace the derived table and make a joint CBOT × premium × FX band possible.

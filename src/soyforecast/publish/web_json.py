@@ -19,16 +19,21 @@ from soyforecast import __version__
 from soyforecast.config import (
     CALIB_WINDOW,
     CHAMPION_ALPHA,
+    COVERAGE_WARN_PP,
     FEATURES,
     HOLDOUT_START,
     HORIZONS,
+    INTERVAL_BASELINE,
+    INTERVAL_CENTRINGS,
+    INTERVAL_METHOD,
+    NOMINAL_LEVELS,
     OOS_START,
+    STALE_PREMIUM_DAYS,
     VALIDATION_END,
     VALIDATION_START,
     Settings,
 )
 from soyforecast.features.vintages import FEATURE_META
-from soyforecast.ingest.premium import monthly_premium_profile
 from soyforecast.logs import get_logger
 from soyforecast.models.ladder import MODEL_LABELS
 from soyforecast.units import BUSHELS_PER_TONNE, SACK_KG
@@ -37,7 +42,7 @@ if TYPE_CHECKING:
     from soyforecast.pipeline import Artefacts
 
 log = get_logger(__name__)
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TRACK_MODELS = ("rw", "arima", "ridge")
 
 
@@ -70,14 +75,39 @@ def _r(x: float, d: int = 2) -> float | None:
     return None if x is None or not np.isfinite(x) else round(float(x), d)
 
 
+def _premium_source(a: Artefacts) -> dict[str, Any]:
+    """What the site needs to label the premium default honestly (P8/P9)."""
+    anchor = pd.Timestamp(a.live["anchor_date"])
+    card = a.premium.card
+    return {
+        "kind": "derived monthly table",
+        "name": card["name"],
+        "unit": card["unit"],
+        "contract_convention": card["contract_convention"],
+        "method": card["method"],
+        "licence": card["licence"],
+        "first": card["series"]["first"],
+        "last": card["series"]["last"],
+        "valid_until": card["valid_until"],
+        "days_since_last": int((anchor - a.premium.last_date).days),
+        "stale_after_days": STALE_PREMIUM_DAYS,
+        "stale": a.premium.is_stale(anchor),
+    }
+
+
 def build_meta(a: Artefacts) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
+    release = pd.Timestamp(a.live["release_date"])
     return {
         "schema_version": SCHEMA_VERSION,
         "version": __version__,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "as_of_close": anchor,
         "latest_wasde": {"month": a.live["report_month"], "release_date": a.live["release_date"]},
+        # Ranges are calibrated at release-day origins; the live forecast is issued from the
+        # latest close, this many days after the report (P15).
+        "days_since_report": int((anchor - release).days),
+        "origin_note": "Ranges are calibrated on forecasts made at the close of WASDE release days.",
         "next_wasde": a.wasde_manifest.get("next_release"),
         "wasde_source": {
             "tag": a.wasde_manifest.get("release_tag"),
@@ -90,7 +120,7 @@ def build_meta(a: Artefacts) -> dict[str, Any]:
             "date": a.ptax.index[-1],
             "source": "Banco Central do Brasil, PTAX selling rate (SGS 1)",
         },
-        "premium_seed": {"first": a.premium.index.min(), "last": a.premium.index.max()},
+        "premium_source": _premium_source(a),
         "splits": {
             "oos_start": OOS_START,
             "validation": [VALIDATION_START, VALIDATION_END],
@@ -99,6 +129,18 @@ def build_meta(a: Artefacts) -> dict[str, Any]:
         "champion": {str(h): m for h, m in a.champion.items()},
         "champion_alpha": CHAMPION_ALPHA,
         "calibration_window": CALIB_WINDOW,
+        "intervals": {
+            "method": INTERVAL_METHOD,
+            "centring": a.centring,
+            "candidates": list(INTERVAL_CENTRINGS),
+            "baseline": INTERVAL_BASELINE,
+            "rule": (
+                "Chosen on validation only: mean 80% + 95% interval score relative to the "
+                "baseline, averaged over models and horizons; the holdout is reported."
+            ),
+            "nominal_levels": list(NOMINAL_LEVELS),
+            "coverage_warn_pp": COVERAGE_WARN_PP,
+        },
         "models": MODEL_LABELS,
         "features": [
             {"id": f, "label": FEATURE_META[f][0], "unit": FEATURE_META[f][1]} for f in FEATURES
@@ -106,23 +148,60 @@ def build_meta(a: Artefacts) -> dict[str, Any]:
     }
 
 
+def _coverage(a: Artefacts, model: str, h: int) -> dict[str, Any]:
+    """Realized hit rates of the champion's bands per split, next to the nominal levels (P5)."""
+    m = a.metrics[(a.metrics["subset"] == "all") & (a.metrics["model"] == model)]
+    m = m[m["h"] == h]
+    out: dict[str, Any] = {"nominal": {"80": NOMINAL_LEVELS[0], "95": NOMINAL_LEVELS[1]}}
+    for split, years in (
+        ("validation", f"{VALIDATION_START.year}-{str(VALIDATION_END.year)[2:]}"),
+        ("holdout", f"{HOLDOUT_START.year}+"),
+    ):
+        row = m[m["split"] == split]
+        if row.empty or pd.isna(row["cover80"].iloc[0]):
+            out[split] = None
+            continue
+        r = row.iloc[0]
+        out[split] = {
+            "years": years,
+            "n": int(r["n_interval"]),
+            "cover80": _r(r["cover80"], 3),
+            "cover95": _r(r["cover95"], 3),
+            "calibration_n_eff": _r(r.get("calibration_n_eff", np.nan), 1),
+        }
+    val = out.get("validation")
+    out["warn80"] = bool(val and val["cover80"] < NOMINAL_LEVELS[0] - COVERAGE_WARN_PP)
+    out["warn95"] = bool(val and val["cover95"] < NOMINAL_LEVELS[1] - COVERAGE_WARN_PP)
+    return out
+
+
+def _premium_row(a: Artefacts, month: int) -> dict[str, Any]:
+    p = a.premium.profile.loc[month]
+    return {
+        "month": month,
+        "median": _r(p["median"], 0),
+        "p10": _r(p["p10"], 0),
+        "p90": _r(p["p90"], 0),
+        "years": a.premium.years_label(month),
+        "n_years": int(p["n_years"]),
+    }
+
+
 def build_outlook(a: Artefacts) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
-    profile = monthly_premium_profile(a.premium)
     horizons = []
     for row in a.forecast:
         target = pd.Timestamp(row["target_date"])  # type: ignore[arg-type]
-        prem = profile.loc[target.month]
+        h = int(row["h"])  # type: ignore[call-overload]
         horizons.append(
             {
                 **row,
                 "central": _r(float(a.live["p0_c_bu"]) * math.exp(float(row["mean_logret"]))),  # type: ignore[arg-type]
-                "premium_default": {
-                    "month": int(target.month),
-                    "median": _r(prem["median"], 0),
-                    "p10": _r(prem["p10"], 0),
-                    "p90": _r(prem["p90"], 0),
-                    "years": "2015-2025",
+                "coverage": _coverage(a, str(row["model"]), h),
+                # Reference text only: the default premium is held flat at premium_now_default.
+                "premium_reference": {
+                    **_premium_row(a, int(target.month)),
+                    "note": "historical median, not validated",
                 },
             }
         )
@@ -132,10 +211,15 @@ def build_outlook(a: Artefacts) -> dict[str, Any]:
         "last": {"date": anchor, "c_bu": _r(float(a.live["p0_c_bu"]))},
         "horizons": horizons,
         "history": [{"date": d, "c_bu": _r(v)} for d, v in weekly.items()],
-        "premium_last": {"date": a.premium.index[-1], "c_bu": _r(float(a.premium.iloc[-1]), 0)},
+        "premium_last": {"date": a.premium.last_date, "c_bu": _r(a.premium.last_c_bu, 0)},
+        # One premium for the headline and every horizon (P6): with CBOT unchanged, FOB
+        # changes only through the premium the user enters.
         "premium_now_default": {
-            "month": int(anchor.month),
-            "median": _r(profile.loc[anchor.month, "median"], 0),
+            **_premium_row(a, int(anchor.month)),
+            "basis": "calendar-month median",
+            "source_last": a.premium.last_date,
+            "stale": a.premium.is_stale(anchor),
+            "illustrative": True,
         },
     }
 
@@ -171,7 +255,9 @@ def build_track_record(a: Artefacts) -> dict[str, Any]:
     return {
         "metrics": metric_rows,
         "tests": a.tests.replace({np.nan: None}).to_dict(orient="records"),
-        "fob_illustrative": a.fob.replace({np.nan: None}).to_dict(orient="records"),
+        "fob_illustrative": a.premium.card.get("fob_illustrative_frozen", {}).get("rows", []),
+        "fob_illustrative_note": a.premium.card.get("fob_illustrative_frozen", {}).get("note"),
+        "interval_choice": a.interval_choice.replace({np.nan: None}).to_dict(orient="records"),
         "paths": paths,
     }
 
@@ -209,6 +295,7 @@ def build_wasde(a: Artefacts) -> dict[str, Any]:
         "market_year": last["proj_my"],
         "lines": lines,
         "reaction": a.reaction,
+        "next_release": a.wasde_manifest.get("next_release"),
         "forward": a.evidence,
     }
 

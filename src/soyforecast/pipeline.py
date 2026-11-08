@@ -4,16 +4,30 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from soyforecast.config import Settings
-from soyforecast.evaluation.backtest import fob_illustrative, run_backtest, summarize
+from soyforecast.config import HORIZONS, Settings
+from soyforecast.evaluation.backtest import (
+    fob_illustrative,
+    run_backtest,
+    select_centring,
+    summarize,
+)
 from soyforecast.features.dataset import build_dataset, live_row
 from soyforecast.features.vintages import build_vintages
 from soyforecast.ingest.fx import fetch_ptax
-from soyforecast.ingest.premium import load_premium
+from soyforecast.ingest.premium import (
+    PremiumTable,
+    build_card,
+    derive_monthly_table,
+    file_sha256,
+    load_premium_table,
+    load_raw_premium,
+    write_premium_table,
+)
 from soyforecast.ingest.prices import fetch_soy_prices
 from soyforecast.ingest.wasde import fetch_wasde, load_wasde
 from soyforecast.logs import get_logger
@@ -28,28 +42,29 @@ class Artefacts:
     vintages: pd.DataFrame
     prices: pd.Series
     ptax: pd.Series
-    premium: pd.Series
+    premium: PremiumTable
     dataset: pd.DataFrame
     live: pd.Series
     backtest: pd.DataFrame
     metrics: pd.DataFrame
     tests: pd.DataFrame
     champion: dict[int, str]
-    fob: pd.DataFrame
     forecast: list[dict[str, object]]
     evidence: list[dict[str, object]]
-    reaction: dict[str, object]
+    reaction: dict[str, Any]
+    centring: str
+    interval_choice: pd.DataFrame
 
 
 def ingest(
     settings: Settings,
-) -> tuple[pd.DataFrame, pd.Series, pd.Series, pd.Series, dict[str, Any]]:
+) -> tuple[pd.DataFrame, pd.Series, pd.Series, PremiumTable, dict[str, Any]]:
     settings.ensure()
     wasde = load_wasde(fetch_wasde(settings))
     manifest = json.loads((settings.bronze / "wasde_manifest.json").read_text())
     prices = fetch_soy_prices(settings.bronze, offline=settings.offline)
     ptax = fetch_ptax(settings.bronze, offline=settings.offline)
-    premium = load_premium(settings.premium_seed)
+    premium = load_premium_table(settings.premium_table, settings.premium_card)
     return wasde, prices, ptax, premium, manifest
 
 
@@ -61,15 +76,15 @@ def run(settings: Settings) -> Artefacts:
     dataset.to_parquet(settings.gold / "dataset.parquet")
     log.info("gold.dataset", rows=len(dataset), first=str(dataset["origin"].min().date()))
 
-    bt = run_backtest(dataset)
+    bt, centring, interval_choice = select_centring(run_backtest(dataset))
     bt.to_parquet(settings.gold / "backtest.parquet")
+    interval_choice.to_csv(settings.gold / "interval_choice.csv", index=False)
     metrics, champion, tests = summarize(bt)
     metrics.to_csv(settings.gold / "metrics.csv", index=False)
     tests.to_csv(settings.gold / "tests.csv", index=False)
-    fob = fob_illustrative(bt, premium, champion)
 
     live = live_row(vintages, prices)
-    forecast = live_forecast(dataset, live, bt, champion)
+    forecast = live_forecast(dataset, live, bt, champion, centring)
     ev = evidence(dataset, float(live["p0_c_bu"]))
     reaction = release_day_reaction(vintages, prices, float(live["p0_c_bu"]))
     log.info("live.forecast", anchor=str(live["anchor_date"].date()), champion=champion)
@@ -85,8 +100,48 @@ def run(settings: Settings) -> Artefacts:
         metrics,
         tests,
         champion,
-        fob,
         forecast,
         ev,
         reaction,
+        centring,
+        interval_choice,
     )
+
+
+def derive_premium(settings: Settings, raw_path: Path) -> Path:
+    """Regenerate the derived premium table and card from a private raw export.
+
+    Also freezes the illustrative FOB backtest of the random walk (premium held at its
+    report-day value), the only result that needs the daily series. The random walk's
+    forecasts do not depend on any fitted parameter, so the frozen rows stay valid.
+    """
+    raw = load_raw_premium(raw_path)
+    table = derive_monthly_table(raw)
+    settings.ensure()
+    vintages = build_vintages(load_wasde(fetch_wasde(settings)))
+    prices = fetch_soy_prices(settings.bronze, offline=settings.offline)
+    bt = run_backtest(build_dataset(vintages, prices), models=("rw",))
+    fob = fob_illustrative(bt, raw, dict.fromkeys(HORIZONS, "rw"))
+    fob_rows = [
+        {
+            k: int(v) if k in ("h", "n") else round(v, 3) if isinstance(v, float) else v
+            for k, v in r.items()
+        }
+        for r in fob.to_dict(orient="records")
+    ]
+    card = build_card(
+        raw,
+        table,
+        raw_sha256=file_sha256(raw_path),
+        derived_at=pd.Timestamp.now(),
+        fob_frozen=fob_rows,
+    )
+    card_path = write_premium_table(table, card, settings.premium_table)
+    log.info(
+        "premium.derived",
+        table=str(settings.premium_table),
+        card=str(card_path),
+        rows=len(table),
+        last=card["series"]["last"],
+    )
+    return card_path

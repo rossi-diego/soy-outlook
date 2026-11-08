@@ -9,6 +9,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable, Mapping
+from typing import TypeVar
+
 import numpy as np
 from scipy import stats
 
@@ -57,9 +60,12 @@ def clark_west(
     return float(t), float(stats.t.sf(t, df=n - 1))
 
 
-def holm(pvalues: dict[int, float]) -> dict[int, float]:
-    """Holm-adjusted p-values (keys are horizons). NaN stays NaN."""
-    valid = sorted(((p, k) for k, p in pvalues.items() if np.isfinite(p)))
+K = TypeVar("K", bound=Hashable)
+
+
+def holm(pvalues: Mapping[K, float]) -> dict[K, float]:
+    """Holm-adjusted p-values for one family (keys: horizons, features, ...). NaN stays NaN."""
+    valid = sorted(((p, k) for k, p in pvalues.items() if np.isfinite(p)), key=lambda t: t[0])
     m = len(valid)
     out = {k: float("nan") for k in pvalues}
     running = 0.0

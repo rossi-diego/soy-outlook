@@ -17,6 +17,8 @@ from soyforecast.config import (
     CHAMPION_ALPHA,
     HOLDOUT_START,
     HORIZONS,
+    INTERVAL_BASELINE,
+    INTERVAL_CENTRINGS,
     OOS_START,
     QUANTILES,
     VALIDATION_END,
@@ -44,7 +46,11 @@ def split_of(origin: pd.Timestamp, target_date: pd.Timestamp) -> str:
     return "burn_in"
 
 
-def run_backtest(df: pd.DataFrame, models: tuple[str, ...] = tuple(MODELS)) -> pd.DataFrame:
+def run_backtest(
+    df: pd.DataFrame,
+    models: tuple[str, ...] = tuple(MODELS),
+    centring: str = INTERVAL_BASELINE,
+) -> pd.DataFrame:
     """Out-of-sample mean forecasts for every origin from OOS_START, model and horizon."""
     rows = []
     origins = df[df["origin"] >= OOS_START]
@@ -73,18 +79,34 @@ def run_backtest(df: pd.DataFrame, models: tuple[str, ...] = tuple(MODELS)) -> p
         log.debug("backtest.origin", origin=str(origin.date()))
     out = pd.DataFrame(rows)
     log.info("backtest.done", forecasts=len(out), origins=out["origin"].nunique())
-    return add_intervals(out)
+    return add_intervals(out, centring)
 
 
-def residual_quantiles(residuals: np.ndarray) -> dict[float, float]:
-    return {q: float(np.quantile(residuals, q)) for q in QUANTILES}
+def residual_quantiles(
+    residuals: np.ndarray, centring: str = INTERVAL_BASELINE
+) -> dict[float, float]:
+    """Empirical quantiles of past errors (linear interpolation), optionally median-centred.
+
+    Not split-conformal (see config.INTERVAL_METHOD): with overlapping windows the residuals
+    are not exchangeable, so no finite-sample guarantee is claimed.
+    """
+    r = np.asarray(residuals, dtype=float)
+    if centring == "median":
+        r = r - np.median(r)
+    elif centring != "raw":
+        raise ValueError(f"unknown centring {centring!r}; expected one of {INTERVAL_CENTRINGS}")
+    return {q: float(np.quantile(r, q)) for q in QUANTILES}
 
 
-def add_intervals(bt: pd.DataFrame) -> pd.DataFrame:
-    """Empirical (split-conformal style) quantiles from realized out-of-sample residuals."""
+def add_intervals(bt: pd.DataFrame, centring: str = INTERVAL_BASELINE) -> pd.DataFrame:
+    """Interval quantiles from realized out-of-sample residuals (purged by date).
+
+    Also records `calib_n`, the number of past errors behind each interval.
+    """
     bt = bt.sort_values(["model", "h", "origin"]).copy()
     for q in QUANTILES:
         bt[f"q{q}"] = np.nan
+    bt["calib_n"] = np.nan
     for (_model, _h), g in bt.groupby(["model", "h"]):
         resid = (g["y"] - g["pred"]).to_numpy()
         tdates = g["target_date"].to_numpy()
@@ -93,9 +115,69 @@ def add_intervals(bt: pd.DataFrame) -> pd.DataFrame:
             past = resid[:i][known][-CALIB_WINDOW:]
             if len(past) < CALIB_MIN:
                 continue
-            for q, v in residual_quantiles(past).items():
+            bt.at[idx, "calib_n"] = len(past)
+            for q, v in residual_quantiles(past, centring).items():
                 bt.at[idx, f"q{q}"] = r["pred"] + v
     return bt
+
+
+def interval_score(y: np.ndarray, lo: np.ndarray, hi: np.ndarray, alpha: float) -> np.ndarray:
+    """Gneiting-Raftery interval score of a central (1 - alpha) interval; lower is better."""
+    y, lo, hi = (np.asarray(a, dtype=float) for a in (y, lo, hi))
+    return (hi - lo) + (2 / alpha) * (lo - y) * (y < lo) + (2 / alpha) * (y - hi) * (y > hi)
+
+
+def _mean_interval_score(g: pd.DataFrame) -> float:
+    """Mean of the 80% plus the 95% interval score over rows with an interval and an outcome."""
+    g = g.dropna(subset=["y", "q0.1", "q0.9", "q0.025", "q0.975"])
+    if g.empty:
+        return float("nan")
+    s80 = interval_score(g["y"], g["q0.1"], g["q0.9"], 0.2)
+    s95 = interval_score(g["y"], g["q0.025"], g["q0.975"], 0.05)
+    return float(np.mean(s80 + s95))
+
+
+def select_centring(
+    bt: pd.DataFrame,
+) -> tuple[pd.DataFrame, str, pd.DataFrame]:
+    """Apply the pre-registered interval-centring rule (config.INTERVAL_CENTRINGS).
+
+    Every candidate is scored on the validation split only; the holdout score is computed for
+    reporting and never used. Returns the backtest with the chosen intervals, the chosen
+    centring and the comparison table (one row per candidate and split).
+    """
+    variants = {c: add_intervals(bt, c) for c in INTERVAL_CENTRINGS}
+    rows = []
+    for split in ("validation", "holdout"):
+        base: dict[tuple[str, int], float] = {}
+        for (model, h), g in variants[INTERVAL_BASELINE][
+            variants[INTERVAL_BASELINE]["split"] == split
+        ].groupby(["model", "h"]):
+            base[(str(model), int(h))] = _mean_interval_score(g)
+        for c, v in variants.items():
+            ratios = []
+            for (model, h), g in v[v["split"] == split].groupby(["model", "h"]):
+                b = base.get((str(model), int(h)), float("nan"))
+                s_ = _mean_interval_score(g)
+                if np.isfinite(b) and b > 0 and np.isfinite(s_):
+                    ratios.append(s_ / b)
+            rows.append(
+                {
+                    "centring": c,
+                    "split": split,
+                    "score_ratio": float(np.mean(ratios)) if ratios else float("nan"),
+                    "cells": len(ratios),
+                }
+            )
+    table = pd.DataFrame(rows)
+    val = table[table["split"] == "validation"].set_index("centring")["score_ratio"]
+    chosen = INTERVAL_BASELINE
+    for c in INTERVAL_CENTRINGS:
+        if c != INTERVAL_BASELINE and np.isfinite(val[c]) and val[c] < min(1.0, val[chosen]):
+            chosen = c
+    table["chosen"] = table["centring"] == chosen
+    log.info("backtest.interval_centring", chosen=chosen, validation=val.round(4).to_dict())
+    return variants[chosen], chosen, table
 
 
 def _metrics(g: pd.DataFrame, rw: pd.DataFrame) -> dict[str, float]:
@@ -129,6 +211,13 @@ def _metrics(g: pd.DataFrame, rw: pd.DataFrame) -> dict[str, float]:
             u = iv["y"] - iv[f"q{q}"]
             pin.append(np.maximum(q * u, (q - 1) * u).mean())
         out["pinball"] = float(np.mean(pin))
+        out["iscore80"] = float(interval_score(iv["y"], iv["q0.1"], iv["q0.9"], 0.2).mean())
+        out["iscore95"] = float(interval_score(iv["y"], iv["q0.025"], iv["q0.975"], 0.05).mean())
+    if "calib_n" in g and g["calib_n"].notna().any():
+        h = int(g.index.get_level_values("h")[0])
+        out["calibration_n"] = float(g["calib_n"].median())
+        # Overlapping h-month windows: about one independent outcome per h monthly origins.
+        out["calibration_n_eff"] = out["calibration_n"] / h
     return out
 
 

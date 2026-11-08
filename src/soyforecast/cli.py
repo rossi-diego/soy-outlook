@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from soyforecast.config import Settings
@@ -39,6 +41,27 @@ def ingest() -> None:
     from soyforecast.pipeline import ingest as do_ingest
 
     do_ingest(Settings())
+
+
+RAW_PREMIUM_OPTION = typer.Option(..., help="Private daily premium export (date, premium_c_bu).")
+
+
+@app.command("derive-premium")
+def derive_premium(
+    raw: Path = RAW_PREMIUM_OPTION,
+    offline: bool = typer.Option(True, help="Use cached bronze files only."),
+) -> None:
+    """Rebuild data/seed/paranagua_premium_monthly.{csv,meta.json} from a raw export.
+
+    The raw file stays outside the repository; only the derived table and card are committed.
+    """
+    import os
+
+    if offline:
+        os.environ["SOY_OFFLINE"] = "1"
+    from soyforecast.pipeline import derive_premium as do_derive
+
+    do_derive(Settings(), raw)
 
 
 if __name__ == "__main__":

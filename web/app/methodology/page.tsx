@@ -20,8 +20,9 @@ export default function Methodology() {
     <div className="mx-auto max-w-3xl space-y-6">
       <h1 className="text-3xl font-semibold tracking-tight">Methodology</h1>
       <p className="text-ink-2">
-        Plain language first; the technical detail follows in each section. Everything is rebuilt from public data by the
-        open-source pipeline on every run.
+        Plain language first; the technical detail follows in each section. The CBOT, WASDE and exchange-rate data are
+        public and rebuilt by the open-source pipeline on every run. The Paranaguá premium is not: its default comes from
+        a 12-row monthly table derived from a private terminal export (see Data and licences below).
       </p>
 
       <Block title="What is forecast">
@@ -80,10 +81,22 @@ export default function Methodology() {
 
       <Block title="Ranges">
         <p>
-          The 80% and 95% ranges are empirical quantiles of the last {meta.calibration_window} realized out-of-sample
-          errors of the winning model at that horizon (split-conformal style). Because 3- and 6-month windows overlap,
-          coverage is approximate; the track record reports the hit rate actually achieved, including on the untouched
-          holdout since {dateLabel(meta.splits.holdout_start)}.
+          The 80% and 95% ranges are {meta.intervals.method}: quantiles of the last {meta.calibration_window} realized
+          out-of-sample errors of the winning model at that horizon
+          {meta.intervals.centring === "median" ? ", centred on their median so the band does not carry a past drift" : ""}.
+          This is not split-conformal: 3- and 6-month windows overlap, so the errors are not exchangeable and no
+          finite-sample guarantee is claimed. The centring was chosen between {meta.intervals.candidates.join(" and ")} by a
+          rule fixed in advance (interval score on the validation period only).
+        </p>
+        <p>
+          The labels show the hit rate actually achieved, next to the nominal level, including on the untouched holdout
+          since {dateLabel(meta.splits.holdout_start)}. With {meta.calibration_window} errors, each 95% bound rests on about
+          one or two past observations, and overlapping windows leave about {Math.round(meta.calibration_window / 6)}{" "}
+          independent outcomes at 6 months, so the 95% tails are rough.
+        </p>
+        <p>
+          Forecasts are tested from the close of each WASDE release day. The live forecast is issued from the latest close,{" "}
+          {meta.days_since_report} days after the {dateLabel(meta.latest_wasde.release_date)} report.
         </p>
       </Block>
 
@@ -109,6 +122,33 @@ export default function Methodology() {
           </li>
           <li>Taxes, logistics and costs from farm to port.</li>
         </ul>
+      </Block>
+
+      <Block title="Data and licences">
+        <ul className="list-disc space-y-1 pl-5">
+          <li>USDA WASDE: US government work, public domain, via the WASDE Tracker history.</li>
+          <li>Banco Central do Brasil PTAX (SGS series 1): public open data from the BCB.</li>
+          <li>
+            CBOT soybean futures (ZS=F): delayed quotes from Yahoo Finance, originating from CME Group. Used for research
+            under their terms; the raw price history is not redistributed in the repository.
+          </li>
+          <li>
+            Paranaguá premium: only a derived table of 12 monthly medians and 10th/90th percentiles is published. The
+            daily export it came from ({dateLabel(meta.premium_source.first)} –{" "}
+            {dateLabel(meta.premium_source.last)}) has unrecorded vendor and contract convention and is not redistributed.
+            Contract convention: {meta.premium_source.contract_convention}.
+          </li>
+        </ul>
+        <p>
+          Full details are in{" "}
+          <a
+            className="underline hover:text-ink"
+            href="https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/blob/main/DATA_LICENSES.md"
+          >
+            DATA_LICENSES.md
+          </a>
+          .
+        </p>
       </Block>
 
       <Block title="What changed from the first version">

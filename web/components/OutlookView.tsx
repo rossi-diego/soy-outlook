@@ -114,10 +114,12 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
 
   const last = outlook.last.c_bu;
   const base = { fx, buPerT: meta.consts.bu_per_t, sackKg: meta.consts.sack_kg };
-  const premiumFor = (h: Horizon) => premiumOverride ?? h.premium_default.median;
+  // One premium for the headline and every horizon: with CBOT unchanged, FOB is unchanged.
+  const premiumDefault = outlook.premium_now_default;
+  const premium = premiumOverride ?? premiumDefault.median;
   const championAllRw = outlook.horizons.every((h) => h.model === "rw");
   const h1 = outlook.horizons[0];
-  const todayA: Assumptions = { ...base, premium: premiumOverride ?? outlook.premium_now_default.median };
+  const todayA: Assumptions = { ...base, premium };
 
   // Chart: the CBOT leg only (the part that is forecast), in ¢/bu or USD/t.
   const chartUnit: Unit = unit === "c_bu" ? "c_bu" : "usd_t";
@@ -186,7 +188,7 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
 
   const headline = useMemo(() => {
     const h3 = outlook.horizons.find((h) => h.h === 3) ?? h1;
-    const a3: Assumptions = { ...base, premium: premiumFor(h3) };
+    const a3: Assumptions = { ...base, premium };
     return {
       now: money(convert(last, unit, todayA), unit),
       lo: money(convert(h3.q100, unit, a3), unit),
@@ -211,7 +213,14 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
           {unit !== "c_bu" && (
             <>
               {" "}
-              with a {signed0(todayA.premium)}¢/bu premium{premiumOverride === null && <> ({MONTHS[outlook.premium_now_default.month - 1]} median)</>}
+              with a {signed0(todayA.premium)}¢/bu premium
+              {premiumOverride === null && (
+                <>
+                  {" "}
+                  ({MONTHS[premiumDefault.month - 1]} median {premiumDefault.years}; data end{" "}
+                  {dateLabel(premiumDefault.source_last)})
+                </>
+              )}
             </>
           )}
           . By {headline.date}, 8 in 10 past
@@ -242,7 +251,9 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
             <label htmlFor="premium" className="flex justify-between text-xs font-medium uppercase tracking-wide text-muted">
               <span>Paranaguá premium (your input)</span>
               <span className="tabular normal-case text-ink">
-                {premiumOverride === null ? "seasonal median" : `${signed0(premiumOverride)}¢/bu`}
+                {premiumOverride === null
+                  ? `${MONTHS[premiumDefault.month - 1]} median${premiumDefault.stale ? " (stale)" : ""}`
+                  : `${signed0(premiumOverride)}¢/bu`}
               </span>
             </label>
             <input
@@ -251,12 +262,13 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
               min={-100}
               max={250}
               step={5}
-              value={premiumOverride ?? h1.premium_default.median}
+              value={premium}
               onChange={(e) => setPremiumOverride(Number(e.target.value))}
               className="w-full accent-[var(--accent)]"
             />
             <p className="text-xs text-muted">
-              Default: median premium for each target month, {h1.premium_default.years}.{" "}
+              Default: the {MONTHS[premiumDefault.month - 1]} median, {premiumDefault.years}, held flat for every
+              horizon. Source data end {dateLabel(premiumDefault.source_last)}.{" "}
               {premiumOverride !== null && (
                 <button type="button" className="underline hover:text-ink" onClick={() => setPremiumOverride(null)}>
                   Reset
@@ -291,7 +303,7 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
             key={h.h}
             h={h}
             unit={unit}
-            a={{ ...base, premium: premiumFor(h) }}
+            a={{ ...base, premium }}
             hit={hitRates[String(h.h)]}
           />
         ))}
@@ -315,10 +327,13 @@ export default function OutlookView({ meta, outlook, hitRates }: Props) {
         <div className="card space-y-2 p-5 text-sm leading-relaxed text-ink-2">
           <h2 className="text-base font-semibold text-ink">About the premium</h2>
           <p>
-            The Paranaguá premium has no free, licensed public feed. Defaults come from a terminal export the author holds
-            ({dateLabel(meta.premium_seed.first)} – {dateLabel(meta.premium_seed.last)}; original source not recorded).
-            Median by month, 2015–2025:{" "}
-            {outlook.horizons.map((h) => `${MONTHS[h.premium_default.month - 1]} ${signed0(h.premium_default.median)}`).join(", ")}{" "}
+            The Paranaguá premium has no free, licensed public feed. The default is a monthly median derived from a
+            terminal export the author holds ({dateLabel(meta.premium_source.first)} –{" "}
+            {dateLabel(meta.premium_source.last)}; original source and CBOT contract not recorded). Only the 12 monthly
+            statistics are published. Historical median by shipment month, not validated:{" "}
+            {outlook.horizons
+              .map((h) => `${MONTHS[h.premium_reference.month - 1]} ${signed0(h.premium_reference.median)}`)
+              .join(", ")}{" "}
             ¢/bu. Replace it with your broker&apos;s quote.
           </p>
         </div>

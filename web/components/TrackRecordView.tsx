@@ -244,8 +244,8 @@ export default function TrackRecordView({ meta, track }: { meta: Meta; track: Tr
         <div className="card space-y-3 p-5 text-sm">
           <h2 className="text-base font-semibold">Paranaguá FOB, illustrative</h2>
           <p className="text-ink-2">
-            Where the premium history exists (to {dateLabel(meta.premium_seed.last)}), FOB = CBOT forecast + premium held
-            at its value on the report day.
+            Where the premium history exists (to {dateLabel(meta.premium_source.last)}), FOB = CBOT forecast + premium held
+            at its value on the report day. Computed once from the daily series, which is no longer published.
           </p>
           <table className="w-full">
             <thead>
