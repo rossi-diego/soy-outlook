@@ -1,0 +1,172 @@
+# Scheduled data refresh: live run -> validation gate -> site build and e2e -> bot PR with auto-merge.
+# The bot never pushes to main; it opens (or updates) one PR from the bot/data-refresh branch, and
+# GitHub merges it once the required checks pass. Owner setup is documented in docs/REFRESH.md.
+name: Data refresh
+
+on:
+  schedule:
+    # After the CBOT close (13:20 CT) in both seasons: 19:45 UTC = 13:45 CST / 14:45 CDT.
+    # `soyforecast guard --event close` re-checks the Chicago clock in code, so a delayed or
+    # mis-set cron can never publish before the close.
+    - cron: "45 19 * * 1-5"
+    # Second pass on WASDE days only (guarded): picks up the new report if the WASDE Tracker
+    # published it after the first run.
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      allow_stale:
+        description: "Publish even if the latest close is older than the freshness limit"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The only job in the repository with write access.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      SOY_DATA_DIR: ${{ github.workspace }}/data
+      SOY_WEB_DATA_DIR: ${{ github.workspace }}/web/public/data
+      SOY_WASDE_LOCK: ${{ github.workspace }}/data/wasde.lock.json
+      GH_TOKEN: ${{ secrets.REFRESH_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install exactly the locked versions
+        run: |
+          uv sync --locked --no-dev
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Guard (CBOT close in Chicago, or WASDE day for the second pass)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then
+            soyforecast --json-logs guard --event wasde --meta web/public/data/meta.json
+          else
+            soyforecast --json-logs guard --event close
+          fi
+
+      # The bronze cache (gitignored) survives between runs, so a failed download falls back to
+      # the last good file instead of failing, and a download is checked against it.
+      - name: Restore the bronze cache
+        if: steps.guard.outputs.should_run == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: data/bronze
+          key: bronze-${{ github.run_id }}
+          restore-keys: bronze-
+
+      - name: Keep the published copy for the delta checks
+        if: steps.guard.outputs.should_run == 'true'
+        run: cp -r web/public/data "$RUNNER_TEMP/previous"
+
+      # --update-pin moves data/wasde.lock.json to the latest WASDE Tracker release once the new
+      # file passes the checks against the cache; the pin change is part of the data PR.
+      - name: Live pipeline run
+        if: steps.guard.outputs.should_run == 'true'
+        run: soyforecast --json-logs run --update-pin
+
+      - name: Save the bronze cache
+        if: steps.guard.outputs.should_run == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: data/bronze
+          key: bronze-${{ github.run_id }}
+
+      - name: Validation gate (shape, freshness, deltas, append-only archive)
+        id: validate
+        if: steps.guard.outputs.should_run == 'true'
+        run: |
+          soyforecast --json-logs validate --data web/public/data --baseline "$RUNNER_TEMP/previous" \
+            ${{ inputs.allow_stale && '--allow-stale' || '' }}
+
+      - name: Anything new to publish?
+        id: diff
+        if: steps.guard.outputs.should_run == 'true'
+        run: |
+          old="$RUNNER_TEMP/previous/meta.json"; new="web/public/data/meta.json"
+          key() { jq -r '[.as_of_close, .latest_wasde.month, (.next_wasde // ""), .freshness.degraded] | join("|")' "$1"; }
+          if [ "$(key "$old")" = "$(key "$new")" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No new close, report or source status: nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build and test the site on the new data
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: web
+        env:
+          CI: "true"
+        run: |
+          npm ci
+          npm run build
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - name: Open or update the data PR
+        id: cpr
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          token: ${{ secrets.REFRESH_TOKEN || github.token }}
+          branch: bot/data-refresh
+          delete-branch: true
+          add-paths: |
+            web/public/data
+            data/wasde.lock.json
+          commit-message: "chore(data): refresh to the ${{ steps.validate.outputs.as_of_close }} close"
+          title: "chore(data): refresh to the ${{ steps.validate.outputs.as_of_close }} close"
+          body: |
+            Automated refresh from `${{ github.workflow }}` run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+            - as-of close: `${{ steps.validate.outputs.as_of_close }}`
+            - degraded sources: `${{ steps.validate.outputs.degraded_sources || 'none' }}`
+            - validation gate: passed (shape, freshness, row deltas, append-only archive)
+            - site build and Playwright: passed on this data
+
+            Only `web/public/data` and the WASDE pin (`data/wasde.lock.json`) change. Archived outlooks are append-only.
+          labels: data-refresh
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number != '' && steps.cpr.outputs.pull-request-operation != 'none'
+        run: gh pr merge --auto --squash "${{ steps.cpr.outputs.pull-request-number }}"
+
+      - name: Alert on a failed, stale or degraded refresh
+        # Stale counts on its own: a manual run with allow_stale passes the gate but still alerts.
+        if: always() && steps.guard.outputs.should_run == 'true' && (failure() || steps.validate.outputs.degraded == 'true' || steps.validate.outputs.stale == 'true')
+        run: |
+          title="Data refresh needs attention"
+          body="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Outcome: ${{ job.status }}; stale: ${{ steps.validate.outputs.stale || 'unknown' }}; degraded sources: ${{ steps.validate.outputs.degraded_sources || 'none' }}.
+          The site shows a stale banner on its own once the close is more than 3 business days old."
+          gh label create data-alert --color B7791F --description "Stale or degraded data refresh" 2>/dev/null || true
+          num=$(gh issue list --label data-alert --state open --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --body "$body"
+          else
+            gh issue create --title "$title" --label data-alert --body "$body"
+          fi

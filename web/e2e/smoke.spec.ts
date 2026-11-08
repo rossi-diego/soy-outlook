@@ -6,7 +6,7 @@ test("outlook shows three horizons and switches units", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /In 1 month/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: /In 6 months/ })).toBeVisible();
   await expect(page.locator('[role="img"] svg').first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("radio", { name: "FOB R$/sack" }).click();
+  await page.getByRole("radio", { name: "CBOT R$/sack" }).click();
   await expect(page.getByLabel("BRL per USD")).toBeVisible();
   await expect(page.getByText(/R\$ [\d,.]+\/sc/).first()).toBeVisible();
 });
@@ -16,9 +16,13 @@ test("wasde what-if responds to a revision", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /What-if/ })).toBeVisible();
   const slider = page.getByLabel("US soybean stocks-to-use");
   await slider.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByText(/Expected CBOT move on release day/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
+  const before = await page.getByTestId("pi80").textContent();
+  // Sliders step by 0.01; a single step can move the interval by less than its display rounding,
+  // so move a quarter of a point (well inside the typical revision) before comparing.
+  for (let i = 0; i < 25; i++) await page.keyboard.press("ArrowRight");
+  await expect(page.getByText(/Historical average reaction on release day/)).toBeVisible();
+  await expect(page.getByTestId("pi80")).not.toHaveText(before ?? "");
+  await expect(page.getByRole("button", { name: "Clear" })).toBeEnabled();
 });
 
 test("track record and methodology render", async ({ page }) => {
@@ -42,4 +46,15 @@ test("pages never scroll horizontally", async ({ page }) => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, url).toBeLessThanOrEqual(0);
   }
+});
+
+test("origin flag and next-WASDE move follow the published data", async ({ page }) => {
+  const meta = await (await page.request.get("/data/meta.json")).json();
+  const wasde = await (await page.request.get("/data/wasde.json")).json();
+  await page.goto("/");
+  await expect(page.getByText(new RegExp(`${meta.days_since_report} days after its release`)).first()).toBeVisible();
+  await page.goto("/wasde/");
+  const move = wasde.reaction.release_move;
+  await expect(page.getByText(new RegExp(`±\s*${move.typical_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
+  await expect(page.getByText(new RegExp(`±\s*${move.one_in_ten_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
 });

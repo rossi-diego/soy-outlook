@@ -1,10 +1,12 @@
-"""Small helpers shared by the ingest modules: atomic writes and file hashes."""
+"""Small helpers shared by the ingest modules: atomic writes, file hashes, dated snapshots."""
 
 from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import tempfile
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -37,3 +39,34 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+SNAPSHOT_DIR = "snapshots"
+# Dated snapshots kept per source; older ones are deleted (the bronze layer is not committed).
+SNAPSHOT_KEEP = 30
+
+
+def snapshot_name(path: Path, digest: str, day: date) -> str:
+    return f"{path.stem}_{day:%Y%m%d}_{digest[:12]}{path.suffix}"
+
+
+def write_snapshot(path: Path, day: date | None = None, keep: int = SNAPSHOT_KEEP) -> Path:
+    """Keep a dated, content-hashed copy of an accepted bronze file (P24).
+
+    bronze/snapshots/<stem>_<YYYYMMDD>_<sha256[:12]>.<ext>, dated the first day these bytes were
+    accepted: identical bytes are stored once, so a rerun or an unchanged WASDE file adds nothing.
+    The run manifest records which snapshot a run used.
+    """
+    day = day or datetime.now(UTC).date()
+    folder = path.parent / SNAPSHOT_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    digest = sha256(path)
+    same = sorted(folder.glob(f"{path.stem}_[0-9]*_{digest[:12]}{path.suffix}"))
+    if same:
+        return same[0]
+    target = folder / snapshot_name(path, digest, day)
+    shutil.copyfile(path, target)
+    olds = sorted(folder.glob(f"{path.stem}_[0-9]*{path.suffix}"))
+    for old in olds[: max(len(olds) - keep, 0)]:
+        old.unlink()
+    return target

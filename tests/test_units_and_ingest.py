@@ -5,9 +5,8 @@ import pandas as pd
 import pytest
 
 from soyforecast.ingest.fx import parse_ptax
-from soyforecast.ingest.premium import load_premium, monthly_premium_profile
 from soyforecast.ingest.prices import PriceDataError, fetch_soy_prices, price_problems
-from soyforecast.units import BUSHELS_PER_TONNE, c_bu_to_usd_t, fob_usd_t, usd_t_to_brl_sack
+from soyforecast.units import BUSHELS_PER_TONNE, c_bu_to_usd_t, usd_t_to_brl_sack
 
 
 def test_bushels_per_tonne_from_exact_definitions():
@@ -16,7 +15,6 @@ def test_bushels_per_tonne_from_exact_definitions():
 
 def test_conversions():
     assert c_bu_to_usd_t(1000) == pytest.approx(367.437, abs=1e-3)
-    assert fob_usd_t(1000, 50) == pytest.approx(c_bu_to_usd_t(1050))
     assert usd_t_to_brl_sack(400, 5.5) == pytest.approx(132.0)
 
 
@@ -59,12 +57,27 @@ def test_parse_ptax():
     assert parse_ptax([]).empty
 
 
-def test_premium_seed_drops_placeholders(tmp_path):
-    p = tmp_path / "prem.csv"
-    p.write_text(
-        "date,premium_c_bu\n2020-01-02,50\n2020-01-03,300\n2020-02-03,-300\n2020-02-04,70\n"
+def test_no_premium_data_anywhere_in_the_repo():
+    """Owner decision (2026-11-08): no licensed premium source, so no premium file is shipped."""
+    import subprocess
+
+    from soyforecast.config import ROOT
+
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=False
+    ).stdout.splitlines()
+    # Code may name the user input (web/lib/premium.ts); no premium *data* file may be tracked.
+    data_ext = (".csv", ".parquet", ".json", ".xlsx", ".xls", ".txt")
+    assert not [
+        f
+        for f in tracked
+        if "premium" in f.lower()
+        and (f.startswith(("data/", "web/public/")) or f.lower().endswith(data_ext))
+    ]
+    assert not (ROOT / "data" / "seed").exists() or not any((ROOT / "data" / "seed").iterdir())
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "data/seed/paranagua_premium.csv"],
+        cwd=ROOT,
+        check=False,
     )
-    s = load_premium(p)
-    assert list(s.values) == [50, 70]
-    prof = monthly_premium_profile(s, first_year=2015)
-    assert prof.loc[1, "median"] == 50
+    assert ignored.returncode == 0  # .gitignore blocks any premium file under data/

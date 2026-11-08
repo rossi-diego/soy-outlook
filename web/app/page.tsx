@@ -1,17 +1,16 @@
+import type { Metadata } from "next";
+
 import OutlookView from "@/components/OutlookView";
-import { getMeta, getOutlook, getTrackRecord } from "@/lib/data";
+import { getMeta, getOutlook } from "@/lib/data";
+import { pageMetadata } from "@/lib/site";
+
+export const metadata: Metadata = pageMetadata(
+  "/",
+  null,
+  "Price-risk ranges for Brazilian export soybeans 1, 3 and 6 months after each USDA WASDE report, for budgeting and hedging: CBOT ranges labelled by the hit rate they achieved, an illustrative downside-vs-selling-today panel, and the premium and exchange rate as your inputs.",
+);
 
 export default function Home() {
-  const meta = getMeta();
-  const outlook = getOutlook();
-  const track = getTrackRecord();
-  // Validation hit rate of the champion's 80% range, per horizon, for the cards.
-  const hitRates: Record<string, { cover80: number | null; n: number | null }> = {};
-  for (const h of outlook.horizons) {
-    const row = track.metrics.find(
-      (m) => m.subset === "all" && m.split === "validation" && m.model === h.model && m.h === h.h,
-    );
-    hitRates[String(h.h)] = { cover80: row?.cover80 ?? null, n: row?.n_interval ?? null };
-  }
-  return <OutlookView meta={meta} outlook={outlook} hitRates={hitRates} />;
+  // Hit rates now come with each horizon (outlook.json `coverage`), so the copy cannot drift from the data.
+  return <OutlookView meta={getMeta()} outlook={getOutlook()} />;
 }

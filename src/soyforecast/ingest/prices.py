@@ -14,7 +14,9 @@ import numpy as np
 import pandas as pd
 
 from soyforecast.config import SOY_TICKER
-from soyforecast.ingest._cache import atomic_write_parquet
+from soyforecast.errors import InputDataError
+from soyforecast.freshness import SourceLog
+from soyforecast.ingest._cache import atomic_write_parquet, write_snapshot
 from soyforecast.logs import get_logger
 
 log = get_logger(__name__)
@@ -25,7 +27,7 @@ MAX_CACHE_RATIO_DRIFT = 0.02
 START = "2004-01-01"
 
 
-class PriceDataError(RuntimeError):
+class PriceDataError(InputDataError):
     pass
 
 
@@ -69,6 +71,7 @@ def fetch_soy_prices(
     bronze: Path,
     offline: bool = False,
     downloader: Callable[[str, str], pd.Series] = _download_yahoo,
+    sources: SourceLog | None = None,
 ) -> pd.Series:
     """Daily ZS=F closes in US cents per bushel, indexed by session date."""
     path = bronze / "zs_daily.parquet"
@@ -76,6 +79,8 @@ def fetch_soy_prices(
     if offline:
         if cached is None:
             raise PriceDataError("offline mode and no price cache")
+        if sources is not None:
+            sources.record("prices", "offline", cached.index.max())
         return cached
     try:
         new = downloader(SOY_TICKER, START)
@@ -87,10 +92,15 @@ def fetch_soy_prices(
         if cached is None:
             raise PriceDataError(f"price download rejected: {problems}")
         log.warning("prices.using_cache", problems=problems, last=str(cached.index.max().date()))
+        if sources is not None:
+            sources.record("prices", "cache", cached.index.max(), "; ".join(problems))
         return cached
     new = new.rename("close_c_bu")
     new.index.name = "date"
     atomic_write_parquet(new.to_frame(), path)
+    write_snapshot(path)
+    if sources is not None:
+        sources.record("prices", "live", new.index.max())
     log.info(
         "prices.ready",
         rows=len(new),

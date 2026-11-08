@@ -1,4 +1,5 @@
-import { signed } from "@/lib/format";
+import { num, signed } from "@/lib/format";
+import type { Locale } from "@/lib/i18n";
 
 /** Signed change with an arrow; direction carried by glyph + sign, color only reinforces. */
 export default function Delta({
@@ -6,11 +7,16 @@ export default function Delta({
   digits = 0,
   suffix = "",
   className = "",
+  loc = "en",
+  zeroAsNumber = false,
 }: {
   value: number | null | undefined;
   digits?: number;
   suffix?: string;
   className?: string;
+  loc?: Locale;
+  /** Show a zero move as "0.0" plus the unit instead of "unch.", e.g. next to an interval in that unit. */
+  zeroAsNumber?: boolean;
 }) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return <span className={`text-muted ${className}`}>—</span>;
@@ -25,8 +31,8 @@ export default function Delta({
           {arrow}
         </span>
       )}
-      {signed(value, digits)}
-      {value !== 0 && suffix}
+      {value === 0 && zeroAsNumber ? num(0, digits, loc) : signed(value, digits, loc)}
+      {(value !== 0 || zeroAsNumber) && suffix}
     </span>
   );
 }

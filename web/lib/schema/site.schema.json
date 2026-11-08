@@ -1,0 +1,3583 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ArchiveEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Archive file name; a WASDE-day re-publish has its own."
+        },
+        "as_of_close": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "latest_wasde": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "p0_c_bu": {
+          "type": "number"
+        },
+        "revision": {
+          "description": "1 = first-published record; N = file <name>.rN.json (P23b).",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "revises": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The archive file this revision follows."
+        },
+        "revision_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "close revised",
+                "outlook revised"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "horizons": {
+          "items": {
+            "$ref": "#/$defs/ArchivedHorizon"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "file",
+        "as_of_close",
+        "latest_wasde",
+        "p0_c_bu",
+        "revision",
+        "revises",
+        "revision_reason",
+        "horizons"
+      ],
+      "title": "ArchiveEntry",
+      "type": "object"
+    },
+    "ArchiveIndex": {
+      "additionalProperties": false,
+      "description": "web/public/data/archive/index.json: every published outlook, scored once targets pass.",
+      "properties": {
+        "archive_schema_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "prices_through": {
+          "type": "string"
+        },
+        "n_outlooks": {
+          "description": "Outlooks on record, each counted once (revision 1).",
+          "type": "integer"
+        },
+        "n_revisions": {
+          "description": "Later records of an outlook (revised close).",
+          "type": "integer"
+        },
+        "n_resolved": {
+          "type": "integer"
+        },
+        "inside80": {
+          "type": "integer"
+        },
+        "inside95": {
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ArchiveEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "archive_schema_version",
+        "prices_through",
+        "n_outlooks",
+        "n_revisions",
+        "n_resolved",
+        "inside80",
+        "inside95",
+        "entries"
+      ],
+      "title": "ArchiveIndex",
+      "type": "object"
+    },
+    "ArchivedHorizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "target_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "central": {
+          "type": "number"
+        },
+        "low80": {
+          "type": "number"
+        },
+        "high80": {
+          "type": "number"
+        },
+        "low95": {
+          "type": "number"
+        },
+        "high95": {
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "resolved"
+          ],
+          "type": "string"
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actual_date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inside80": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inside95": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "h",
+        "model",
+        "target_date",
+        "central",
+        "low80",
+        "high80",
+        "low95",
+        "high95",
+        "status",
+        "actual",
+        "actual_date",
+        "inside80",
+        "inside95"
+      ],
+      "title": "ArchivedHorizon",
+      "type": "object"
+    },
+    "CoefCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "usd_t_per_unit": {
+          "type": "number"
+        },
+        "se_usd_t": {
+          "type": "number"
+        },
+        "p_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "p_holm": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "usd_t_per_unit",
+        "se_usd_t",
+        "p_value",
+        "p_holm"
+      ],
+      "title": "CoefCheck",
+      "type": "object"
+    },
+    "Consts": {
+      "additionalProperties": false,
+      "properties": {
+        "bu_per_t": {
+          "type": "number"
+        },
+        "sack_kg": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bu_per_t",
+        "sack_kg"
+      ],
+      "title": "Consts",
+      "type": "object"
+    },
+    "ContractInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[FHKNQUX]\\d{2}$",
+          "type": "string"
+        },
+        "delivery_month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "first_notice": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last_trade": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "delivery_month",
+        "first_notice",
+        "last_trade"
+      ],
+      "title": "ContractInfo",
+      "type": "object"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "nominal": {
+          "$ref": "#/$defs/Nominal"
+        },
+        "validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSplit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "holdout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSplit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warn80": {
+          "description": "Validation hit rate more than coverage_warn_pp below 80%.",
+          "type": "boolean"
+        },
+        "warn95": {
+          "description": "Validation hit rate more than coverage_warn_pp below 95%.",
+          "type": "boolean"
+        },
+        "tail_warn_lo80": {
+          "default": false,
+          "description": "Validation lower-tail miss rate more than coverage_warn_pp above 10%.",
+          "type": "boolean"
+        },
+        "tail_warn_hi80": {
+          "default": false,
+          "description": "Validation upper-tail miss rate more than coverage_warn_pp above 10%.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "nominal",
+        "validation",
+        "holdout",
+        "warn80",
+        "warn95",
+        "tail_warn_lo80",
+        "tail_warn_hi80"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "CoverageSplit": {
+      "additionalProperties": false,
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "cover80": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "cover95": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "calibration_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ci80": {
+          "description": "Moving-block bootstrap 95% CI of the 80% hit rate.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        "ci95": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        "n_eff80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Approximate number of independent outcomes."
+        },
+        "n_eff95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo80": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of outcomes below the 80% range (one-tail nominal 10%)."
+        },
+        "miss_hi80": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of outcomes above the 80% range (one-tail nominal 10%)."
+        }
+      },
+      "required": [
+        "years",
+        "n",
+        "cover80",
+        "cover95",
+        "calibration_n_eff",
+        "ci80",
+        "ci95",
+        "n_eff80",
+        "n_eff95",
+        "miss_lo80",
+        "miss_hi80"
+      ],
+      "title": "CoverageSplit",
+      "type": "object"
+    },
+    "FeatureMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "unit"
+      ],
+      "title": "FeatureMeta",
+      "type": "object"
+    },
+    "ForwardRow": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "feature": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "usd_t_per_unit": {
+          "type": "number"
+        },
+        "se_usd_t": {
+          "type": "number"
+        },
+        "p_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "n": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "h",
+        "feature",
+        "label",
+        "unit",
+        "usd_t_per_unit",
+        "se_usd_t",
+        "p_value",
+        "n"
+      ],
+      "title": "ForwardRow",
+      "type": "object"
+    },
+    "Freshness": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of_close": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "offline"
+          ],
+          "type": "string"
+        },
+        "stale_after_bdays": {
+          "type": "integer"
+        },
+        "bdays_close_to_generated": {
+          "type": "integer"
+        },
+        "next_wasde": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceStatus"
+          },
+          "type": "object"
+        },
+        "degraded": {
+          "type": "boolean"
+        },
+        "degraded_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "as_of_close",
+        "generated_at",
+        "mode",
+        "stale_after_bdays",
+        "bdays_close_to_generated",
+        "next_wasde",
+        "sources",
+        "degraded",
+        "degraded_sources"
+      ],
+      "title": "Freshness",
+      "type": "object"
+    },
+    "FxDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "date",
+        "source"
+      ],
+      "title": "FxDefault",
+      "type": "object"
+    },
+    "GitState": {
+      "additionalProperties": false,
+      "properties": {
+        "sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code_dirty": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sha",
+        "code_dirty"
+      ],
+      "title": "GitState",
+      "type": "object"
+    },
+    "Horizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "target_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "mean_logret": {
+          "type": "number"
+        },
+        "calibration_n": {
+          "type": "integer"
+        },
+        "calibration_n_eff": {
+          "type": "number"
+        },
+        "tail_obs_95": {
+          "type": "number"
+        },
+        "contract": {
+          "$ref": "#/$defs/HorizonContract"
+        },
+        "q025": {
+          "type": "number"
+        },
+        "q100": {
+          "type": "number"
+        },
+        "q500": {
+          "type": "number"
+        },
+        "q900": {
+          "type": "number"
+        },
+        "q975": {
+          "type": "number"
+        },
+        "central": {
+          "type": "number"
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "grid": {
+          "$ref": "#/$defs/QuantileGrid"
+        }
+      },
+      "required": [
+        "h",
+        "model",
+        "target_date",
+        "mean_logret",
+        "calibration_n",
+        "calibration_n_eff",
+        "tail_obs_95",
+        "contract",
+        "q025",
+        "q100",
+        "q500",
+        "q900",
+        "q975",
+        "central",
+        "coverage",
+        "grid"
+      ],
+      "title": "Horizon",
+      "type": "object"
+    },
+    "HorizonContract": {
+      "additionalProperties": false,
+      "description": "The hedge contract for a horizon (P10); prices stay the continuous front month.",
+      "properties": {
+        "front_at_origin": {
+          "description": "Contract ZS=F quotes at the origin close.",
+          "pattern": "^[FHKNQUX]\\d{2}$",
+          "type": "string"
+        },
+        "front_at_target": {
+          "description": "Contract ZS=F will quote on the target date.",
+          "pattern": "^[FHKNQUX]\\d{2}$",
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/ContractInfo",
+          "description": "Hedge contract: the first whose first notice day is after the target date."
+        },
+        "crosses_roll": {
+          "description": "The continuous front month rolls (at a last trading day) inside the window.",
+          "type": "boolean"
+        },
+        "crosses_crop_roll": {
+          "type": "boolean"
+        },
+        "series": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "front_at_origin",
+        "front_at_target",
+        "reference",
+        "crosses_roll",
+        "crosses_crop_roll",
+        "series"
+      ],
+      "title": "HorizonContract",
+      "type": "object"
+    },
+    "InferenceRule": {
+      "additionalProperties": false,
+      "description": "The versioned, pre-registered test and champion rule (P16).",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "registered": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "primary_loss": {
+          "type": "string"
+        },
+        "secondary_loss": {
+          "type": "string"
+        },
+        "adjustment": {
+          "type": "string"
+        },
+        "champion": {
+          "type": "string"
+        },
+        "direction_test": {
+          "type": "string"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "v1": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "registered",
+        "primary_loss",
+        "secondary_loss",
+        "adjustment",
+        "champion",
+        "direction_test",
+        "calibration",
+        "v1"
+      ],
+      "title": "InferenceRule",
+      "type": "object"
+    },
+    "IntervalChoiceRow": {
+      "additionalProperties": false,
+      "properties": {
+        "centring": {
+          "type": "string"
+        },
+        "split": {
+          "type": "string"
+        },
+        "score_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cells": {
+          "type": "integer"
+        },
+        "chosen": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "centring",
+        "split",
+        "score_ratio",
+        "cells",
+        "chosen"
+      ],
+      "title": "IntervalChoiceRow",
+      "type": "object"
+    },
+    "Intervals": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "description": "Label of the published range method (the validation winner).",
+          "type": "string"
+        },
+        "range_method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_candidates": {
+          "items": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "range_baseline": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_rule": {
+          "type": "string"
+        },
+        "range_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ]
+          },
+          "type": "object"
+        },
+        "centring": {
+          "type": "string"
+        },
+        "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "nominal_levels": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "coverage_warn_pp": {
+          "type": "number"
+        },
+        "tail_nominal_80": {
+          "description": "One-tail nominal miss rate of the 80% range.",
+          "type": "number"
+        },
+        "tail_obs_min_95": {
+          "description": "Below this many past errors per 95% tail, the 1-in-40 figure is muted.",
+          "type": "number"
+        },
+        "target_readout_levels": {
+          "description": "Range levels a user-typed target is placed between (a position, not odds).",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "method",
+        "range_method",
+        "range_candidates",
+        "range_baseline",
+        "range_rule",
+        "range_labels",
+        "centring",
+        "candidates",
+        "baseline",
+        "rule",
+        "nominal_levels",
+        "coverage_warn_pp",
+        "tail_nominal_80",
+        "tail_obs_min_95",
+        "target_readout_levels"
+      ],
+      "title": "Intervals",
+      "type": "object"
+    },
+    "LatestRevisions": {
+      "additionalProperties": false,
+      "properties": {
+        "month": {
+          "type": "string"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "may": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "month",
+        "previous",
+        "may"
+      ],
+      "title": "LatestRevisions",
+      "type": "object"
+    },
+    "LatestWasde": {
+      "additionalProperties": false,
+      "properties": {
+        "month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "release_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "month",
+        "release_date"
+      ],
+      "title": "LatestWasde",
+      "type": "object"
+    },
+    "LockState": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "title": "LockState",
+      "type": "object"
+    },
+    "Meta": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": 4,
+          "type": "integer"
+        },
+        "version": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "as_of_close": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "latest_wasde": {
+          "$ref": "#/$defs/LatestWasde"
+        },
+        "days_since_report": {
+          "description": "Calendar days from the WASDE release to the close.",
+          "type": "integer"
+        },
+        "origin_note": {
+          "type": "string"
+        },
+        "next_wasde": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "freshness": {
+          "$ref": "#/$defs/Freshness"
+        },
+        "wasde_source": {
+          "$ref": "#/$defs/WasdeSource"
+        },
+        "consts": {
+          "$ref": "#/$defs/Consts"
+        },
+        "fx_default": {
+          "$ref": "#/$defs/FxDefault"
+        },
+        "splits": {
+          "$ref": "#/$defs/Splits"
+        },
+        "champion": {
+          "additionalProperties": {
+            "enum": [
+              "rw",
+              "drift",
+              "arima",
+              "ridge"
+            ],
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "champion_alpha": {
+          "type": "number"
+        },
+        "calibration_window": {
+          "type": "integer"
+        },
+        "calib_min": {
+          "description": "Realized errors needed before a backtest range is drawn.",
+          "type": "integer"
+        },
+        "intervals": {
+          "$ref": "#/$defs/Intervals"
+        },
+        "inference_rule": {
+          "$ref": "#/$defs/InferenceRule"
+        },
+        "models": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "rw",
+              "drift",
+              "arima",
+              "ridge"
+            ]
+          },
+          "type": "object"
+        },
+        "features": {
+          "items": {
+            "$ref": "#/$defs/FeatureMeta"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "version",
+        "generated_at",
+        "as_of_close",
+        "latest_wasde",
+        "days_since_report",
+        "origin_note",
+        "next_wasde",
+        "freshness",
+        "wasde_source",
+        "consts",
+        "fx_default",
+        "splits",
+        "champion",
+        "champion_alpha",
+        "calibration_window",
+        "calib_min",
+        "intervals",
+        "inference_rule",
+        "models",
+        "features"
+      ],
+      "title": "Meta",
+      "type": "object"
+    },
+    "MetricRow": {
+      "additionalProperties": false,
+      "properties": {
+        "subset": {
+          "enum": [
+            "all",
+            "no_crop_roll"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "mse_logret": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary loss (rule v2): squared log-return error."
+        },
+        "mae_usd_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rmse_usd_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mape_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mase": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dir_acc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dir_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "n_interval": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pinball": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "iscore80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "iscore95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calibration_n": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calibration_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mde_mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Minimum detectable relative MAE improvement over no change (5%, 80% power)."
+        },
+        "cover80_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_hi80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kupiec80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_hi95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kupiec95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "subset",
+        "split",
+        "model",
+        "h",
+        "n",
+        "mse_logret",
+        "mae_usd_t",
+        "rmse_usd_t",
+        "mape_pct",
+        "mase",
+        "dir_acc",
+        "dir_p",
+        "n_interval",
+        "cover80",
+        "cover95",
+        "pinball",
+        "iscore80",
+        "iscore95",
+        "calibration_n",
+        "calibration_n_eff",
+        "mde_mae",
+        "cover80_se",
+        "cover80_ci_lo",
+        "cover80_ci_hi",
+        "cover80_n_eff",
+        "miss_lo80",
+        "miss_hi80",
+        "kupiec80_p",
+        "christ80_p",
+        "cover95_se",
+        "cover95_ci_lo",
+        "cover95_ci_hi",
+        "cover95_n_eff",
+        "miss_lo95",
+        "miss_hi95",
+        "kupiec95_p",
+        "christ95_p"
+      ],
+      "title": "MetricRow",
+      "type": "object"
+    },
+    "MoveHitRate": {
+      "additionalProperties": false,
+      "properties": {
+        "validation": {
+          "$ref": "#/$defs/MoveHitSplit"
+        },
+        "holdout": {
+          "$ref": "#/$defs/MoveHitSplit"
+        },
+        "all": {
+          "$ref": "#/$defs/MoveHitSplit"
+        }
+      },
+      "required": [
+        "validation",
+        "holdout",
+        "all"
+      ],
+      "title": "MoveHitRate",
+      "type": "object"
+    },
+    "MoveHitSplit": {
+      "additionalProperties": false,
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "hit50": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Share of reports inside the typical move."
+        },
+        "ci50": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Wilson 95% interval."
+        },
+        "hit90": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Share of reports inside the 1-in-10 move."
+        },
+        "ci90": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "years",
+        "n",
+        "hit50",
+        "ci50",
+        "hit90",
+        "ci90"
+      ],
+      "title": "MoveHitSplit",
+      "type": "object"
+    },
+    "Nominal": {
+      "additionalProperties": false,
+      "properties": {
+        "80": {
+          "type": "number"
+        },
+        "95": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "80",
+        "95"
+      ],
+      "title": "Nominal",
+      "type": "object"
+    },
+    "Outlook": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of_close": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last": {
+          "$ref": "#/$defs/PricePoint"
+        },
+        "horizons": {
+          "items": {
+            "$ref": "#/$defs/Horizon"
+          },
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/PricePoint"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "stress": {
+          "$ref": "#/$defs/Stress"
+        }
+      },
+      "required": [
+        "as_of_close",
+        "last",
+        "horizons",
+        "history",
+        "stress"
+      ],
+      "title": "Outlook",
+      "type": "object"
+    },
+    "PathRow": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "target_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "crop_roll": {
+          "type": "boolean"
+        },
+        "roll_cross": {
+          "type": "boolean"
+        },
+        "p0": {
+          "type": "number"
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forecast": {
+          "type": "number"
+        },
+        "q025": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "q10": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "q90": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "q975": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "origin",
+        "target_date",
+        "split",
+        "crop_roll",
+        "roll_cross",
+        "p0",
+        "actual",
+        "forecast",
+        "q025",
+        "q10",
+        "q90",
+        "q975"
+      ],
+      "title": "PathRow",
+      "type": "object"
+    },
+    "Placebo": {
+      "additionalProperties": false,
+      "properties": {
+        "lag_sessions": {
+          "type": "integer"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CoefCheck"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "lag_sessions",
+        "n_reports",
+        "r2",
+        "joint_p",
+        "items"
+      ],
+      "title": "Placebo",
+      "type": "object"
+    },
+    "PricePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "c_bu": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "date",
+        "c_bu"
+      ],
+      "title": "PricePoint",
+      "type": "object"
+    },
+    "QuantileGrid": {
+      "additionalProperties": false,
+      "description": "The published range method on a finer grid of levels (P18), US cents per bushel.",
+      "properties": {
+        "levels": {
+          "description": "Quantile levels, 0.05 to 0.95 in 0.05 steps.",
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "c_bu": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "levels",
+        "c_bu"
+      ],
+      "title": "QuantileGrid",
+      "type": "object"
+    },
+    "RangeChoiceRow": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "score_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cells": {
+          "type": "integer"
+        },
+        "chosen": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "method",
+        "split",
+        "score_ratio",
+        "cells",
+        "chosen"
+      ],
+      "title": "RangeChoiceRow",
+      "type": "object"
+    },
+    "RangeDiagnosticRow": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "cover80": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "cover95": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "pinball": {
+          "type": "number"
+        },
+        "iscore80": {
+          "type": "number"
+        },
+        "iscore95": {
+          "type": "number"
+        },
+        "width80_median": {
+          "type": "number"
+        },
+        "cover80_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo80": {
+          "type": "number"
+        },
+        "miss_hi80": {
+          "type": "number"
+        },
+        "kupiec80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo95": {
+          "type": "number"
+        },
+        "miss_hi95": {
+          "type": "number"
+        },
+        "kupiec95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "split",
+        "h",
+        "model",
+        "n",
+        "cover80",
+        "cover95",
+        "pinball",
+        "iscore80",
+        "iscore95",
+        "width80_median",
+        "cover80_se",
+        "cover80_ci_lo",
+        "cover80_ci_hi",
+        "cover80_n_eff",
+        "miss_lo80",
+        "miss_hi80",
+        "kupiec80_p",
+        "christ80_p",
+        "cover95_se",
+        "cover95_ci_lo",
+        "cover95_ci_hi",
+        "cover95_n_eff",
+        "miss_lo95",
+        "miss_hi95",
+        "kupiec95_p",
+        "christ95_p"
+      ],
+      "title": "RangeDiagnosticRow",
+      "type": "object"
+    },
+    "RangeRegimeRow": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "regime": {
+          "enum": [
+            "low",
+            "mid",
+            "high"
+          ],
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "cover80": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "split",
+        "h",
+        "regime",
+        "n",
+        "cover80",
+        "cover95"
+      ],
+      "title": "RangeRegimeRow",
+      "type": "object"
+    },
+    "Reaction": {
+      "additionalProperties": false,
+      "properties": {
+        "n_reports": {
+          "type": "integer"
+        },
+        "years": {
+          "type": "string"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "abs_move_usd_t_median": {
+          "type": "number"
+        },
+        "alpha": {
+          "type": "number"
+        },
+        "adjustment": {
+          "type": "string"
+        },
+        "headline_feature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ReactionItem"
+          },
+          "type": "array"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cov_usd_t": {
+          "description": "HC1 covariance of the coefficients, (USD/t per unit) squared, in `features` order.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "resid_sd_usd_t": {
+          "type": "number"
+        },
+        "whatif_default_fit": {
+          "description": "Display rule (config.WHATIF_DEFAULT_FIT): which fit the what-if opens on.",
+          "enum": [
+            "recent",
+            "full"
+          ],
+          "type": "string"
+        },
+        "latest_revisions": {
+          "$ref": "#/$defs/LatestRevisions"
+        },
+        "release_move": {
+          "$ref": "#/$defs/ReleaseMove"
+        },
+        "robustness": {
+          "$ref": "#/$defs/Robustness"
+        }
+      },
+      "required": [
+        "n_reports",
+        "years",
+        "r2",
+        "joint_p",
+        "abs_move_usd_t_median",
+        "alpha",
+        "adjustment",
+        "headline_feature",
+        "items",
+        "features",
+        "cov_usd_t",
+        "resid_sd_usd_t",
+        "whatif_default_fit",
+        "latest_revisions",
+        "release_move",
+        "robustness"
+      ],
+      "title": "Reaction",
+      "type": "object"
+    },
+    "ReactionItem": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "usd_t_per_unit": {
+          "type": "number"
+        },
+        "se_usd_t": {
+          "type": "number"
+        },
+        "p_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "p_holm": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "expected_sign": {
+          "type": "integer"
+        },
+        "wrong_sign": {
+          "type": "boolean"
+        },
+        "weak": {
+          "type": "boolean"
+        },
+        "median_abs_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Median absolute revision over the event-study reports, in `unit`."
+        },
+        "p90_abs_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_rev": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest report's revision vs the previous report; null in a May report."
+        }
+      },
+      "required": [
+        "feature",
+        "usd_t_per_unit",
+        "se_usd_t",
+        "p_value",
+        "p_holm",
+        "label",
+        "unit",
+        "expected_sign",
+        "wrong_sign",
+        "weak",
+        "median_abs_rev",
+        "p90_abs_rev",
+        "latest_rev"
+      ],
+      "title": "ReactionItem",
+      "type": "object"
+    },
+    "RecentFit": {
+      "additionalProperties": false,
+      "description": "The split sample's late half, refitted on its own: the what-if's default fit (unit D).",
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "items": {
+          "description": "Coefficients, Holm-adjusted within this fit.",
+          "items": {
+            "$ref": "#/$defs/CoefCheck"
+          },
+          "type": "array"
+        },
+        "cov_usd_t": {
+          "description": "HC1 covariance of this fit's coefficients, (USD/t per unit) squared, in `items` order.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "resid_sd_usd_t": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "years",
+        "n_reports",
+        "r2",
+        "joint_p",
+        "items",
+        "cov_usd_t",
+        "resid_sd_usd_t"
+      ],
+      "title": "RecentFit",
+      "type": "object"
+    },
+    "ReleaseMove": {
+      "additionalProperties": false,
+      "description": "Empirical release-day move band (P11/P14) with its out-of-sample hit rate.",
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "levels": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "typical_usd_t": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "one_in_ten_usd_t": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "typical_pct": {
+          "description": "Median |release-day move|, percent.",
+          "minimum": 0,
+          "type": "number"
+        },
+        "one_in_ten_pct": {
+          "description": "90th percentile |release-day move|, percent.",
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_past": {
+          "type": "integer"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "hit_rate": {
+          "$ref": "#/$defs/MoveHitRate"
+        }
+      },
+      "required": [
+        "n",
+        "levels",
+        "typical_usd_t",
+        "one_in_ten_usd_t",
+        "typical_pct",
+        "one_in_ten_pct",
+        "min_past",
+        "rule",
+        "hit_rate"
+      ],
+      "title": "ReleaseMove",
+      "type": "object"
+    },
+    "ReturnDistribution": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "first": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "quantiles": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "bin_step": {
+          "type": "number"
+        },
+        "bin_edges": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "n",
+        "first",
+        "last_start",
+        "quantiles",
+        "bin_step",
+        "bin_edges",
+        "counts"
+      ],
+      "title": "ReturnDistribution",
+      "type": "object"
+    },
+    "Robustness": {
+      "additionalProperties": false,
+      "properties": {
+        "placebo": {
+          "$ref": "#/$defs/Placebo"
+        },
+        "split_sample": {
+          "$ref": "#/$defs/SplitSample"
+        },
+        "roll_excluded": {
+          "$ref": "#/$defs/RollExcluded"
+        }
+      },
+      "required": [
+        "placebo",
+        "split_sample",
+        "roll_excluded"
+      ],
+      "title": "Robustness",
+      "type": "object"
+    },
+    "RollExcluded": {
+      "additionalProperties": false,
+      "properties": {
+        "bdays": {
+          "type": "integer"
+        },
+        "n_excluded": {
+          "type": "integer"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CoefCheck"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "bdays",
+        "n_excluded",
+        "n_reports",
+        "r2",
+        "joint_p",
+        "items"
+      ],
+      "title": "RollExcluded",
+      "type": "object"
+    },
+    "RunInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "wasde": {
+          "$ref": "#/$defs/WasdeInput"
+        },
+        "prices": {
+          "$ref": "#/$defs/SeriesInput"
+        },
+        "ptax": {
+          "$ref": "#/$defs/SeriesInput"
+        }
+      },
+      "required": [
+        "wasde",
+        "prices",
+        "ptax"
+      ],
+      "title": "RunInputs",
+      "type": "object"
+    },
+    "RunManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "run_manifest_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "soyforecast_version": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "offline"
+          ],
+          "type": "string"
+        },
+        "git": {
+          "$ref": "#/$defs/GitState"
+        },
+        "python": {
+          "type": "string"
+        },
+        "packages": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "object"
+        },
+        "lock": {
+          "$ref": "#/$defs/LockState"
+        },
+        "inputs": {
+          "$ref": "#/$defs/RunInputs"
+        },
+        "sources": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceStatus"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "run_manifest_version",
+        "generated_at",
+        "soyforecast_version",
+        "mode",
+        "git",
+        "python",
+        "packages",
+        "lock",
+        "inputs",
+        "sources"
+      ],
+      "title": "RunManifest",
+      "type": "object"
+    },
+    "SeriesInput": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "type": "integer"
+        },
+        "first": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256",
+        "bytes",
+        "snapshot",
+        "rows",
+        "first",
+        "last"
+      ],
+      "title": "SeriesInput",
+      "type": "object"
+    },
+    "SourceStatus": {
+      "additionalProperties": false,
+      "description": "live: downloaded this run; offline: cache on purpose; cache: a download failed or was\nrejected and the cache was used.",
+      "properties": {
+        "status": {
+          "enum": [
+            "live",
+            "offline",
+            "cache"
+          ],
+          "type": "string"
+        },
+        "last": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "last",
+        "detail"
+      ],
+      "title": "SourceStatus",
+      "type": "object"
+    },
+    "SplitItem": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "early_usd_t": {
+          "type": "number"
+        },
+        "early_se_usd_t": {
+          "type": "number"
+        },
+        "late_usd_t": {
+          "type": "number"
+        },
+        "late_se_usd_t": {
+          "type": "number"
+        },
+        "diff_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "early_usd_t",
+        "early_se_usd_t",
+        "late_usd_t",
+        "late_se_usd_t",
+        "diff_p"
+      ],
+      "title": "SplitItem",
+      "type": "object"
+    },
+    "SplitSample": {
+      "additionalProperties": false,
+      "properties": {
+        "break": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "early": {
+          "$ref": "#/$defs/SubSample"
+        },
+        "late": {
+          "$ref": "#/$defs/RecentFit"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SplitItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "break",
+        "early",
+        "late",
+        "items"
+      ],
+      "title": "SplitSample",
+      "type": "object"
+    },
+    "Splits": {
+      "additionalProperties": false,
+      "properties": {
+        "oos_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "validation": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        "holdout_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "oos_start",
+        "validation",
+        "holdout_start"
+      ],
+      "title": "Splits",
+      "type": "object"
+    },
+    "Stress": {
+      "additionalProperties": false,
+      "description": "Historical stress replay (P19): illustrative scenarios, not probabilities.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "p0_c_bu": {
+          "type": "number"
+        },
+        "fx": {
+          "type": "number"
+        },
+        "horizons": {
+          "items": {
+            "$ref": "#/$defs/StressHorizon"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "rule",
+        "basis",
+        "p0_c_bu",
+        "fx",
+        "horizons"
+      ],
+      "title": "Stress",
+      "type": "object"
+    },
+    "StressEpisode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "end": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "logret": {
+          "type": "number"
+        },
+        "pct": {
+          "type": "number"
+        },
+        "percentile": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        "c_bu": {
+          "type": "number"
+        },
+        "usd_t": {
+          "description": "CBOT price in USD/t, no premium.",
+          "type": "number"
+        },
+        "cbot_brl_sack": {
+          "description": "CBOT price only (no premium) in R$ per 60 kg sack at today's PTAX.",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "rationale",
+        "start",
+        "end",
+        "logret",
+        "pct",
+        "percentile",
+        "c_bu",
+        "usd_t",
+        "cbot_brl_sack"
+      ],
+      "title": "StressEpisode",
+      "type": "object"
+    },
+    "StressHorizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/StressEpisode"
+          },
+          "type": "array"
+        },
+        "distribution": {
+          "$ref": "#/$defs/ReturnDistribution"
+        }
+      },
+      "required": [
+        "h",
+        "episodes",
+        "distribution"
+      ],
+      "title": "StressHorizon",
+      "type": "object"
+    },
+    "SubSample": {
+      "additionalProperties": false,
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "years",
+        "n_reports",
+        "r2",
+        "joint_p"
+      ],
+      "title": "SubSample",
+      "type": "object"
+    },
+    "TestRow": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "dm_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "DM on the primary loss (squared log-return error)."
+        },
+        "dm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dm_mae_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "DM on the secondary loss (absolute USD/t error)."
+        },
+        "dm_mae_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cw_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cw_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cw_p_holm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "h",
+        "n",
+        "dm_t",
+        "dm_p",
+        "dm_mae_t",
+        "dm_mae_p",
+        "cw_t",
+        "cw_p",
+        "cw_p_holm"
+      ],
+      "title": "TestRow",
+      "type": "object"
+    },
+    "TrackRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MetricRow"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "tests": {
+          "items": {
+            "$ref": "#/$defs/TestRow"
+          },
+          "type": "array"
+        },
+        "interval_choice": {
+          "items": {
+            "$ref": "#/$defs/IntervalChoiceRow"
+          },
+          "type": "array"
+        },
+        "range_choice": {
+          "items": {
+            "$ref": "#/$defs/RangeChoiceRow"
+          },
+          "type": "array"
+        },
+        "range_diagnostics": {
+          "items": {
+            "$ref": "#/$defs/RangeDiagnosticRow"
+          },
+          "type": "array"
+        },
+        "range_regimes": {
+          "items": {
+            "$ref": "#/$defs/RangeRegimeRow"
+          },
+          "type": "array"
+        },
+        "paths": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/$defs/PathRow"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "rw",
+                "drift",
+                "arima",
+                "ridge"
+              ]
+            },
+            "type": "object"
+          },
+          "minProperties": 1,
+          "type": "object"
+        }
+      },
+      "required": [
+        "metrics",
+        "tests",
+        "interval_choice",
+        "range_choice",
+        "range_diagnostics",
+        "range_regimes",
+        "paths"
+      ],
+      "title": "TrackRecord",
+      "type": "object"
+    },
+    "Wasde": {
+      "additionalProperties": false,
+      "properties": {
+        "report_month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "release_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "previous_month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "market_year": {
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/WasdeLine"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "reaction": {
+          "$ref": "#/$defs/Reaction"
+        },
+        "next_release": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forward": {
+          "items": {
+            "$ref": "#/$defs/ForwardRow"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "report_month",
+        "release_date",
+        "previous_month",
+        "market_year",
+        "lines",
+        "reaction",
+        "next_release",
+        "forward"
+      ],
+      "title": "Wasde",
+      "type": "object"
+    },
+    "WasdeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pin_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "matches_pin": {
+          "type": "boolean"
+        },
+        "reports": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_report": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256",
+        "bytes",
+        "snapshot",
+        "release_tag",
+        "pin_sha256",
+        "matches_pin",
+        "reports",
+        "latest_report"
+      ],
+      "title": "WasdeInput",
+      "type": "object"
+    },
+    "WasdeLine": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "unit",
+        "value",
+        "previous",
+        "change"
+      ],
+      "title": "WasdeLine",
+      "type": "object"
+    },
+    "WasdeSource": {
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reports": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "tag",
+        "sha256",
+        "reports"
+      ],
+      "title": "WasdeSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Every published file at once: the root from which the TypeScript types are generated.",
+  "properties": {
+    "meta": {
+      "$ref": "#/$defs/Meta"
+    },
+    "outlook": {
+      "$ref": "#/$defs/Outlook"
+    },
+    "track_record": {
+      "$ref": "#/$defs/TrackRecord"
+    },
+    "wasde": {
+      "$ref": "#/$defs/Wasde"
+    },
+    "run_manifest": {
+      "$ref": "#/$defs/RunManifest"
+    },
+    "archive_index": {
+      "$ref": "#/$defs/ArchiveIndex"
+    }
+  },
+  "required": [
+    "meta",
+    "outlook",
+    "track_record",
+    "wasde",
+    "run_manifest",
+    "archive_index"
+  ],
+  "title": "SiteData",
+  "type": "object"
+}

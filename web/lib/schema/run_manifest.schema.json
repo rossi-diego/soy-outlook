@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "GitState": {
+      "additionalProperties": false,
+      "properties": {
+        "sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code_dirty": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sha",
+        "code_dirty"
+      ],
+      "title": "GitState",
+      "type": "object"
+    },
+    "LockState": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "file",
+        "sha256"
+      ],
+      "title": "LockState",
+      "type": "object"
+    },
+    "RunInputs": {
+      "additionalProperties": false,
+      "properties": {
+        "wasde": {
+          "$ref": "#/$defs/WasdeInput"
+        },
+        "prices": {
+          "$ref": "#/$defs/SeriesInput"
+        },
+        "ptax": {
+          "$ref": "#/$defs/SeriesInput"
+        }
+      },
+      "required": [
+        "wasde",
+        "prices",
+        "ptax"
+      ],
+      "title": "RunInputs",
+      "type": "object"
+    },
+    "SeriesInput": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rows": {
+          "type": "integer"
+        },
+        "first": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256",
+        "bytes",
+        "snapshot",
+        "rows",
+        "first",
+        "last"
+      ],
+      "title": "SeriesInput",
+      "type": "object"
+    },
+    "SourceStatus": {
+      "additionalProperties": false,
+      "description": "live: downloaded this run; offline: cache on purpose; cache: a download failed or was\nrejected and the cache was used.",
+      "properties": {
+        "status": {
+          "enum": [
+            "live",
+            "offline",
+            "cache"
+          ],
+          "type": "string"
+        },
+        "last": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "last",
+        "detail"
+      ],
+      "title": "SourceStatus",
+      "type": "object"
+    },
+    "WasdeInput": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "snapshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release_tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pin_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "matches_pin": {
+          "type": "boolean"
+        },
+        "reports": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_report": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file",
+        "sha256",
+        "bytes",
+        "snapshot",
+        "release_tag",
+        "pin_sha256",
+        "matches_pin",
+        "reports",
+        "latest_report"
+      ],
+      "title": "WasdeInput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "run_manifest_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "soyforecast_version": {
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "live",
+        "offline"
+      ],
+      "type": "string"
+    },
+    "git": {
+      "$ref": "#/$defs/GitState"
+    },
+    "python": {
+      "type": "string"
+    },
+    "packages": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "type": "object"
+    },
+    "lock": {
+      "$ref": "#/$defs/LockState"
+    },
+    "inputs": {
+      "$ref": "#/$defs/RunInputs"
+    },
+    "sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SourceStatus"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "run_manifest_version",
+    "generated_at",
+    "soyforecast_version",
+    "mode",
+    "git",
+    "python",
+    "packages",
+    "lock",
+    "inputs",
+    "sources"
+  ],
+  "title": "RunManifest",
+  "type": "object"
+}

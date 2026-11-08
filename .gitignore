@@ -11,11 +11,17 @@ venv/
 coverage.xml
 htmlcov/
 
-# Data: everything is rebuilt by the pipeline, except the premium seed
+# Data: everything is rebuilt by the pipeline.
 data/*
-!data/seed/
-data/seed/*
-!data/seed/paranagua_premium.csv
+# The WASDE input pin (release tag + sha256) is reviewed like code.
+!data/wasde.lock.json
+# No premium data is distributed (no licensed source; the premium is a user input only, see
+# DATA_LICENSES.md). Block any premium file, raw or derived, wherever it is dropped.
+data/**/*premium*
+web/public/**/*premium*
+*premium*.csv
+*premium*.parquet
+*premium*.meta.json
 
 # Model artefacts
 *.pkl
@@ -41,3 +47,6 @@ Thumbs.db
 .idea/
 *.log
 .ipynb_checkpoints/
+
+# CI scratch (hermetic offline run)
+.ci/

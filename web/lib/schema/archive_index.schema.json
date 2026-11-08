@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "ArchiveEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Archive file name; a WASDE-day re-publish has its own."
+        },
+        "as_of_close": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "latest_wasde": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "p0_c_bu": {
+          "type": "number"
+        },
+        "revision": {
+          "description": "1 = first-published record; N = file <name>.rN.json (P23b).",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "revises": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The archive file this revision follows."
+        },
+        "revision_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "close revised",
+                "outlook revised"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "horizons": {
+          "items": {
+            "$ref": "#/$defs/ArchivedHorizon"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "file",
+        "as_of_close",
+        "latest_wasde",
+        "p0_c_bu",
+        "revision",
+        "revises",
+        "revision_reason",
+        "horizons"
+      ],
+      "title": "ArchiveEntry",
+      "type": "object"
+    },
+    "ArchivedHorizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "target_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "central": {
+          "type": "number"
+        },
+        "low80": {
+          "type": "number"
+        },
+        "high80": {
+          "type": "number"
+        },
+        "low95": {
+          "type": "number"
+        },
+        "high95": {
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "resolved"
+          ],
+          "type": "string"
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actual_date": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inside80": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inside95": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "h",
+        "model",
+        "target_date",
+        "central",
+        "low80",
+        "high80",
+        "low95",
+        "high95",
+        "status",
+        "actual",
+        "actual_date",
+        "inside80",
+        "inside95"
+      ],
+      "title": "ArchivedHorizon",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "web/public/data/archive/index.json: every published outlook, scored once targets pass.",
+  "properties": {
+    "archive_schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "prices_through": {
+      "type": "string"
+    },
+    "n_outlooks": {
+      "description": "Outlooks on record, each counted once (revision 1).",
+      "type": "integer"
+    },
+    "n_revisions": {
+      "description": "Later records of an outlook (revised close).",
+      "type": "integer"
+    },
+    "n_resolved": {
+      "type": "integer"
+    },
+    "inside80": {
+      "type": "integer"
+    },
+    "inside95": {
+      "type": "integer"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/ArchiveEntry"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "archive_schema_version",
+    "prices_through",
+    "n_outlooks",
+    "n_revisions",
+    "n_resolved",
+    "inside80",
+    "inside95",
+    "entries"
+  ],
+  "title": "ArchiveIndex",
+  "type": "object"
+}

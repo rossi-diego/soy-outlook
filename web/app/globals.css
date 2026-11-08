@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
 /* Design tokens. Chart roles follow the validated reference palette (dataviz skill):
-   dark mode is its own selected steps, not an automatic inversion. */
+   dark mode is its own selected steps, not an automatic inversion.
+   Colour roles:
+   - brand  (green): identity only (logo mark, page eyebrows). Never data, never controls.
+   - accent (blue):  interaction (focus, sliders, links on hover) and the forecast series.
+   - warn   (amber): a range whose measured hit rate falls more than 5 pp below its nominal level,
+                     and stale inputs. Always paired with words, never colour alone.
+   - up / down:      diverging poles for signed changes. */
 :root {
   color-scheme: light;
   --page: #f9f9f7;
@@ -9,7 +15,7 @@
   --surface-2: #f3f2ee;
   --ink: #0b0b0b;
   --ink-2: #52514e;
-  --muted: #898781;
+  --muted: #6b6a64; /* WCAG AA: >= 4.8:1 on page, surface and surface-2 (P27) */
   --grid: #e1e0d9;
   --axis: #c3c2b7;
   --border: rgba(11, 11, 11, 0.1);
@@ -25,6 +31,9 @@
   --down-text: #b42d2c;
   --bar-muted: #86b6ef;
   --brand: #14532d;
+  --warn: #b7791f;
+  --warn-text: #8a5310;
+  --warn-soft: #fbefd9;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,7 +44,7 @@
     --surface-2: #232321;
     --ink: #f0efec;
     --ink-2: #c3c2b7;
-    --muted: #898781;
+    --muted: #9a9890; /* >= 5.4:1 on the dark surfaces */
     --grid: #2c2c2a;
     --axis: #383835;
     --border: rgba(255, 255, 255, 0.1);
@@ -51,6 +60,9 @@
     --down-text: #f19b9b;
     --bar-muted: #1c5cab;
     --brand: #4ade80;
+    --warn: #e0a23a;
+    --warn-text: #f2c475;
+    --warn-soft: #3d2a0b;
   }
 }
 
@@ -61,7 +73,7 @@
   --surface-2: #232321;
   --ink: #f0efec;
   --ink-2: #c3c2b7;
-  --muted: #898781;
+  --muted: #9a9890;
   --grid: #2c2c2a;
   --axis: #383835;
   --border: rgba(255, 255, 255, 0.1);
@@ -77,6 +89,9 @@
   --down-text: #f19b9b;
   --bar-muted: #1c5cab;
   --brand: #4ade80;
+  --warn: #e0a23a;
+  --warn-text: #f2c475;
+  --warn-soft: #3d2a0b;
 }
 
 @theme inline {
@@ -93,6 +108,9 @@
   --color-up: var(--up-text);
   --color-down: var(--down-text);
   --color-brand: var(--brand);
+  --color-warn: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -120,4 +138,98 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.chart-skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: chart-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes chart-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-skeleton {
+    animation: none;
+  }
+}
+
+/* A term with a one-line definition on hover/focus (DM, CW, Holm, p-value, hit rate). */
+.term {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--axis);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* Charts (P27): the height each chart asks for from sm up, capped at 260 px on phones. */
+.chart-box {
+  height: min(var(--chart-h, 320px), 260px);
+}
+
+@media (min-width: 640px) {
+  .chart-box {
+    height: var(--chart-h, 320px);
+  }
+}
+
+/* Tables that stack below sm (P27): each row becomes a small card and every cell carries its
+   column name (data-label), so a phone never scrolls a table sideways. */
+@media (max-width: 639.98px) {
+  table.stack-sm {
+    min-width: 0 !important;
+  }
+  table.stack-sm thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  table.stack-sm,
+  table.stack-sm tbody,
+  table.stack-sm tr,
+  table.stack-sm td {
+    display: block;
+    width: 100%;
+  }
+  table.stack-sm tr {
+    padding: 0.5rem 0;
+  }
+  /* A caption would otherwise shrink to a one-word column once the table is a block. */
+  table.stack-sm caption {
+    display: block;
+    width: 100%;
+  }
+  table.stack-sm td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.125rem 0 !important;
+    text-align: right;
+  }
+  table.stack-sm td:first-child {
+    display: block;
+    font-weight: 500;
+    color: var(--ink);
+    text-align: left;
+  }
+  table.stack-sm td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    text-align: left;
+    font-weight: 400;
+  }
+  table.stack-sm td:first-child::before {
+    content: none;
+  }
 }

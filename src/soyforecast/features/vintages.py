@@ -119,7 +119,7 @@ def build_vintages(wasde: pd.DataFrame) -> pd.DataFrame:
         out[f"rev_{name}"] = parts[name]["revision"]
 
     out["may_rollover"] = (out["proj_my"] != out["proj_my"].shift(1)).astype(int)
-    out.iloc[0, out.columns.get_loc("may_rollover")] = 0
+    out.loc[out.index[0], "may_rollover"] = 0
     rev_cols = [c for c in out.columns if c.startswith("rev_")]
     # A revision is undefined when the projected MY is new; the dummy carries that report.
     out[rev_cols] = out[rev_cols].fillna(0.0)

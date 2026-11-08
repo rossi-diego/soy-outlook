@@ -1,16 +1,47 @@
-"""Command line: `soyforecast run` builds everything and publishes the site data."""
+"""Command line: `soyforecast run` builds everything and publishes the site data.
+
+Exit codes are documented in soyforecast.errors: 1 validation gate, 2 usage, 3 input data
+unavailable, 4 contract broken (nothing published).
+"""
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import replace
+from pathlib import Path
+from typing import TypeVar
 
 import typer
 
 from soyforecast.config import Settings
+from soyforecast.errors import SoyError
 from soyforecast.logs import configure_logging, get_logger
 
 app = typer.Typer(
     add_completion=False, help="Point-in-time soybean price forecasts after each WASDE."
 )
 log = get_logger(__name__)
+T = TypeVar("T")
+
+OFFLINE_OPTION = typer.Option(False, help="Use cached bronze files only (no network).")
+UPDATE_PIN_OPTION = typer.Option(
+    False, help="Move the WASDE pin (data/wasde.lock.json) to the latest checked release."
+)
+
+
+def _settings(offline: bool) -> Settings:
+    """Settings from the environment; --offline overrides SOY_OFFLINE for this run only."""
+    settings = Settings()
+    return replace(settings, offline=True) if offline else settings
+
+
+def _guarded(fn: Callable[[], T]) -> T:
+    """Run a command body and turn our errors into a logged message and an exit code."""
+    try:
+        return fn()
+    except SoyError as exc:
+        log.error("command.failed", error=type(exc).__name__, detail=str(exc))
+        raise typer.Exit(exc.exit_code) from exc
 
 
 @app.callback()
@@ -19,27 +50,126 @@ def main(json_logs: bool = typer.Option(False, "--json-logs", help="JSON log lin
 
 
 @app.command()
-def run(offline: bool = typer.Option(False, help="Use cached bronze files only.")) -> None:
+def run(offline: bool = OFFLINE_OPTION, update_pin: bool = UPDATE_PIN_OPTION) -> None:
     """Ingest, build features, backtest, forecast and write web/public/data/*.json."""
-    import os
-
-    if offline:
-        os.environ["SOY_OFFLINE"] = "1"
     from soyforecast.pipeline import run as run_pipeline
     from soyforecast.publish.web_json import publish
 
-    settings = Settings()
-    artefacts = run_pipeline(settings)
-    publish(artefacts, settings)
+    settings = _settings(offline)
+
+    def body() -> None:
+        publish(run_pipeline(settings, update_pin=update_pin), settings)
+
+    _guarded(body)
 
 
 @app.command()
-def ingest() -> None:
+def ingest(offline: bool = OFFLINE_OPTION, update_pin: bool = UPDATE_PIN_OPTION) -> None:
     """Refresh the bronze layer only (WASDE parquet, CBOT closes, PTAX)."""
     from soyforecast.pipeline import ingest as do_ingest
 
-    do_ingest(Settings())
+    settings = _settings(offline)
+    _guarded(lambda: do_ingest(settings, update_pin=update_pin))
 
 
-if __name__ == "__main__":
+def _github_output(**values: object) -> None:
+    """Expose step outputs to GitHub Actions (no-op outside a workflow)."""
+    import os
+
+    target = os.getenv("GITHUB_OUTPUT")
+    if not target:
+        return
+    with open(target, "a", encoding="utf-8") as fh:
+        for k, v in values.items():
+            fh.write(f"{k}={str(v).lower() if isinstance(v, bool) else v}\n")
+
+
+META_OPTION = typer.Option(Path("web/public/data/meta.json"), help="Published meta.json.")
+DATA_OPTION = typer.Option(Path("web/public/data"), help="Freshly published data folder.")
+BASELINE_OPTION = typer.Option(None, help="Previously published copy to diff against.")
+FIXTURES_OPTION = typer.Option(Path("tests/fixtures/bronze"), help="Target bronze folder.")
+
+
+@app.command()
+def guard(
+    event: str = typer.Option("close", help="'close' (after the CBOT close) or 'wasde'."),
+    meta: Path = META_OPTION,
+) -> None:
+    """Decide whether a scheduled refresh should run now (writes should_run to GITHUB_OUTPUT)."""
+    import json
+
+    from soyforecast.freshness import cbot_closed_today, chicago_now, is_wasde_day
+
+    if event == "close":
+        should_run = cbot_closed_today()
+    elif event == "wasde":
+        next_release = None
+        if meta.exists():
+            next_release = json.loads(meta.read_text(encoding="utf-8")).get("next_wasde")
+        should_run = is_wasde_day(next_release)
+    else:
+        raise typer.BadParameter("event must be 'close' or 'wasde'")
+    log.info(
+        "guard", trigger=event, chicago=chicago_now().isoformat(timespec="minutes"), run=should_run
+    )
+    _github_output(should_run=should_run)
+
+
+@app.command()
+def validate(
+    data: Path = DATA_OPTION,
+    baseline: Path | None = BASELINE_OPTION,
+    allow_stale: bool = typer.Option(False, help="Report, but do not fail on, an old close."),
+) -> None:
+    """Validation gate: shape, freshness and row deltas. Exits 1 on any problem."""
+    import os
+
+    from soyforecast.publish.schema import SCHEMA_VERSION
+    from soyforecast.publish.validate import summary_markdown
+    from soyforecast.publish.validate import validate as run_validate
+
+    report = run_validate(data, SCHEMA_VERSION, baseline=baseline, require_fresh=not allow_stale)
+    summary = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as fh:
+            fh.write(summary_markdown(report))
+    _github_output(
+        ok=report.ok,
+        stale=report.stale,
+        degraded=bool(report.degraded),
+        degraded_sources=",".join(report.degraded),
+        as_of_close=report.as_of_close or "",
+    )
+    if report.degraded:
+        log.warning("validate.degraded", sources=report.degraded)
+    if not report.ok:
+        log.error("validate.failed", problems=report.problems)
+        raise typer.Exit(1)
+    log.info("validate.passed", as_of_close=report.as_of_close, bdays_old=report.bdays_old)
+
+
+SCHEMA_OPTION = typer.Option(Path("web/lib/schema"), help="Folder for the JSON Schema files.")
+
+
+@app.command("export-schema")
+def export_schema(out: Path = SCHEMA_OPTION) -> None:
+    """Write the site contract (publish/schema.py) as JSON Schema for the web build and codegen."""
+    from soyforecast.publish.schema import export_schemas
+
+    paths = export_schemas(out)
+    log.info("schema.exported", files=[p.name for p in paths], path=str(out))
+
+
+@app.command("make-fixtures")
+def make_fixtures(
+    out: Path = FIXTURES_OPTION,
+) -> None:
+    """Write the synthetic bronze inputs used by the hermetic CI run."""
+    from soyforecast.fixtures import write_fixtures
+
+    paths = write_fixtures(out)
+    log.info("fixtures.written", files=[p.name for p in paths], path=str(out))
+
+
+if __name__ == "__main__":  # pragma: no cover
     app()

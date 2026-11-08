@@ -1,0 +1,45 @@
+{
+ "archive_schema_version": 1,
+ "as_of_close": "2026-11-06",
+ "generated_at": "2026-11-08T13:04:28+00:00",
+ "version": "2.0.0",
+ "latest_wasde": {
+  "month": "2026-10",
+  "release_date": "2026-10-09"
+ },
+ "interval_method": "empirical quantiles of past errors",
+ "interval_centring": "median",
+ "p0_c_bu": 1193.75,
+ "horizons": [
+  {
+   "h": 1,
+   "model": "rw",
+   "target_date": "2026-12-06",
+   "central": 1193.75,
+   "q025": 1089.29,
+   "q100": 1138.29,
+   "q900": 1269.47,
+   "q975": 1324.32
+  },
+  {
+   "h": 3,
+   "model": "rw",
+   "target_date": "2027-02-06",
+   "central": 1193.75,
+   "q025": 1014.3,
+   "q100": 1048.58,
+   "q900": 1329.28,
+   "q975": 1516.12
+  },
+  {
+   "h": 6,
+   "model": "rw",
+   "target_date": "2027-05-06",
+   "central": 1193.75,
+   "q025": 994.2,
+   "q100": 1036.98,
+   "q900": 1407.37,
+   "q975": 1686.57
+  }
+ ]
+}

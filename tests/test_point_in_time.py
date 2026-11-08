@@ -108,6 +108,7 @@ def test_intervals_use_only_realized_residuals():
     assert out["q0.975"].max() < 1
 
 
+@pytest.mark.slow
 def test_end_to_end_random_walk_wins_on_a_random_walk(synthetic_wasde, synthetic_prices):
     df = build_dataset(build_vintages(synthetic_wasde), synthetic_prices)
     bt = run_backtest(df, models=("rw", "drift", "ridge"))
@@ -120,6 +121,7 @@ def test_end_to_end_random_walk_wins_on_a_random_walk(synthetic_wasde, synthetic
     assert {"dm_p", "cw_p", "cw_p_holm"} <= set(tests.columns)
 
 
+@pytest.mark.slow
 def test_live_forecast_runs_for_every_model_as_champion(synthetic_wasde, synthetic_prices):
     from soyforecast.models.live import live_forecast
 

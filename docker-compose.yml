@@ -4,7 +4,14 @@
 #   2. web: builds the static Next.js site from that data and serves it
 services:
   pipeline:
-    build: .
+    build:
+      context: .
+      args:
+        # Recorded in run_manifest.json: GIT_SHA=$(git rev-parse HEAD) docker compose up --build
+        GIT_SHA: ${GIT_SHA:-}
+    # The image runs unprivileged; run it as your own user so it can write the bind-mounted
+    # data/ and web/public/data folders (Linux: SOY_UID=$(id -u) SOY_GID=$(id -g)).
+    user: "${SOY_UID:-1000}:${SOY_GID:-1000}"
     volumes:
       - ./data:/app/data
       - ./web/public/data:/app/web/public/data

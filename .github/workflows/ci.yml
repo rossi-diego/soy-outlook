@@ -1,68 +1,116 @@
+# Hermetic CI for pushes and pull requests: no data is downloaded. The pipeline runs offline on
+# committed synthetic fixtures (tests/fixtures/bronze), and the site is built and tested against
+# the committed web/public/data. Live data only enters through refresh.yml, behind its gate.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 19 * * 1-5" # weekdays after the CBOT close: refresh and rebuild
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   python:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    name: python (${{ matrix.python-version }})
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -e ".[dev]"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Lock file matches pyproject.toml
+        run: uv lock --check
+      - name: Install exactly the locked versions
+        run: |
+          uv sync --locked --extra dev
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - run: ruff format --check src tests
       - run: ruff check src tests
       - run: mypy src
-      - run: pytest --cov --cov-report=term-missing --cov-fail-under=80
+      - run: pytest -m "not network" --cov --cov-report=term-missing --cov-fail-under=80
 
-  pipeline:
+  pipeline-offline:
+    needs: python
+    runs-on: ubuntu-latest
+    env:
+      SOY_DATA_DIR: ${{ github.workspace }}/.ci/data
+      SOY_WEB_DATA_DIR: ${{ github.workspace }}/.ci/web-data
+      SOY_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install exactly the locked versions (before the network tripwire)
+        run: |
+          uv sync --locked --no-dev
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Stage the synthetic fixtures (no licensed or downloaded data)
+        run: |
+          mkdir -p "$SOY_DATA_DIR"
+          cp -r tests/fixtures/bronze "$SOY_DATA_DIR/bronze"
+      - name: Offline pipeline run (network tripwire, every HTTP call goes to a dead proxy)
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          ALL_PROXY: http://127.0.0.1:9
+          SOY_WASDE_RELEASES_URL: http://127.0.0.1:9/blocked
+        run: soyforecast --json-logs run --offline
+      - name: Validation gate on the fixture output (shape only; fixture dates are fixed)
+        run: soyforecast --json-logs validate --data "$SOY_WEB_DATA_DIR" --allow-stale
+      - name: Validation gate on the committed site data
+        run: soyforecast --json-logs validate --data web/public/data --allow-stale
+
+  docker:
     needs: python
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install .
-      - name: Run the pipeline on live data
-        run: soyforecast --json-logs run
-        env:
-          SOY_DATA_DIR: ${{ github.workspace }}/data
-          SOY_WEB_DATA_DIR: ${{ github.workspace }}/web/public/data
-      - uses: actions/upload-artifact@v4
-        with:
-          name: site-data
-          path: web/public/data
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Build the multi-stage, non-root pipeline image from uv.lock
+        run: docker build --build-arg GIT_SHA=${{ github.sha }} --tag soyforecast:ci .
+      - name: The image runs as a non-root user and the CLI starts
+        run: |
+          test "$(docker run --rm --entrypoint id soyforecast:ci -u)" != "0"
+          docker run --rm soyforecast:ci --help
+          test "$(docker run --rm --entrypoint printenv soyforecast:ci SOY_GIT_SHA)" = "${{ github.sha }}"
+          docker run --rm --entrypoint test soyforecast:ci -f /app/uv.lock
 
   web:
-    needs: pipeline
+    needs: python
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: site-data
-          path: web/public/data
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: Generated types match the exported schema (lib/types.generated.ts)
+        run: npm run check:types
       - run: npm run lint
       - run: npm run typecheck
+      - name: Unit tests (vitest)
+        run: npm run test:unit
       - run: npm run build
+      - name: Size budget (HTML and first-load JS)
+        run: npm run size
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
         env:

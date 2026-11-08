@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Soy Outlook social card</title>
+<style>
+  /* Static social card (1200x630). No live numbers: the question and the honest headline only. */
+  :root { --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9;
+          --accent:#2a78d6; --brand:#14532d; --border:rgba(11,11,11,.1); }
+  * { box-sizing:border-box; margin:0; }
+  html,body { width:1200px; height:630px; background:var(--page); color:var(--ink);
+              font-family:"Segoe UI", system-ui, -apple-system, Roboto, sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { position:relative; width:1200px; height:630px; padding:56px 72px 52px; display:flex; flex-direction:column; overflow:hidden; }
+  .brand { display:flex; align-items:center; gap:14px; font-weight:600; font-size:28px; letter-spacing:-.01em; }
+  .brand img { width:48px; height:48px; }
+  .eyebrow { margin-top:36px; color:var(--brand); font-size:22px; font-weight:600; position:relative; }
+  h1 { margin-top:12px; max-width:660px; font-size:52px; line-height:1.08; font-weight:650; letter-spacing:-.025em; position:relative; }
+  .call { position:relative; margin-top:32px; max-width:640px; background:var(--surface); border:1px solid var(--border);
+          border-left:6px solid var(--accent); border-radius:14px; padding:18px 26px; }
+  .call strong { display:block; font-size:30px; font-weight:650; letter-spacing:-.015em; }
+  .call span { display:block; margin-top:6px; color:var(--ink2); font-size:20px; line-height:1.35; }
+  .foot { margin-top:auto; display:flex; gap:28px; color:var(--muted); font-size:20px; position:relative; }
+  .foot b { color:var(--ink2); font-weight:600; }
+  svg.fan { position:absolute; right:-40px; top:150px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Abstract fan chart: history line, central no-change line, 80% and 95% bands. Illustrative shape, no data. -->
+  <svg class="fan" width="440" height="420" viewBox="0 0 440 420" aria-hidden="true">
+    <g stroke="#e1e0d9" stroke-width="1">
+      <line x1="0" y1="60" x2="440" y2="60"/><line x1="0" y1="150" x2="440" y2="150"/>
+      <line x1="0" y1="240" x2="440" y2="240"/><line x1="0" y1="330" x2="440" y2="330"/>
+    </g>
+    <path d="M190 210 L430 40 L430 400 Z" fill="#2a78d6" fill-opacity=".08" stroke="#2a78d6" stroke-opacity=".5" stroke-dasharray="6 5"/>
+    <path d="M190 210 L430 120 L430 315 Z" fill="#2a78d6" fill-opacity=".22"/>
+    <polyline points="10,250 40,236 70,248 100,214 130,226 160,196 190,210" fill="none" stroke="#0b0b0b" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+    <line x1="190" y1="210" x2="430" y2="210" stroke="#2a78d6" stroke-width="3" stroke-dasharray="9 7"/>
+    <circle cx="190" cy="210" r="7" fill="#2a78d6"/>
+  </svg>
+  <div class="brand"><img src="../../app/icon.svg" alt="">Soy Outlook</div>
+  <p class="eyebrow">CBOT soybeans and Paranaguá FOB, after every USDA WASDE</p>
+  <h1>How far could Brazilian export soybeans move against you in six months?</h1>
+  <div class="call">
+    <strong>No model beats &ldquo;no change&rdquo;.</strong>
+    <span>Tested on every WASDE since 2016. The site shows ranges labelled by the hit rate they actually achieved.</span>
+  </div>
+  <div class="foot"><b>soy-outlook.vercel.app</b><span>Built by Diego Rossi</span></div>
+</div>
+</body>
+</html>

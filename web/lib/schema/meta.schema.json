@@ -1,0 +1,549 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Consts": {
+      "additionalProperties": false,
+      "properties": {
+        "bu_per_t": {
+          "type": "number"
+        },
+        "sack_kg": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bu_per_t",
+        "sack_kg"
+      ],
+      "title": "Consts",
+      "type": "object"
+    },
+    "FeatureMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "unit"
+      ],
+      "title": "FeatureMeta",
+      "type": "object"
+    },
+    "Freshness": {
+      "additionalProperties": false,
+      "properties": {
+        "as_of_close": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "offline"
+          ],
+          "type": "string"
+        },
+        "stale_after_bdays": {
+          "type": "integer"
+        },
+        "bdays_close_to_generated": {
+          "type": "integer"
+        },
+        "next_wasde": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceStatus"
+          },
+          "type": "object"
+        },
+        "degraded": {
+          "type": "boolean"
+        },
+        "degraded_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "as_of_close",
+        "generated_at",
+        "mode",
+        "stale_after_bdays",
+        "bdays_close_to_generated",
+        "next_wasde",
+        "sources",
+        "degraded",
+        "degraded_sources"
+      ],
+      "title": "Freshness",
+      "type": "object"
+    },
+    "FxDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "date",
+        "source"
+      ],
+      "title": "FxDefault",
+      "type": "object"
+    },
+    "InferenceRule": {
+      "additionalProperties": false,
+      "description": "The versioned, pre-registered test and champion rule (P16).",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "registered": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "primary_loss": {
+          "type": "string"
+        },
+        "secondary_loss": {
+          "type": "string"
+        },
+        "adjustment": {
+          "type": "string"
+        },
+        "champion": {
+          "type": "string"
+        },
+        "direction_test": {
+          "type": "string"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "v1": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "registered",
+        "primary_loss",
+        "secondary_loss",
+        "adjustment",
+        "champion",
+        "direction_test",
+        "calibration",
+        "v1"
+      ],
+      "title": "InferenceRule",
+      "type": "object"
+    },
+    "Intervals": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "description": "Label of the published range method (the validation winner).",
+          "type": "string"
+        },
+        "range_method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_candidates": {
+          "items": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "range_baseline": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_rule": {
+          "type": "string"
+        },
+        "range_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ]
+          },
+          "type": "object"
+        },
+        "centring": {
+          "type": "string"
+        },
+        "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "baseline": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "nominal_levels": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "coverage_warn_pp": {
+          "type": "number"
+        },
+        "tail_nominal_80": {
+          "description": "One-tail nominal miss rate of the 80% range.",
+          "type": "number"
+        },
+        "tail_obs_min_95": {
+          "description": "Below this many past errors per 95% tail, the 1-in-40 figure is muted.",
+          "type": "number"
+        },
+        "target_readout_levels": {
+          "description": "Range levels a user-typed target is placed between (a position, not odds).",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "method",
+        "range_method",
+        "range_candidates",
+        "range_baseline",
+        "range_rule",
+        "range_labels",
+        "centring",
+        "candidates",
+        "baseline",
+        "rule",
+        "nominal_levels",
+        "coverage_warn_pp",
+        "tail_nominal_80",
+        "tail_obs_min_95",
+        "target_readout_levels"
+      ],
+      "title": "Intervals",
+      "type": "object"
+    },
+    "LatestWasde": {
+      "additionalProperties": false,
+      "properties": {
+        "month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "release_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "month",
+        "release_date"
+      ],
+      "title": "LatestWasde",
+      "type": "object"
+    },
+    "SourceStatus": {
+      "additionalProperties": false,
+      "description": "live: downloaded this run; offline: cache on purpose; cache: a download failed or was\nrejected and the cache was used.",
+      "properties": {
+        "status": {
+          "enum": [
+            "live",
+            "offline",
+            "cache"
+          ],
+          "type": "string"
+        },
+        "last": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "last",
+        "detail"
+      ],
+      "title": "SourceStatus",
+      "type": "object"
+    },
+    "Splits": {
+      "additionalProperties": false,
+      "properties": {
+        "oos_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "validation": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        "holdout_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "oos_start",
+        "validation",
+        "holdout_start"
+      ],
+      "title": "Splits",
+      "type": "object"
+    },
+    "WasdeSource": {
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reports": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "tag",
+        "sha256",
+        "reports"
+      ],
+      "title": "WasdeSource",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 4,
+      "type": "integer"
+    },
+    "version": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "as_of_close": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+    },
+    "latest_wasde": {
+      "$ref": "#/$defs/LatestWasde"
+    },
+    "days_since_report": {
+      "description": "Calendar days from the WASDE release to the close.",
+      "type": "integer"
+    },
+    "origin_note": {
+      "type": "string"
+    },
+    "next_wasde": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "freshness": {
+      "$ref": "#/$defs/Freshness"
+    },
+    "wasde_source": {
+      "$ref": "#/$defs/WasdeSource"
+    },
+    "consts": {
+      "$ref": "#/$defs/Consts"
+    },
+    "fx_default": {
+      "$ref": "#/$defs/FxDefault"
+    },
+    "splits": {
+      "$ref": "#/$defs/Splits"
+    },
+    "champion": {
+      "additionalProperties": {
+        "enum": [
+          "rw",
+          "drift",
+          "arima",
+          "ridge"
+        ],
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "champion_alpha": {
+      "type": "number"
+    },
+    "calibration_window": {
+      "type": "integer"
+    },
+    "calib_min": {
+      "description": "Realized errors needed before a backtest range is drawn.",
+      "type": "integer"
+    },
+    "intervals": {
+      "$ref": "#/$defs/Intervals"
+    },
+    "inference_rule": {
+      "$ref": "#/$defs/InferenceRule"
+    },
+    "models": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "propertyNames": {
+        "enum": [
+          "rw",
+          "drift",
+          "arima",
+          "ridge"
+        ]
+      },
+      "type": "object"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/FeatureMeta"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "generated_at",
+    "as_of_close",
+    "latest_wasde",
+    "days_since_report",
+    "origin_note",
+    "next_wasde",
+    "freshness",
+    "wasde_source",
+    "consts",
+    "fx_default",
+    "splits",
+    "champion",
+    "champion_alpha",
+    "calibration_window",
+    "calib_min",
+    "intervals",
+    "inference_rule",
+    "models",
+    "features"
+  ],
+  "title": "Meta",
+  "type": "object"
+}
