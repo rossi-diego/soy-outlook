@@ -68,7 +68,7 @@ def test_models_reject_unknown_keys_nulls_nan_and_bad_quantiles(published):
         schema.Outlook.model_validate({**outlook, "last": {"date": "2026-11-06", "c_bu": "nan"}})
     meta = json.loads((published / "meta.json").read_text(encoding="utf-8"))
     with pytest.raises(ValidationError, match="schema_version"):
-        schema.validate_payload("meta.json", {**meta, "schema_version": 3})
+        schema.validate_payload("meta.json", {**meta, "schema_version": schema.SCHEMA_VERSION + 1})
 
 
 def test_contract_violation_raises_before_anything_is_written(fixture_run, tmp_path):

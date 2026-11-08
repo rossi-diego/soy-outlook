@@ -125,11 +125,102 @@
       "title": "FxDefault",
       "type": "object"
     },
+    "InferenceRule": {
+      "additionalProperties": false,
+      "description": "The versioned, pre-registered test and champion rule (P16).",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "registered": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "primary_loss": {
+          "type": "string"
+        },
+        "secondary_loss": {
+          "type": "string"
+        },
+        "adjustment": {
+          "type": "string"
+        },
+        "champion": {
+          "type": "string"
+        },
+        "direction_test": {
+          "type": "string"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "v1": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "registered",
+        "primary_loss",
+        "secondary_loss",
+        "adjustment",
+        "champion",
+        "direction_test",
+        "calibration",
+        "v1"
+      ],
+      "title": "InferenceRule",
+      "type": "object"
+    },
     "Intervals": {
       "additionalProperties": false,
       "properties": {
         "method": {
+          "description": "Label of the published range method (the validation winner).",
           "type": "string"
+        },
+        "range_method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_candidates": {
+          "items": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "range_baseline": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_rule": {
+          "type": "string"
+        },
+        "range_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ]
+          },
+          "type": "object"
         },
         "centring": {
           "type": "string"
@@ -158,6 +249,11 @@
       },
       "required": [
         "method",
+        "range_method",
+        "range_candidates",
+        "range_baseline",
+        "range_rule",
+        "range_labels",
         "centring",
         "candidates",
         "baseline",
@@ -369,7 +465,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 2,
+      "const": 3,
       "type": "integer"
     },
     "version": {
@@ -442,6 +538,9 @@
     "intervals": {
       "$ref": "#/$defs/Intervals"
     },
+    "inference_rule": {
+      "$ref": "#/$defs/InferenceRule"
+    },
     "models": {
       "additionalProperties": {
         "type": "string"
@@ -482,6 +581,7 @@
     "champion_alpha",
     "calibration_window",
     "intervals",
+    "inference_rule",
     "models",
     "features"
   ],

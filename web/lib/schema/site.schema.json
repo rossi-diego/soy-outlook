@@ -236,6 +236,35 @@
       "title": "Consts",
       "type": "object"
     },
+    "ContractInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[FHKNQUX]\\d{2}$",
+          "type": "string"
+        },
+        "delivery_month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "first_notice": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last_trade": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "delivery_month",
+        "first_notice",
+        "last_trade"
+      ],
+      "title": "ContractInfo",
+      "type": "object"
+    },
     "Coverage": {
       "additionalProperties": false,
       "properties": {
@@ -309,6 +338,90 @@
               "type": "null"
             }
           ]
+        },
+        "ci80": {
+          "description": "Moving-block bootstrap 95% CI of the 80% hit rate.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        "ci95": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        "n_eff80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Approximate number of independent outcomes."
+        },
+        "n_eff95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -316,7 +429,11 @@
         "n",
         "cover80",
         "cover95",
-        "calibration_n_eff"
+        "calibration_n_eff",
+        "ci80",
+        "ci95",
+        "n_eff80",
+        "n_eff95"
       ],
       "title": "CoverageSplit",
       "type": "object"
@@ -572,6 +689,9 @@
         "tail_obs_95": {
           "type": "number"
         },
+        "contract": {
+          "$ref": "#/$defs/HorizonContract"
+        },
         "q025": {
           "type": "number"
         },
@@ -605,6 +725,7 @@
         "calibration_n",
         "calibration_n_eff",
         "tail_obs_95",
+        "contract",
         "q025",
         "q100",
         "q500",
@@ -615,6 +736,83 @@
         "premium_reference"
       ],
       "title": "Horizon",
+      "type": "object"
+    },
+    "HorizonContract": {
+      "additionalProperties": false,
+      "description": "The hedge contract for a horizon (P10); prices stay the continuous front month.",
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/ContractInfo"
+        },
+        "crosses_roll": {
+          "type": "boolean"
+        },
+        "crosses_crop_roll": {
+          "type": "boolean"
+        },
+        "series": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin",
+        "reference",
+        "crosses_roll",
+        "crosses_crop_roll",
+        "series"
+      ],
+      "title": "HorizonContract",
+      "type": "object"
+    },
+    "InferenceRule": {
+      "additionalProperties": false,
+      "description": "The versioned, pre-registered test and champion rule (P16).",
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "registered": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "primary_loss": {
+          "type": "string"
+        },
+        "secondary_loss": {
+          "type": "string"
+        },
+        "adjustment": {
+          "type": "string"
+        },
+        "champion": {
+          "type": "string"
+        },
+        "direction_test": {
+          "type": "string"
+        },
+        "calibration": {
+          "type": "string"
+        },
+        "v1": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "registered",
+        "primary_loss",
+        "secondary_loss",
+        "adjustment",
+        "champion",
+        "direction_test",
+        "calibration",
+        "v1"
+      ],
+      "title": "InferenceRule",
       "type": "object"
     },
     "InputFile": {
@@ -703,7 +901,51 @@
       "additionalProperties": false,
       "properties": {
         "method": {
+          "description": "Label of the published range method (the validation winner).",
           "type": "string"
+        },
+        "range_method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_candidates": {
+          "items": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "range_baseline": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "range_rule": {
+          "type": "string"
+        },
+        "range_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "empirical",
+              "ewma_fhs",
+              "lognormal_rv"
+            ]
+          },
+          "type": "object"
         },
         "centring": {
           "type": "string"
@@ -732,6 +974,11 @@
       },
       "required": [
         "method",
+        "range_method",
+        "range_candidates",
+        "range_baseline",
+        "range_rule",
+        "range_labels",
         "centring",
         "candidates",
         "baseline",
@@ -789,7 +1036,7 @@
       "additionalProperties": false,
       "properties": {
         "schema_version": {
-          "const": 2,
+          "const": 3,
           "type": "integer"
         },
         "version": {
@@ -862,6 +1109,9 @@
         "intervals": {
           "$ref": "#/$defs/Intervals"
         },
+        "inference_rule": {
+          "$ref": "#/$defs/InferenceRule"
+        },
         "models": {
           "additionalProperties": {
             "type": "string"
@@ -902,6 +1152,7 @@
         "champion_alpha",
         "calibration_window",
         "intervals",
+        "inference_rule",
         "models",
         "features"
       ],
@@ -939,6 +1190,17 @@
         },
         "n": {
           "type": "integer"
+        },
+        "mse_logret": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary loss (rule v2): squared log-return error."
         },
         "mae_usd_t": {
           "anyOf": [
@@ -1079,6 +1341,177 @@
               "type": "null"
             }
           ]
+        },
+        "mde_mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Minimum detectable relative MAE improvement over no change (5%, 80% power)."
+        },
+        "cover80_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_hi80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kupiec80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_hi95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kupiec95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1087,6 +1520,7 @@
         "model",
         "h",
         "n",
+        "mse_logret",
         "mae_usd_t",
         "rmse_usd_t",
         "mape_pct",
@@ -1100,7 +1534,24 @@
         "iscore80",
         "iscore95",
         "calibration_n",
-        "calibration_n_eff"
+        "calibration_n_eff",
+        "mde_mae",
+        "cover80_se",
+        "cover80_ci_lo",
+        "cover80_ci_hi",
+        "cover80_n_eff",
+        "miss_lo80",
+        "miss_hi80",
+        "kupiec80_p",
+        "christ80_p",
+        "cover95_se",
+        "cover95_ci_lo",
+        "cover95_ci_hi",
+        "cover95_n_eff",
+        "miss_lo95",
+        "miss_hi95",
+        "kupiec95_p",
+        "christ95_p"
       ],
       "title": "MetricRow",
       "type": "object"
@@ -1148,6 +1599,9 @@
         "premium_last": {
           "$ref": "#/$defs/PricePoint"
         },
+        "stress": {
+          "$ref": "#/$defs/Stress"
+        },
         "premium_now_default": {
           "$ref": "#/$defs/PremiumNowDefault"
         }
@@ -1158,6 +1612,7 @@
         "horizons",
         "history",
         "premium_last",
+        "stress",
         "premium_now_default"
       ],
       "title": "Outlook",
@@ -1182,6 +1637,9 @@
           "type": "string"
         },
         "crop_roll": {
+          "type": "boolean"
+        },
+        "roll_cross": {
           "type": "boolean"
         },
         "p0": {
@@ -1246,6 +1704,7 @@
         "target_date",
         "split",
         "crop_roll",
+        "roll_cross",
         "p0",
         "actual",
         "forecast",
@@ -1464,6 +1923,340 @@
       "title": "PricePoint",
       "type": "object"
     },
+    "RangeChoiceRow": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "score_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cells": {
+          "type": "integer"
+        },
+        "chosen": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "method",
+        "split",
+        "score_ratio",
+        "cells",
+        "chosen"
+      ],
+      "title": "RangeChoiceRow",
+      "type": "object"
+    },
+    "RangeDiagnosticRow": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "cover80": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "cover95": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "pinball": {
+          "type": "number"
+        },
+        "iscore80": {
+          "type": "number"
+        },
+        "iscore95": {
+          "type": "number"
+        },
+        "width80_median": {
+          "type": "number"
+        },
+        "cover80_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo80": {
+          "type": "number"
+        },
+        "miss_hi80": {
+          "type": "number"
+        },
+        "kupiec80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ80_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_se": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_lo": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_ci_hi": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "miss_lo95": {
+          "type": "number"
+        },
+        "miss_hi95": {
+          "type": "number"
+        },
+        "kupiec95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "christ95_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "split",
+        "h",
+        "model",
+        "n",
+        "cover80",
+        "cover95",
+        "pinball",
+        "iscore80",
+        "iscore95",
+        "width80_median",
+        "cover80_se",
+        "cover80_ci_lo",
+        "cover80_ci_hi",
+        "cover80_n_eff",
+        "miss_lo80",
+        "miss_hi80",
+        "kupiec80_p",
+        "christ80_p",
+        "cover95_se",
+        "cover95_ci_lo",
+        "cover95_ci_hi",
+        "cover95_n_eff",
+        "miss_lo95",
+        "miss_hi95",
+        "kupiec95_p",
+        "christ95_p"
+      ],
+      "title": "RangeDiagnosticRow",
+      "type": "object"
+    },
+    "RangeRegimeRow": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "empirical",
+            "ewma_fhs",
+            "lognormal_rv"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "regime": {
+          "enum": [
+            "low",
+            "mid",
+            "high"
+          ],
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "cover80": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "split",
+        "h",
+        "regime",
+        "n",
+        "cover80",
+        "cover95"
+      ],
+      "title": "RangeRegimeRow",
+      "type": "object"
+    },
     "Reaction": {
       "additionalProperties": false,
       "properties": {
@@ -1623,6 +2416,54 @@
         "one_in_ten_usd_t"
       ],
       "title": "ReleaseMove",
+      "type": "object"
+    },
+    "ReturnDistribution": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "first": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "quantiles": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "bin_step": {
+          "type": "number"
+        },
+        "bin_edges": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "n",
+        "first",
+        "last_start",
+        "quantiles",
+        "bin_step",
+        "bin_edges",
+        "counts"
+      ],
+      "title": "ReturnDistribution",
       "type": "object"
     },
     "Robustness": {
@@ -1980,6 +2821,125 @@
       "title": "Splits",
       "type": "object"
     },
+    "Stress": {
+      "additionalProperties": false,
+      "description": "Historical stress replay (P19): illustrative scenarios, not probabilities.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "p0_c_bu": {
+          "type": "number"
+        },
+        "fx": {
+          "type": "number"
+        },
+        "horizons": {
+          "items": {
+            "$ref": "#/$defs/StressHorizon"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "rule",
+        "basis",
+        "p0_c_bu",
+        "fx",
+        "horizons"
+      ],
+      "title": "Stress",
+      "type": "object"
+    },
+    "StressEpisode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "end": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "logret": {
+          "type": "number"
+        },
+        "pct": {
+          "type": "number"
+        },
+        "percentile": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        "c_bu": {
+          "type": "number"
+        },
+        "usd_t": {
+          "type": "number"
+        },
+        "brl_sack": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "rationale",
+        "start",
+        "end",
+        "logret",
+        "pct",
+        "percentile",
+        "c_bu",
+        "usd_t",
+        "brl_sack"
+      ],
+      "title": "StressEpisode",
+      "type": "object"
+    },
+    "StressHorizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/StressEpisode"
+          },
+          "type": "array"
+        },
+        "distribution": {
+          "$ref": "#/$defs/ReturnDistribution"
+        }
+      },
+      "required": [
+        "h",
+        "episodes",
+        "distribution"
+      ],
+      "title": "StressHorizon",
+      "type": "object"
+    },
     "SubSample": {
       "additionalProperties": false,
       "properties": {
@@ -2023,9 +2983,31 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "DM on the primary loss (squared log-return error)."
         },
         "dm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dm_mae_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "DM on the secondary loss (absolute USD/t error)."
+        },
+        "dm_mae_p": {
           "anyOf": [
             {
               "type": "number"
@@ -2072,6 +3054,8 @@
         "n",
         "dm_t",
         "dm_p",
+        "dm_mae_t",
+        "dm_mae_p",
         "cw_t",
         "cw_p",
         "cw_p_holm"
@@ -2117,6 +3101,24 @@
           },
           "type": "array"
         },
+        "range_choice": {
+          "items": {
+            "$ref": "#/$defs/RangeChoiceRow"
+          },
+          "type": "array"
+        },
+        "range_diagnostics": {
+          "items": {
+            "$ref": "#/$defs/RangeDiagnosticRow"
+          },
+          "type": "array"
+        },
+        "range_regimes": {
+          "items": {
+            "$ref": "#/$defs/RangeRegimeRow"
+          },
+          "type": "array"
+        },
         "paths": {
           "additionalProperties": {
             "additionalProperties": {
@@ -2145,6 +3147,9 @@
         "fob_illustrative",
         "fob_illustrative_note",
         "interval_choice",
+        "range_choice",
+        "range_diagnostics",
+        "range_regimes",
         "paths"
       ],
       "title": "TrackRecord",

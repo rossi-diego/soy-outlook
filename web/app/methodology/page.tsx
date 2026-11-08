@@ -75,13 +75,23 @@ export default function Methodology() {
         </p>
         <p>
           A model replaces &ldquo;no change&rdquo; at a horizon only if it beats it on the validation period with a
-          Clark-West test (the right test when one model nests the other), Holm-adjusted across the three horizons at p
-          &lt; {meta.champion_alpha}. Diebold-Mariano tests with the Harvey-Leybourne-Newbold correction and Newey-West
-          variance are reported alongside. Current winners:{" "}
+          Clark-West test (the right test when one model nests the other), Holm-adjusted across all nine model × horizon
+          tests at p &lt; {meta.champion_alpha}, and only if its {meta.inference_rule.primary_loss} is also lower.
+          Diebold-Mariano tests with the Harvey-Leybourne-Newbold correction and Newey-West variance are reported
+          alongside, on the same primary loss and, as a secondary check, on the {meta.inference_rule.secondary_loss}.
+          Current winners:{" "}
           {Object.entries(meta.champion)
             .map(([h, m]) => `${h}m ${m === "rw" ? "no change" : meta.models[m]}`)
             .join(", ")}
           .
+        </p>
+        <p>
+          This is inference rule v{meta.inference_rule.version}, fixed on {dateLabel(meta.inference_rule.registered)}.
+          The first version mixed losses: Diebold-Mariano on absolute USD/t errors, Clark-West on squared log-return
+          errors, and a tie-break on mean absolute error. A model could then pass one test and fail another for reasons
+          of units alone. Version 2 uses one primary loss, keeps the absolute error as secondary, adjusts for all nine
+          tests at once, and tests direction with a Pesaran-Timmermann test with overlap-robust (HAC) errors instead of a binomial test
+          that ignores overlapping windows. No conclusion changed: no model beats no change under either rule.
         </p>
       </Block>
 
@@ -93,6 +103,14 @@ export default function Methodology() {
           This is not split-conformal: 3- and 6-month windows overlap, so the errors are not exchangeable and no
           finite-sample guarantee is claimed. The centring was chosen between {meta.intervals.candidates.join(" and ")} by a
           rule fixed in advance (interval score on the validation period only).
+        </p>
+        <p>
+          Two volatility-scaled alternatives were fixed in advance and scored the same way: {meta.intervals.range_labels.ewma_fhs}{" "}
+          and a {meta.intervals.range_labels.lognormal_rv}. Only the validation winner is published:{" "}
+          {meta.intervals.range_method === meta.intervals.range_baseline
+            ? "neither beat the plain empirical errors, so the ranges above are unchanged."
+            : `the ${meta.intervals.method}, which replaced the empirical errors.`}{" "}
+          The comparison is on the track record page.
         </p>
         <p>
           The labels show the hit rate actually achieved, next to the nominal level, including on the holdout since{" "}

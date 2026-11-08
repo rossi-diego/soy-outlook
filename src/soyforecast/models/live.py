@@ -17,14 +17,17 @@ from soyforecast.config import (
     INTERVAL_BASELINE,
     PLACEBO_LAG_SESSIONS,
     QUANTILES,
+    RANGE_BASELINE,
     REACTION_ALPHA,
     REACTION_EXPECTED_SIGN,
     ROLL_EXCLUSION_BDAYS,
     SOY_CONTRACT_MONTHS,
     SPLIT_SAMPLE_BREAK,
 )
-from soyforecast.evaluation.backtest import eligible, residual_quantiles
+from soyforecast.evaluation.backtest import eligible, interval_offsets
 from soyforecast.evaluation.stats import holm
+from soyforecast.features.contracts import crosses_roll, reference_contract
+from soyforecast.features.dataset import crop_roll_dates, crosses_crop_roll
 from soyforecast.features.vintages import FEATURE_META
 from soyforecast.models.ladder import MODELS
 from soyforecast.units import c_bu_to_usd_t
@@ -36,8 +39,13 @@ def live_forecast(
     bt: pd.DataFrame,
     champion: dict[int, str],
     centring: str = INTERVAL_BASELINE,
+    method: str = RANGE_BASELINE,
 ) -> list[dict[str, Any]]:
+    """One row per horizon: the champion's mean, the published range method's quantiles,
+    the calibration size and the reference contract (P10)."""
     anchor = pd.Timestamp(live["anchor_date"])
+    rolls = crop_roll_dates(anchor.year - 1, anchor.year + 2)
+    vol_col = "vol_rv" if method == "lognormal_rv" else "vol_ewma"
     history = pd.concat([df[df["origin"] < anchor], live.to_frame().T.infer_objects()])
     out = []
     for h in HORIZONS:
@@ -49,18 +57,29 @@ def live_forecast(
         )
         g = g.sort_values("origin").tail(CALIB_WINDOW)
         resid = (g["y"] - g["pred"]).to_numpy()
-        qs = residual_quantiles(resid, centring)
+        past_vol = g[vol_col].to_numpy(dtype=float) if vol_col in g else np.full(len(g), np.nan)
+        qs = interval_offsets(resid, past_vol, float(live[vol_col]), h, method, centring)
         p0 = float(live["p0_c_bu"])
+        target = anchor + pd.DateOffset(months=h)
         row: dict[str, Any] = {
             "h": h,
             "model": name,
-            "target_date": (anchor + pd.DateOffset(months=h)).date().isoformat(),
+            "target_date": target.date().isoformat(),
             "mean_logret": pred,
             "calibration_n": len(resid),
             # overlapping h-month windows: roughly one independent outcome per h origins
             "calibration_n_eff": round(len(resid) / h, 1),
             # expected number of past errors beyond each 95% bound
             "tail_obs_95": round(len(resid) * 0.025, 1),
+            # The hedge contract for this horizon, and whether the continuous front month
+            # rolls inside the window (the price then partly measures a calendar spread).
+            "contract": {
+                "origin": reference_contract(anchor)["code"],
+                "reference": reference_contract(target),
+                "crosses_roll": crosses_roll(anchor, target),
+                "crosses_crop_roll": crosses_crop_roll(anchor, target, rolls),
+                "series": "Yahoo continuous front month (ZS=F)",
+            },
         }
         for q in QUANTILES:
             row[f"q{round(q * 1000):03d}"] = round(p0 * float(np.exp(pred + qs[q])), 2)

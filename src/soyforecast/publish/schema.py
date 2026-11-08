@@ -24,9 +24,10 @@ from pydantic.json_schema import GenerateJsonSchema
 
 from soyforecast.config import HORIZONS
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3  # v3: range method (P2), calibration stats (P4), inference rule v2 (P16)
 
 ModelId = Literal["rw", "drift", "arima", "ridge"]
+RangeMethod = Literal["empirical", "ewma_fhs", "lognormal_rv"]
 Split = Literal["validation", "holdout"]
 IsoDate = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 ReportMonth = Annotated[str, Field(pattern=r"^\d{4}-\d{2}$")]
@@ -110,13 +111,32 @@ class Splits(Contract):
 
 
 class Intervals(Contract):
-    method: str
+    method: str = Field(description="Label of the published range method (the validation winner).")
+    range_method: RangeMethod
+    range_candidates: list[RangeMethod]
+    range_baseline: RangeMethod
+    range_rule: str
+    range_labels: dict[RangeMethod, str]
     centring: str
     candidates: list[str]
     baseline: str
     rule: str
     nominal_levels: list[float]
     coverage_warn_pp: float
+
+
+class InferenceRule(Contract):
+    """The versioned, pre-registered test and champion rule (P16)."""
+
+    version: int
+    registered: IsoDate
+    primary_loss: str
+    secondary_loss: str
+    adjustment: str
+    champion: str
+    direction_test: str
+    calibration: str
+    v1: str
 
 
 class FeatureMeta(Contract):
@@ -126,7 +146,7 @@ class FeatureMeta(Contract):
 
 
 class Meta(Contract):
-    schema_version: Literal[2]
+    schema_version: Literal[3]
     version: str
     generated_at: str
     as_of_close: IsoDate
@@ -144,6 +164,7 @@ class Meta(Contract):
     champion_alpha: float
     calibration_window: int
     intervals: Intervals
+    inference_rule: InferenceRule
     models: dict[ModelId, str]
     features: list[FeatureMeta]
 
@@ -191,6 +212,12 @@ class CoverageSplit(Contract):
     cover80: Probability
     cover95: Probability
     calibration_n_eff: float | None
+    ci80: tuple[Probability | None, Probability | None] = Field(
+        description="Moving-block bootstrap 95% CI of the 80% hit rate."
+    )
+    ci95: tuple[Probability | None, Probability | None]
+    n_eff80: float | None = Field(description="Approximate number of independent outcomes.")
+    n_eff95: float | None
 
 
 class Coverage(Contract):
@@ -204,6 +231,23 @@ class Coverage(Contract):
 QUANTILE_FIELDS = ("q025", "q100", "q500", "q900", "q975")
 
 
+class ContractInfo(Contract):
+    code: str = Field(pattern=r"^[FHKNQUX]\d{2}$")
+    delivery_month: ReportMonth
+    first_notice: IsoDate
+    last_trade: IsoDate
+
+
+class HorizonContract(Contract):
+    """The hedge contract for a horizon (P10); prices stay the continuous front month."""
+
+    origin: str
+    reference: ContractInfo
+    crosses_roll: bool
+    crosses_crop_roll: bool
+    series: str
+
+
 class Horizon(Contract):
     h: int
     model: ModelId
@@ -212,6 +256,7 @@ class Horizon(Contract):
     calibration_n: int
     calibration_n_eff: float
     tail_obs_95: float
+    contract: HorizonContract
     q025: float
     q100: float
     q500: float
@@ -231,12 +276,60 @@ class Horizon(Contract):
         return self
 
 
+class StressEpisode(Contract):
+    id: ReportMonth
+    name: str
+    rationale: str
+    start: IsoDate
+    end: IsoDate
+    logret: float
+    pct: float
+    percentile: float = Field(ge=0, le=100)
+    c_bu: float
+    usd_t: float
+    brl_sack: float
+
+
+class ReturnDistribution(Contract):
+    n: int
+    first: IsoDate
+    last_start: IsoDate
+    quantiles: dict[str, float]
+    bin_step: float
+    bin_edges: list[float]
+    counts: list[int]
+
+    @model_validator(mode="after")
+    def _bins(self) -> ReturnDistribution:
+        if len(self.bin_edges) != len(self.counts) + 1 or sum(self.counts) != self.n:
+            raise ValueError("histogram edges/counts do not match n")
+        return self
+
+
+class StressHorizon(Contract):
+    h: int
+    episodes: list[StressEpisode]
+    distribution: ReturnDistribution
+
+
+class Stress(Contract):
+    """Historical stress replay (P19): illustrative scenarios, not probabilities."""
+
+    label: str
+    rule: str
+    basis: str
+    p0_c_bu: float
+    fx: float
+    horizons: list[StressHorizon]
+
+
 class Outlook(Contract):
     as_of_close: IsoDate
     last: PricePoint
     horizons: list[Horizon]
     history: list[PricePoint] = Field(min_length=1)
     premium_last: PricePoint
+    stress: Stress
     premium_now_default: PremiumNowDefault
 
     @model_validator(mode="after")
@@ -256,6 +349,9 @@ class MetricRow(Contract):
     model: ModelId
     h: int
     n: int
+    mse_logret: float | None = Field(
+        description="Primary loss (rule v2): squared log-return error."
+    )
     mae_usd_t: float | None
     rmse_usd_t: float | None
     mape_pct: float | None
@@ -270,14 +366,35 @@ class MetricRow(Contract):
     iscore95: float | None
     calibration_n: float | None
     calibration_n_eff: float | None
+    mde_mae: float | None = Field(
+        description="Minimum detectable relative MAE improvement over no change (5%, 80% power)."
+    )
+    cover80_se: float | None
+    cover80_ci_lo: float | None
+    cover80_ci_hi: float | None
+    cover80_n_eff: float | None
+    miss_lo80: float | None
+    miss_hi80: float | None
+    kupiec80_p: float | None
+    christ80_p: float | None
+    cover95_se: float | None
+    cover95_ci_lo: float | None
+    cover95_ci_hi: float | None
+    cover95_n_eff: float | None
+    miss_lo95: float | None
+    miss_hi95: float | None
+    kupiec95_p: float | None
+    christ95_p: float | None
 
 
 class TestRow(Contract):
     model: ModelId
     h: int
     n: int
-    dm_t: float | None
+    dm_t: float | None = Field(description="DM on the primary loss (squared log-return error).")
     dm_p: float | None
+    dm_mae_t: float | None = Field(description="DM on the secondary loss (absolute USD/t error).")
+    dm_mae_p: float | None
     cw_t: float | None
     cw_p: float | None
     cw_p_holm: float | None
@@ -288,6 +405,7 @@ class PathRow(Contract):
     target_date: IsoDate
     split: Split
     crop_roll: bool
+    roll_cross: bool
     p0: float
     actual: float | None
     forecast: float
@@ -321,12 +439,63 @@ class IntervalChoiceRow(Contract):
     chosen: bool
 
 
+class RangeChoiceRow(Contract):
+    method: RangeMethod
+    split: Split
+    score_ratio: float | None
+    cells: int
+    chosen: bool
+
+
+class RangeDiagnosticRow(Contract):
+    method: RangeMethod
+    split: Split
+    h: int
+    model: ModelId
+    n: int
+    cover80: Probability
+    cover95: Probability
+    pinball: float
+    iscore80: float
+    iscore95: float
+    width80_median: float
+    cover80_se: float | None
+    cover80_ci_lo: float | None
+    cover80_ci_hi: float | None
+    cover80_n_eff: float | None
+    miss_lo80: float
+    miss_hi80: float
+    kupiec80_p: float | None
+    christ80_p: float | None
+    cover95_se: float | None
+    cover95_ci_lo: float | None
+    cover95_ci_hi: float | None
+    cover95_n_eff: float | None
+    miss_lo95: float
+    miss_hi95: float
+    kupiec95_p: float | None
+    christ95_p: float | None
+
+
+class RangeRegimeRow(Contract):
+    method: RangeMethod
+    split: Split
+    h: int
+    regime: Literal["low", "mid", "high"]
+    n: int
+    cover80: Probability | None
+    cover95: Probability | None
+
+
 class TrackRecord(Contract):
     metrics: list[MetricRow] = Field(min_length=1)
     tests: list[TestRow]
     fob_illustrative: list[FobRow]
     fob_illustrative_note: str | None
     interval_choice: list[IntervalChoiceRow]
+    range_choice: list[RangeChoiceRow]
+    range_diagnostics: list[RangeDiagnosticRow]
+    range_regimes: list[RangeRegimeRow]
     paths: dict[str, dict[ModelId, list[PathRow]]] = Field(min_length=1)
 
 

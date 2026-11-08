@@ -13,6 +13,8 @@ import pandas as pd
 from pandas.tseries.offsets import BDay
 
 from soyforecast.config import FEATURES, HORIZONS
+from soyforecast.features.contracts import crosses_roll
+from soyforecast.features.vol import ewma_vol, realized_vol, vol_at
 
 # CBOT soybean contracts whose expiry carries the old-crop / new-crop spread into the
 # continuous series (July, August, September); the jump is a calendar spread, not a move.
@@ -48,6 +50,7 @@ def build_dataset(vintages: pd.DataFrame, prices: pd.Series) -> pd.DataFrame:
     prices = prices.sort_index()
     last_close = prices.index.max()
     rolls = crop_roll_dates(prices.index.min().year, last_close.year + 1)
+    v_ewma, v_rv = ewma_vol(prices), realized_vol(prices)
     rows = []
     for month, v in vintages.iterrows():
         origin = pd.Timestamp(v["release_date"])
@@ -62,6 +65,9 @@ def build_dataset(vintages: pd.DataFrame, prices: pd.Series) -> pd.DataFrame:
             "p0_c_bu": p0,
             "mom_1m": _momentum(prices, anchor_date, p0, 1),
             "mom_3m": _momentum(prices, anchor_date, p0, 3),
+            # trailing vol at the origin close (range methods only, never a model feature)
+            "vol_ewma": vol_at(v_ewma, anchor_date),
+            "vol_rv": vol_at(v_rv, anchor_date),
         }
         for f in FEATURES:
             if f not in row:
@@ -70,6 +76,7 @@ def build_dataset(vintages: pd.DataFrame, prices: pd.Series) -> pd.DataFrame:
             target_date = origin + pd.DateOffset(months=h)
             row[f"target_date_{h}"] = target_date
             row[f"crop_roll_{h}"] = crosses_crop_roll(origin, target_date, rolls)
+            row[f"roll_cross_{h}"] = crosses_roll(origin, target_date)
             realized = (
                 close_on_or_before(prices, target_date) if target_date <= last_close else None
             )
@@ -97,6 +104,8 @@ def live_row(vintages: pd.DataFrame, prices: pd.Series) -> pd.Series:
             "p0_c_bu": p0,
             "mom_1m": _momentum(prices, anchor_date, p0, 1),
             "mom_3m": _momentum(prices, anchor_date, p0, 3),
+            "vol_ewma": vol_at(ewma_vol(prices), anchor_date),
+            "vol_rv": vol_at(realized_vol(prices), anchor_date),
         }
     )
     return pd.Series(row)

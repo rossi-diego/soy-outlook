@@ -22,6 +22,7 @@ from soyforecast.freshness import (
 )
 from soyforecast.ingest.prices import fetch_soy_prices
 from soyforecast.publish.archive import load_archive, publish_archive, score
+from soyforecast.publish.schema import SCHEMA_VERSION
 from soyforecast.publish.validate import validate
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bronze"
@@ -260,7 +261,7 @@ def test_gate_rejects_bad_shape(published, tmp_path):
     outlook["horizons"][0]["q900"] = outlook["horizons"][0]["q025"] - 1
     outlook["horizons"][1]["q500"] = None
     (bad / "outlook.json").write_text(json.dumps(outlook), encoding="utf-8")
-    problems = validate(bad, 2, now=datetime(2026, 11, 9, tzinfo=UTC)).problems
+    problems = validate(bad, SCHEMA_VERSION, now=datetime(2026, 11, 9, tzinfo=UTC)).problems
     assert any("not monotone" in p for p in problems)
     assert any(p.startswith("outlook.json: horizons.1.q500:") for p in problems)
     assert (

@@ -1,6 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
+    "ContractInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "pattern": "^[FHKNQUX]\\d{2}$",
+          "type": "string"
+        },
+        "delivery_month": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "first_notice": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last_trade": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "delivery_month",
+        "first_notice",
+        "last_trade"
+      ],
+      "title": "ContractInfo",
+      "type": "object"
+    },
     "Coverage": {
       "additionalProperties": false,
       "properties": {
@@ -74,6 +103,90 @@
               "type": "null"
             }
           ]
+        },
+        "ci80": {
+          "description": "Moving-block bootstrap 95% CI of the 80% hit rate.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        "ci95": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            {
+              "anyOf": [
+                {
+                  "maximum": 1,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          ],
+          "type": "array"
+        },
+        "n_eff80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Approximate number of independent outcomes."
+        },
+        "n_eff95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -81,7 +194,11 @@
         "n",
         "cover80",
         "cover95",
-        "calibration_n_eff"
+        "calibration_n_eff",
+        "ci80",
+        "ci95",
+        "n_eff80",
+        "n_eff95"
       ],
       "title": "CoverageSplit",
       "type": "object"
@@ -117,6 +234,9 @@
         "tail_obs_95": {
           "type": "number"
         },
+        "contract": {
+          "$ref": "#/$defs/HorizonContract"
+        },
         "q025": {
           "type": "number"
         },
@@ -150,6 +270,7 @@
         "calibration_n",
         "calibration_n_eff",
         "tail_obs_95",
+        "contract",
         "q025",
         "q100",
         "q500",
@@ -160,6 +281,36 @@
         "premium_reference"
       ],
       "title": "Horizon",
+      "type": "object"
+    },
+    "HorizonContract": {
+      "additionalProperties": false,
+      "description": "The hedge contract for a horizon (P10); prices stay the continuous front month.",
+      "properties": {
+        "origin": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/ContractInfo"
+        },
+        "crosses_roll": {
+          "type": "boolean"
+        },
+        "crosses_crop_roll": {
+          "type": "boolean"
+        },
+        "series": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "origin",
+        "reference",
+        "crosses_roll",
+        "crosses_crop_roll",
+        "series"
+      ],
+      "title": "HorizonContract",
       "type": "object"
     },
     "Nominal": {
@@ -291,6 +442,173 @@
       ],
       "title": "PricePoint",
       "type": "object"
+    },
+    "ReturnDistribution": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "first": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "last_start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "quantiles": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "bin_step": {
+          "type": "number"
+        },
+        "bin_edges": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "n",
+        "first",
+        "last_start",
+        "quantiles",
+        "bin_step",
+        "bin_edges",
+        "counts"
+      ],
+      "title": "ReturnDistribution",
+      "type": "object"
+    },
+    "Stress": {
+      "additionalProperties": false,
+      "description": "Historical stress replay (P19): illustrative scenarios, not probabilities.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "p0_c_bu": {
+          "type": "number"
+        },
+        "fx": {
+          "type": "number"
+        },
+        "horizons": {
+          "items": {
+            "$ref": "#/$defs/StressHorizon"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "rule",
+        "basis",
+        "p0_c_bu",
+        "fx",
+        "horizons"
+      ],
+      "title": "Stress",
+      "type": "object"
+    },
+    "StressEpisode": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^\\d{4}-\\d{2}$",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "start": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "end": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "logret": {
+          "type": "number"
+        },
+        "pct": {
+          "type": "number"
+        },
+        "percentile": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        "c_bu": {
+          "type": "number"
+        },
+        "usd_t": {
+          "type": "number"
+        },
+        "brl_sack": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "rationale",
+        "start",
+        "end",
+        "logret",
+        "pct",
+        "percentile",
+        "c_bu",
+        "usd_t",
+        "brl_sack"
+      ],
+      "title": "StressEpisode",
+      "type": "object"
+    },
+    "StressHorizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "episodes": {
+          "items": {
+            "$ref": "#/$defs/StressEpisode"
+          },
+          "type": "array"
+        },
+        "distribution": {
+          "$ref": "#/$defs/ReturnDistribution"
+        }
+      },
+      "required": [
+        "h",
+        "episodes",
+        "distribution"
+      ],
+      "title": "StressHorizon",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -318,6 +636,9 @@
     "premium_last": {
       "$ref": "#/$defs/PricePoint"
     },
+    "stress": {
+      "$ref": "#/$defs/Stress"
+    },
     "premium_now_default": {
       "$ref": "#/$defs/PremiumNowDefault"
     }
@@ -328,6 +649,7 @@
     "horizons",
     "history",
     "premium_last",
+    "stress",
     "premium_now_default"
   ],
   "title": "Outlook",

@@ -17,7 +17,7 @@ export interface SiteData {
  * via the `definition` "Meta".
  */
 export interface Meta {
-  schema_version: 2;
+  schema_version: 3;
   version: string;
   generated_at: string;
   as_of_close: string;
@@ -40,6 +40,7 @@ export interface Meta {
   champion_alpha: number;
   calibration_window: number;
   intervals: Intervals;
+  inference_rule: InferenceRule;
   models: {
     [k: string]: string;
   };
@@ -144,13 +145,40 @@ export interface Splits {
  * via the `definition` "Intervals".
  */
 export interface Intervals {
+  /**
+   * Label of the published range method (the validation winner).
+   */
   method: string;
+  range_method: "empirical" | "ewma_fhs" | "lognormal_rv";
+  range_candidates: ("empirical" | "ewma_fhs" | "lognormal_rv")[];
+  range_baseline: "empirical" | "ewma_fhs" | "lognormal_rv";
+  range_rule: string;
+  range_labels: {
+    [k: string]: string;
+  };
   centring: string;
   candidates: string[];
   baseline: string;
   rule: string;
   nominal_levels: number[];
   coverage_warn_pp: number;
+}
+/**
+ * The versioned, pre-registered test and champion rule (P16).
+ *
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "InferenceRule".
+ */
+export interface InferenceRule {
+  version: number;
+  registered: string;
+  primary_loss: string;
+  secondary_loss: string;
+  adjustment: string;
+  champion: string;
+  direction_test: string;
+  calibration: string;
+  v1: string;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -174,6 +202,7 @@ export interface Outlook {
    */
   history: [PricePoint, ...PricePoint[]];
   premium_last: PricePoint;
+  stress: Stress;
   premium_now_default: PremiumNowDefault;
 }
 /**
@@ -196,6 +225,7 @@ export interface Horizon {
   calibration_n: number;
   calibration_n_eff: number;
   tail_obs_95: number;
+  contract: HorizonContract;
   q025: number;
   q100: number;
   q500: number;
@@ -204,6 +234,29 @@ export interface Horizon {
   central: number;
   coverage: Coverage;
   premium_reference: PremiumReference;
+}
+/**
+ * The hedge contract for a horizon (P10); prices stay the continuous front month.
+ *
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "HorizonContract".
+ */
+export interface HorizonContract {
+  origin: string;
+  reference: ContractInfo;
+  crosses_roll: boolean;
+  crosses_crop_roll: boolean;
+  series: string;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "ContractInfo".
+ */
+export interface ContractInfo {
+  code: string;
+  delivery_month: string;
+  first_notice: string;
+  last_trade: string;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -240,6 +293,23 @@ export interface CoverageSplit {
   cover80: number;
   cover95: number;
   calibration_n_eff: number | null;
+  /**
+   * Moving-block bootstrap 95% CI of the 80% hit rate.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  ci80: [number | null, number | null];
+  /**
+   * @minItems 2
+   * @maxItems 2
+   */
+  ci95: [number | null, number | null];
+  /**
+   * Approximate number of independent outcomes.
+   */
+  n_eff80: number | null;
+  n_eff95: number | null;
 }
 /**
  * Reference text only ("historical median, not validated"); never used as the default.
@@ -258,6 +328,61 @@ export interface PremiumReference {
   years: string;
   n_years: number;
   note: string;
+}
+/**
+ * Historical stress replay (P19): illustrative scenarios, not probabilities.
+ *
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "Stress".
+ */
+export interface Stress {
+  label: string;
+  rule: string;
+  basis: string;
+  p0_c_bu: number;
+  fx: number;
+  horizons: StressHorizon[];
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "StressHorizon".
+ */
+export interface StressHorizon {
+  h: number;
+  episodes: StressEpisode[];
+  distribution: ReturnDistribution;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "StressEpisode".
+ */
+export interface StressEpisode {
+  id: string;
+  name: string;
+  rationale: string;
+  start: string;
+  end: string;
+  logret: number;
+  pct: number;
+  percentile: number;
+  c_bu: number;
+  usd_t: number;
+  brl_sack: number;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "ReturnDistribution".
+ */
+export interface ReturnDistribution {
+  n: number;
+  first: string;
+  last_start: string;
+  quantiles: {
+    [k: string]: number;
+  };
+  bin_step: number;
+  bin_edges: number[];
+  counts: number[];
 }
 /**
  * The one premium used for the headline and every horizon until the user enters a quote.
@@ -293,6 +418,9 @@ export interface TrackRecord {
   fob_illustrative: FobRow[];
   fob_illustrative_note: string | null;
   interval_choice: IntervalChoiceRow[];
+  range_choice: RangeChoiceRow[];
+  range_diagnostics: RangeDiagnosticRow[];
+  range_regimes: RangeRegimeRow[];
   paths: {
     [k: string]: {
       [k: string]: PathRow[];
@@ -309,6 +437,10 @@ export interface MetricRow {
   model: "rw" | "drift" | "arima" | "ridge";
   h: number;
   n: number;
+  /**
+   * Primary loss (rule v2): squared log-return error.
+   */
+  mse_logret: number | null;
   mae_usd_t: number | null;
   rmse_usd_t: number | null;
   mape_pct: number | null;
@@ -323,6 +455,26 @@ export interface MetricRow {
   iscore95: number | null;
   calibration_n: number | null;
   calibration_n_eff: number | null;
+  /**
+   * Minimum detectable relative MAE improvement over no change (5%, 80% power).
+   */
+  mde_mae: number | null;
+  cover80_se: number | null;
+  cover80_ci_lo: number | null;
+  cover80_ci_hi: number | null;
+  cover80_n_eff: number | null;
+  miss_lo80: number | null;
+  miss_hi80: number | null;
+  kupiec80_p: number | null;
+  christ80_p: number | null;
+  cover95_se: number | null;
+  cover95_ci_lo: number | null;
+  cover95_ci_hi: number | null;
+  cover95_n_eff: number | null;
+  miss_lo95: number | null;
+  miss_hi95: number | null;
+  kupiec95_p: number | null;
+  christ95_p: number | null;
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
@@ -332,8 +484,16 @@ export interface TestRow {
   model: "rw" | "drift" | "arima" | "ridge";
   h: number;
   n: number;
+  /**
+   * DM on the primary loss (squared log-return error).
+   */
   dm_t: number | null;
   dm_p: number | null;
+  /**
+   * DM on the secondary loss (absolute USD/t error).
+   */
+  dm_mae_t: number | null;
+  dm_mae_p: number | null;
   cw_t: number | null;
   cw_p: number | null;
   cw_p_holm: number | null;
@@ -363,6 +523,63 @@ export interface IntervalChoiceRow {
 }
 /**
  * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "RangeChoiceRow".
+ */
+export interface RangeChoiceRow {
+  method: "empirical" | "ewma_fhs" | "lognormal_rv";
+  split: "validation" | "holdout";
+  score_ratio: number | null;
+  cells: number;
+  chosen: boolean;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "RangeDiagnosticRow".
+ */
+export interface RangeDiagnosticRow {
+  method: "empirical" | "ewma_fhs" | "lognormal_rv";
+  split: "validation" | "holdout";
+  h: number;
+  model: "rw" | "drift" | "arima" | "ridge";
+  n: number;
+  cover80: number;
+  cover95: number;
+  pinball: number;
+  iscore80: number;
+  iscore95: number;
+  width80_median: number;
+  cover80_se: number | null;
+  cover80_ci_lo: number | null;
+  cover80_ci_hi: number | null;
+  cover80_n_eff: number | null;
+  miss_lo80: number;
+  miss_hi80: number;
+  kupiec80_p: number | null;
+  christ80_p: number | null;
+  cover95_se: number | null;
+  cover95_ci_lo: number | null;
+  cover95_ci_hi: number | null;
+  cover95_n_eff: number | null;
+  miss_lo95: number;
+  miss_hi95: number;
+  kupiec95_p: number | null;
+  christ95_p: number | null;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
+ * via the `definition` "RangeRegimeRow".
+ */
+export interface RangeRegimeRow {
+  method: "empirical" | "ewma_fhs" | "lognormal_rv";
+  split: "validation" | "holdout";
+  h: number;
+  regime: "low" | "mid" | "high";
+  n: number;
+  cover80: number | null;
+  cover95: number | null;
+}
+/**
+ * This interface was referenced by `SiteData`'s JSON-Schema
  * via the `definition` "PathRow".
  */
 export interface PathRow {
@@ -370,6 +587,7 @@ export interface PathRow {
   target_date: string;
   split: "validation" | "holdout";
   crop_roll: boolean;
+  roll_cross: boolean;
   p0: number;
   actual: number | null;
   forecast: number;

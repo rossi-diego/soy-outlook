@@ -46,10 +46,14 @@ The Paranaguá FOB price is the CBOT soybean price plus a port premium. This pro
 
 Values as of the CBOT close of 6 Nov 2026 and the October 2026 WASDE. They regenerate on every run (`web/public/data/metrics.csv`).
 
-- **The ridge model is significantly *worse*** than no change at 1 and 6 months: Diebold-Mariano p = 0.046 and 0.017 (0.10 at 3 months).
-- **No challenger passes** the Clark-West test against no change, Holm-adjusted across horizons (all adjusted p = 1.0).
+- **No challenger passes** the Clark-West test against no change, Holm-adjusted across all nine model × horizon tests (all adjusted p = 1.0).
+- **The tests had power.** The minimum detectable effect (one-sided 5%, 80% power, HAC errors) is about a 6% lower MAE for the ridge model (5–7% across horizons) and 1–4% for ARIMA and the average past change. Improvements that size were detectable; none was found.
+- **The ridge model is *worse*** than no change. On the primary loss (squared log-return error) Diebold-Mariano p = 0.06, 0.11 and 0.07 at 1, 3 and 6 months; on the secondary absolute USD/t error, p = 0.046 and 0.017 at 1 and 6 months. The average past change is worse at 1 month (p = 0.02).
+- **Inference rule v2.** Version 1 mixed losses (DM on USD/t absolute errors, Clark-West on squared log returns, a MAE tie-break) and used an iid binomial direction test on overlapping windows. Version 2, fixed in `config.py` on 2026-11-08, uses one primary loss, Holm across all nine tests, a champion that must also have the lower primary loss, and a HAC Pesaran-Timmermann direction test. No conclusion changed.
 - **The 6-month range is too narrow** in validation: it held 71% of outcomes, not 80%. The page shows these hit rates next to every range.
 - **How the ranges are built.** Empirical quantiles of the last 60 realized out-of-sample errors, centred on their median. The centring (raw vs median) was fixed as a two-way choice in `config.py` before the comparison was run and chosen on validation only by interval score (median: 0.974 of the raw score). On the holdout it scored 1.008, slightly worse, which is reported rather than acted on. It is *not* split-conformal: overlapping windows break exchangeability, and each 95% bound rests on one or two past errors.
+- **Volatility-scaled ranges did not beat it.** Two alternatives were fixed in `config.py` before any result: EWMA(λ = 0.94) filtered historical simulation (the one challenger) and a plain lognormal band from 63-session realized vol (the naive benchmark). On validation their interval scores were 1.10 and 1.07 times the baseline's, so the empirical ranges stay. On the holdout the plain vol band scored 0.80, better; that is reported, not acted on, because the holdout never chooses.
+- **How uncertain the hit rates are.** Each comes with a moving-block bootstrap 95% CI and an effective sample size: the 6-month 80% range held 71% in validation, likely 54–87%, from about 32 independent outcomes. Misses are split by tail: in validation most 80% misses are on the upside (19% of 6-month outcomes above the range, 10% below). For the published (no change) ranges, Kupiec and Christoffersen tests on non-overlapping subsamples find no rejection at 5%.
 
 ## What the first version got wrong
 
@@ -157,12 +161,12 @@ Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](
 ```
 ├── src/soyforecast/
 │   ├── ingest/       wasde.py · prices.py (validated cache) · fx.py (PTAX) · premium.py (derived table + data card)
-│   ├── features/     vintages.py (projected MY, revisions) · dataset.py (origins, targets, roll flags)
-│   ├── models/       ladder.py (rw, drift, arima, ridge) · live.py (forecast, release-day reaction)
-│   ├── evaluation/   backtest.py (purging, empirical-quantile ranges, centring rule, champion) · stats.py (DM-HLN, Clark-West, Holm)
+│   ├── features/     vintages.py (projected MY, revisions) · dataset.py (origins, targets, roll flags) · vol.py (EWMA / realized vol at each close) · contracts.py (reference contract, roll crossing)
+│   ├── models/       ladder.py (rw, drift, arima, ridge) · live.py (forecast, release-day reaction) · stress.py (historical stress replay)
+│   ├── evaluation/   backtest.py (purging, range methods and their rule, centring rule, calibration stats, champion) · stats.py (DM-HLN, Clark-West, Holm, HAC / block-bootstrap hit-rate CIs, Kupiec, Christoffersen, MDE, Pesaran-Timmermann)
 │   ├── publish/      schema.py (pydantic site contract) · web_json.py (validated, staged publish) · archive.py (append-only outlook archive) · lineage.py (run manifest) · validate.py (refresh gate)
 │   ├── pipeline.py · cli.py · errors.py (exit codes) · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
-├── tests/            82 tests: no look-ahead, intervals, event study, premium card, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
+├── tests/            100 tests: no look-ahead, intervals, event study, premium card, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
 │   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources
@@ -174,7 +178,8 @@ Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](
 
 - **Premium source.** It has no public, licensed feed. The default is derived from a private terminal export with unrecorded vendor and contract convention that stops in June 2025, so it is flagged stale. Only 12 monthly statistics are committed; the daily export was removed from the working tree (earlier commits still hold it, see [DATA_LICENSES.md](DATA_LICENSES.md)). On the site the premium is a user input, and FOB is illustrative until you enter a quote.
 - **Forecast origin.** Ranges are tested from WASDE release-day closes. The live forecast is issued from the latest close, some days after the report (`days_since_report` in `meta.json`).
-- **Contract rolls.** The continuous front month jumps at expiry. Windows that cross a roll partly measure a calendar spread; the July–September rolls (old crop to new crop) are the largest. Metrics without those windows are in `metrics.csv` (`subset = no_crop_roll`), and the conclusion is the same.
+- **Contract rolls.** The continuous front month jumps at expiry. Windows that cross a roll partly measure a calendar spread; the July–September rolls (old crop to new crop) are the largest. Metrics without those windows are in `metrics.csv` (`subset = no_crop_roll`), and the conclusion is the same. Each horizon in `outlook.json` names its reference (hedge) contract, the first contract whose first notice day is after the target date (today: F27, H27, N27), and flags windows that cross a roll (`contract.crosses_roll`; `roll_cross` on every backtest row).
+- **Stress replay.** `outlook.json` also replays five episodes fixed in advance (Jun 2018 trade war, Jul 2020 China buying, May 2021 correction, Feb 2022 Ukraine, Jul 2024 sell-off) on today's price, next to the full distribution of h-month returns since 2004. They are illustrative scenarios, not probabilities, and CBOT only (premium and BRL held fixed).
 - **Revisions, not surprises.** A "revision" is a change against the previous report, not against analyst expectations. Release-day sensitivities therefore understate the true surprise effect. None of the six survives Holm adjustment; two (Brazil crop, China imports) have the unexpected sign and are flagged but kept in the what-if total, since dropping them would be post-hoc selection. A placebo on the session five days before each release finds nothing (joint p = 0.21). Excluding release days within three business days of a contract expiry (85 of 173) shrinks the US soybean coefficient to −1.1 ± 1.0 USD/t.
 - **Low power at long horizons.** 3- and 6-month windows overlap, so there are few independent outcomes, and the tests there have little power.
 - **Not investment advice.**
@@ -189,5 +194,7 @@ Licences and terms for each source are in [DATA_LICENSES.md](DATA_LICENSES.md).
 - Paranaguá premium: a derived 12-row monthly table (median, p10, p90 per calendar month) with a data card, `data/seed/paranagua_premium_monthly.*`. Not public data.
 
 ## Roadmap
+
+- **Contract-consistent targets (v2.1).** Rebuild the targets on specific contracts, or on a ratio-back-adjusted series with explicit roll dates, so a 3- or 6-month window no longer mixes price moves with calendar spreads. It would be pre-registered and documented as v2.1, the holdout would then be viewed a second time (and disclosed as such), and it needs legally sourceable expired-contract data, avoiding the licensing problem of the premium series.
 
 - **A public premium source.** A CEPEA/ESALQ-implied Paranaguá premium (R$/60 kg ÷ PTAX, minus CBOT nearby, with full lineage) would replace the derived table and make a joint CBOT × premium × FX band possible.

@@ -327,9 +327,9 @@ export default function TrackRecordView({ meta, track, archive }: { meta: Meta; 
             </table>
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted">
-            DM: Diebold-Mariano on absolute errors, Harvey-Leybourne-Newbold correction, Newey-West lag h−1. CW: Clark-West,
-            one-sided, for models that nest no change; Holm-adjusted across horizons. A model replaces no change only if CW
-            p &lt; {meta.champion_alpha} and its error is lower.
+            DM: Diebold-Mariano on the {meta.inference_rule.primary_loss} (the primary loss), Harvey-Leybourne-Newbold
+            correction, Newey-West lag h−1. CW: Clark-West, one-sided, for models that nest no change; Holm-adjusted across
+            all nine tests. A model replaces no change only if CW p &lt; {meta.champion_alpha} and its primary loss is lower.
           </p>
         </details>
         <div className="card space-y-3 p-5 text-sm">

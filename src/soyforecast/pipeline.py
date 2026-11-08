@@ -14,8 +14,10 @@ import pandas as pd
 from soyforecast.config import HORIZONS, WASDE_ASSET, Settings
 from soyforecast.evaluation.backtest import (
     fob_illustrative,
+    range_diagnostics,
     run_backtest,
     select_centring,
+    select_range_method,
     summarize,
 )
 from soyforecast.features.dataset import build_dataset, live_row
@@ -36,6 +38,7 @@ from soyforecast.ingest.prices import fetch_soy_prices
 from soyforecast.ingest.wasde import fetch_wasde, load_wasde
 from soyforecast.logs import get_logger
 from soyforecast.models.live import evidence, live_forecast, release_day_reaction
+from soyforecast.models.stress import stress_replay
 
 log = get_logger(__name__)
 
@@ -58,6 +61,11 @@ class Artefacts:
     reaction: dict[str, Any]
     centring: str
     interval_choice: pd.DataFrame
+    range_method: str
+    range_choice: pd.DataFrame
+    range_diagnostics: pd.DataFrame
+    range_regimes: pd.DataFrame
+    stress: dict[str, Any]
     sources: SourceLog
     offline: bool
 
@@ -111,14 +119,19 @@ def run(settings: Settings, *, update_pin: bool = False) -> Artefacts:
     log.info("gold.dataset", rows=len(dataset), first=str(dataset["origin"].min().date()))
 
     bt, centring, interval_choice = select_centring(run_backtest(dataset))
+    bt, range_method, range_choice, variants = select_range_method(bt, centring)
     bt.to_parquet(settings.gold / "backtest.parquet")
     interval_choice.to_csv(settings.gold / "interval_choice.csv", index=False)
+    range_choice.to_csv(settings.gold / "range_choice.csv", index=False)
     metrics, champion, tests = summarize(bt)
     metrics.to_csv(settings.gold / "metrics.csv", index=False)
     tests.to_csv(settings.gold / "tests.csv", index=False)
+    diag, regimes = range_diagnostics(variants, champion)
+    diag.to_csv(settings.gold / "range_diagnostics.csv", index=False)
 
     live = live_row(vintages, prices)
-    forecast = live_forecast(dataset, live, bt, champion, centring)
+    forecast = live_forecast(dataset, live, bt, champion, centring, range_method)
+    stress = stress_replay(prices, float(live["p0_c_bu"]), float(ptax.iloc[-1]))
     ev = evidence(dataset, float(live["p0_c_bu"]))
     reaction = release_day_reaction(vintages, prices, float(live["p0_c_bu"]))
     log.info("live.forecast", anchor=str(live["anchor_date"].date()), champion=champion)
@@ -139,6 +152,11 @@ def run(settings: Settings, *, update_pin: bool = False) -> Artefacts:
         reaction=reaction,
         centring=centring,
         interval_choice=interval_choice,
+        range_method=range_method,
+        range_choice=range_choice,
+        range_diagnostics=diag,
+        range_regimes=regimes,
+        stress=stress,
         sources=sources,
         offline=settings.offline,
     )

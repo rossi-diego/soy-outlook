@@ -21,17 +21,27 @@ from pydantic import ValidationError
 
 from soyforecast import __version__
 from soyforecast.config import (
+    BOOTSTRAP_DRAWS,
     CALIB_WINDOW,
     CHAMPION_ALPHA,
     COVERAGE_WARN_PP,
+    EWMA_LAMBDA,
     FEATURES,
     HOLDOUT_START,
     HORIZONS,
+    INFERENCE_RULE_VERSION,
     INTERVAL_BASELINE,
     INTERVAL_CENTRINGS,
     INTERVAL_METHOD,
+    MDE_ALPHA,
+    MDE_POWER,
     NOMINAL_LEVELS,
     OOS_START,
+    PRIMARY_LOSS,
+    RANGE_BASELINE,
+    RANGE_METHODS,
+    RV_WINDOW,
+    SECONDARY_LOSS,
     STALE_PREMIUM_DAYS,
     VALIDATION_END,
     VALIDATION_START,
@@ -53,6 +63,12 @@ if TYPE_CHECKING:
 
 log = get_logger(__name__)
 TRACK_MODELS = ("rw", "arima", "ridge")
+
+RANGE_METHOD_LABELS = {
+    "empirical": INTERVAL_METHOD,
+    "ewma_fhs": f"EWMA filtered historical simulation (lambda {EWMA_LAMBDA})",
+    "lognormal_rv": f"plain volatility band (lognormal, {RV_WINDOW}-session realized vol)",
+}
 
 
 def _clean(x: Any) -> Any:
@@ -145,7 +161,16 @@ def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
         "champion_alpha": CHAMPION_ALPHA,
         "calibration_window": CALIB_WINDOW,
         "intervals": {
-            "method": INTERVAL_METHOD,
+            "method": RANGE_METHOD_LABELS[a.range_method],
+            "range_method": a.range_method,
+            "range_candidates": list(RANGE_METHODS),
+            "range_baseline": RANGE_BASELINE,
+            "range_rule": (
+                "Pre-registered 2026-11-08: baseline, one EWMA(0.94) FHS challenger and a "
+                "naive lognormal vol band, chosen on validation only by the same interval-score "
+                "ratio; only the winner is published, the holdout is reported."
+            ),
+            "range_labels": RANGE_METHOD_LABELS,
             "centring": a.centring,
             "candidates": list(INTERVAL_CENTRINGS),
             "baseline": INTERVAL_BASELINE,
@@ -155,6 +180,28 @@ def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
             ),
             "nominal_levels": list(NOMINAL_LEVELS),
             "coverage_warn_pp": COVERAGE_WARN_PP,
+        },
+        "inference_rule": {
+            "version": INFERENCE_RULE_VERSION,
+            "registered": "2026-11-08",
+            "primary_loss": PRIMARY_LOSS,
+            "secondary_loss": SECONDARY_LOSS,
+            "adjustment": "Holm across all 9 Clark-West tests (3 challengers x 3 horizons)",
+            "champion": (
+                "Replace no change only if Holm-adjusted CW p < champion_alpha and the "
+                "validation primary loss is lower than the random walk's"
+            ),
+            "direction_test": "Pesaran-Timmermann, regression form, HAC (Bartlett, lag h-1)",
+            "calibration": (
+                f"HAC SE (Bartlett, lag h-1); moving-block bootstrap 95% CI (block h, "
+                f"{BOOTSTRAP_DRAWS} draws); n_eff = n p(1-p) / long-run variance; Kupiec and "
+                "Christoffersen on the h non-overlapping subsamples (median p); "
+                f"MDE at {MDE_ALPHA:.0%} one-sided, {MDE_POWER:.0%} power, MAE units"
+            ),
+            "v1": (
+                "DM on absolute USD/t errors, CW on squared log-return errors, Holm across the "
+                "three horizons of each model, champion tie-break on MAE, iid binomial direction test"
+            ),
         },
         "models": MODEL_LABELS,
         "features": [
@@ -183,6 +230,11 @@ def _coverage(a: Artefacts, model: str, h: int) -> dict[str, Any]:
             "cover80": _r(r["cover80"], 3),
             "cover95": _r(r["cover95"], 3),
             "calibration_n_eff": _r(r.get("calibration_n_eff", np.nan), 1),
+            # P4: plain-words uncertainty of each hit rate for the cards
+            "ci80": [_r(r["cover80_ci_lo"], 3), _r(r["cover80_ci_hi"], 3)],
+            "ci95": [_r(r["cover95_ci_lo"], 3), _r(r["cover95_ci_hi"], 3)],
+            "n_eff80": _r(r["cover80_n_eff"], 0),
+            "n_eff95": _r(r["cover95_n_eff"], 0),
         }
     val = out.get("validation")
     out["warn80"] = bool(val and val["cover80"] < NOMINAL_LEVELS[0] - COVERAGE_WARN_PP)
@@ -227,6 +279,7 @@ def build_outlook(a: Artefacts) -> dict[str, Any]:
         "horizons": horizons,
         "history": [{"date": d, "c_bu": _r(v)} for d, v in weekly.items()],
         "premium_last": {"date": a.premium.last_date, "c_bu": _r(a.premium.last_c_bu, 0)},
+        "stress": a.stress,
         # One premium for the headline and every horizon (P6): with CBOT unchanged, FOB
         # changes only through the premium the user enters.
         "premium_now_default": {
@@ -237,6 +290,10 @@ def build_outlook(a: Artefacts) -> dict[str, Any]:
             "illustrative": True,
         },
     }
+
+
+def _records(df: pd.DataFrame) -> list[dict[str, Any]]:
+    return [_clean(r) for r in df.to_dict(orient="records")]
 
 
 def build_track_record(a: Artefacts) -> dict[str, Any]:
@@ -257,6 +314,7 @@ def build_track_record(a: Artefacts) -> dict[str, Any]:
                         "target_date": r["target_date"],
                         "split": r["split"],
                         "crop_roll": r["crop_roll"],
+                        "roll_cross": bool(r.get("roll_cross", False)),
                         "p0": _r(p0),
                         "actual": _r(r["pT_c_bu"]),
                         "forecast": _r(p0 * math.exp(r["pred"])),
@@ -273,6 +331,10 @@ def build_track_record(a: Artefacts) -> dict[str, Any]:
         "fob_illustrative": a.premium.card.get("fob_illustrative_frozen", {}).get("rows", []),
         "fob_illustrative_note": a.premium.card.get("fob_illustrative_frozen", {}).get("note"),
         "interval_choice": a.interval_choice.replace({np.nan: None}).to_dict(orient="records"),
+        # P2: the three pre-registered range methods; only `chosen` is published as the range.
+        "range_choice": _records(a.range_choice),
+        "range_diagnostics": _records(a.range_diagnostics),
+        "range_regimes": _records(a.range_regimes),
         "paths": paths,
     }
 
@@ -332,6 +394,7 @@ BACKTEST_COLUMNS = [
     "q0.9",
     "q0.975",
     "crop_roll",
+    "roll_cross",
 ]
 
 

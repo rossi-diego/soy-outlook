@@ -47,6 +47,8 @@ Selection: on validation only, the mean 80% + 95% interval score divided by the 
 
 **Reference contract (P10, minimum step).** For each horizon, the first soybean contract whose first notice day falls after the target date; a window crosses a roll when that contract differs from the origin's. Targets are not rebuilt (roadmap v2.1).
 
+**Results (computed after the pre-registration commit 2d33ed6).** Range method, validation score ratio vs the baseline: EWMA FHS 1.096, lognormal vol band 1.071, so the empirical baseline stays and the published ranges are unchanged. Holdout, reported only: FHS 1.091, vol band 0.804. Rule v2: all nine Holm-adjusted CW p = 1.0, champion no change at every horizon (unchanged). MDE for the ridge model 5–7% of the random walk's MAE.
+
 ## Definition of done
 Static Next.js site with real data, an honest README with backtest numbers and screenshots, `docker compose up`,
 CI (Python checks → live pipeline → site build + Playwright), tests for no look-ahead.
