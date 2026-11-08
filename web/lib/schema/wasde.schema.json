@@ -1,0 +1,520 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "CoefCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "usd_t_per_unit": {
+          "type": "number"
+        },
+        "se_usd_t": {
+          "type": "number"
+        },
+        "p_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "p_holm": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "usd_t_per_unit",
+        "se_usd_t",
+        "p_value",
+        "p_holm"
+      ],
+      "title": "CoefCheck",
+      "type": "object"
+    },
+    "ForwardRow": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "feature": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "usd_t_per_unit": {
+          "type": "number"
+        },
+        "se_usd_t": {
+          "type": "number"
+        },
+        "p_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "n": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "h",
+        "feature",
+        "label",
+        "unit",
+        "usd_t_per_unit",
+        "se_usd_t",
+        "p_value",
+        "n"
+      ],
+      "title": "ForwardRow",
+      "type": "object"
+    },
+    "Placebo": {
+      "additionalProperties": false,
+      "properties": {
+        "lag_sessions": {
+          "type": "integer"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CoefCheck"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "lag_sessions",
+        "n_reports",
+        "r2",
+        "joint_p",
+        "items"
+      ],
+      "title": "Placebo",
+      "type": "object"
+    },
+    "Reaction": {
+      "additionalProperties": false,
+      "properties": {
+        "n_reports": {
+          "type": "integer"
+        },
+        "years": {
+          "type": "string"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "abs_move_usd_t_median": {
+          "type": "number"
+        },
+        "alpha": {
+          "type": "number"
+        },
+        "adjustment": {
+          "type": "string"
+        },
+        "headline_feature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ReactionItem"
+          },
+          "type": "array"
+        },
+        "features": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cov_usd_t": {
+          "description": "HC1 covariance of the coefficients, (USD/t per unit) squared, in `features` order.",
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "resid_sd_usd_t": {
+          "type": "number"
+        },
+        "release_move": {
+          "$ref": "#/$defs/ReleaseMove"
+        },
+        "robustness": {
+          "$ref": "#/$defs/Robustness"
+        }
+      },
+      "required": [
+        "n_reports",
+        "years",
+        "r2",
+        "joint_p",
+        "abs_move_usd_t_median",
+        "alpha",
+        "adjustment",
+        "headline_feature",
+        "items",
+        "features",
+        "cov_usd_t",
+        "resid_sd_usd_t",
+        "release_move",
+        "robustness"
+      ],
+      "title": "Reaction",
+      "type": "object"
+    },
+    "ReactionItem": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "usd_t_per_unit": {
+          "type": "number"
+        },
+        "se_usd_t": {
+          "type": "number"
+        },
+        "p_value": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "p_holm": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "expected_sign": {
+          "type": "integer"
+        },
+        "wrong_sign": {
+          "type": "boolean"
+        },
+        "weak": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "feature",
+        "usd_t_per_unit",
+        "se_usd_t",
+        "p_value",
+        "p_holm",
+        "label",
+        "unit",
+        "expected_sign",
+        "wrong_sign",
+        "weak"
+      ],
+      "title": "ReactionItem",
+      "type": "object"
+    },
+    "ReleaseMove": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "typical_usd_t": {
+          "type": "number"
+        },
+        "one_in_ten_usd_t": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "n",
+        "typical_usd_t",
+        "one_in_ten_usd_t"
+      ],
+      "title": "ReleaseMove",
+      "type": "object"
+    },
+    "Robustness": {
+      "additionalProperties": false,
+      "properties": {
+        "placebo": {
+          "$ref": "#/$defs/Placebo"
+        },
+        "split_sample": {
+          "$ref": "#/$defs/SplitSample"
+        },
+        "roll_excluded": {
+          "$ref": "#/$defs/RollExcluded"
+        }
+      },
+      "required": [
+        "placebo",
+        "split_sample",
+        "roll_excluded"
+      ],
+      "title": "Robustness",
+      "type": "object"
+    },
+    "RollExcluded": {
+      "additionalProperties": false,
+      "properties": {
+        "bdays": {
+          "type": "integer"
+        },
+        "n_excluded": {
+          "type": "integer"
+        },
+        "n_reports": {
+          "type": "integer"
+        },
+        "r2": {
+          "type": "number"
+        },
+        "joint_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/CoefCheck"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "bdays",
+        "n_excluded",
+        "n_reports",
+        "r2",
+        "joint_p",
+        "items"
+      ],
+      "title": "RollExcluded",
+      "type": "object"
+    },
+    "SplitItem": {
+      "additionalProperties": false,
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "early_usd_t": {
+          "type": "number"
+        },
+        "early_se_usd_t": {
+          "type": "number"
+        },
+        "late_usd_t": {
+          "type": "number"
+        },
+        "late_se_usd_t": {
+          "type": "number"
+        },
+        "diff_p": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "early_usd_t",
+        "early_se_usd_t",
+        "late_usd_t",
+        "late_se_usd_t",
+        "diff_p"
+      ],
+      "title": "SplitItem",
+      "type": "object"
+    },
+    "SplitSample": {
+      "additionalProperties": false,
+      "properties": {
+        "break": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "early": {
+          "$ref": "#/$defs/SubSample"
+        },
+        "late": {
+          "$ref": "#/$defs/SubSample"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SplitItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "break",
+        "early",
+        "late",
+        "items"
+      ],
+      "title": "SplitSample",
+      "type": "object"
+    },
+    "SubSample": {
+      "additionalProperties": false,
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n_reports": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "years",
+        "n_reports"
+      ],
+      "title": "SubSample",
+      "type": "object"
+    },
+    "WasdeLine": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "change": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "unit",
+        "value",
+        "previous",
+        "change"
+      ],
+      "title": "WasdeLine",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "report_month": {
+      "pattern": "^\\d{4}-\\d{2}$",
+      "type": "string"
+    },
+    "release_date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+    },
+    "previous_month": {
+      "pattern": "^\\d{4}-\\d{2}$",
+      "type": "string"
+    },
+    "market_year": {
+      "type": "string"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/WasdeLine"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "reaction": {
+      "$ref": "#/$defs/Reaction"
+    },
+    "next_release": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "forward": {
+      "items": {
+        "$ref": "#/$defs/ForwardRow"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "report_month",
+    "release_date",
+    "previous_month",
+    "market_year",
+    "lines",
+    "reaction",
+    "next_release",
+    "forward"
+  ],
+  "title": "Wasde",
+  "type": "object"
+}

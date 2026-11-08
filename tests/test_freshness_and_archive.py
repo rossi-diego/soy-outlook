@@ -190,22 +190,6 @@ def test_archive_keeps_a_wasde_day_republish_and_skips_late_rebuilds(tmp_path):
 # ---------------------------------------------------------------- validation gate and fixtures
 
 
-@pytest.fixture(scope="module")
-def published(tmp_path_factory) -> Path:
-    """One offline pipeline run on the committed synthetic fixtures (what CI does)."""
-    from soyforecast.config import ROOT, Settings
-    from soyforecast.pipeline import run
-    from soyforecast.publish.web_json import publish
-
-    base = tmp_path_factory.mktemp("ci")
-    shutil.copytree(FIXTURES, base / "data" / "bronze")
-    shutil.copytree(ROOT / "data" / "seed", base / "data" / "seed")
-    settings = Settings(data_dir=base / "data", web_data_dir=base / "web", offline=True)
-    # Built on the day of the fixtures' last close, as the scheduled refresh would be.
-    publish(run(settings), settings, now=datetime(2026, 11, 6, 21, tzinfo=UTC))
-    return base / "web"
-
-
 def test_committed_fixtures_match_the_generator(tmp_path):
     fixtures.write_fixtures(tmp_path)
     for name in ("wasde_full.parquet", "zs_daily.parquet", "ptax_daily.parquet"):
@@ -278,7 +262,7 @@ def test_gate_rejects_bad_shape(published, tmp_path):
     (bad / "outlook.json").write_text(json.dumps(outlook), encoding="utf-8")
     problems = validate(bad, 2, now=datetime(2026, 11, 9, tzinfo=UTC)).problems
     assert any("not monotone" in p for p in problems)
-    assert any("non-finite" in p for p in problems)
+    assert any(p.startswith("outlook.json: horizons.1.q500:") for p in problems)
     assert (
         validate(bad, 99, now=datetime(2026, 11, 9, tzinfo=UTC))
         .problems[0]

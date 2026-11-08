@@ -51,8 +51,8 @@ class Artefacts:
     metrics: pd.DataFrame
     tests: pd.DataFrame
     champion: dict[int, str]
-    forecast: list[dict[str, object]]
-    evidence: list[dict[str, object]]
+    forecast: list[dict[str, Any]]
+    evidence: list[dict[str, Any]]
     reaction: dict[str, Any]
     centring: str
     interval_choice: pd.DataFrame

@@ -1,0 +1,522 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "FobRow": {
+      "additionalProperties": false,
+      "properties": {
+        "split": {
+          "type": "string"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "mae_usd_t": {
+          "type": "number"
+        },
+        "mape_pct": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "split",
+        "model",
+        "h",
+        "n",
+        "mae_usd_t",
+        "mape_pct"
+      ],
+      "title": "FobRow",
+      "type": "object"
+    },
+    "IntervalChoiceRow": {
+      "additionalProperties": false,
+      "properties": {
+        "centring": {
+          "type": "string"
+        },
+        "split": {
+          "type": "string"
+        },
+        "score_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cells": {
+          "type": "integer"
+        },
+        "chosen": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "centring",
+        "split",
+        "score_ratio",
+        "cells",
+        "chosen"
+      ],
+      "title": "IntervalChoiceRow",
+      "type": "object"
+    },
+    "MetricRow": {
+      "additionalProperties": false,
+      "properties": {
+        "subset": {
+          "enum": [
+            "all",
+            "no_crop_roll"
+          ],
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "mae_usd_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rmse_usd_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mape_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mase": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dir_acc": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dir_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "n_interval": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cover95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pinball": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "iscore80": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "iscore95": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calibration_n": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calibration_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "subset",
+        "split",
+        "model",
+        "h",
+        "n",
+        "mae_usd_t",
+        "rmse_usd_t",
+        "mape_pct",
+        "mase",
+        "dir_acc",
+        "dir_p",
+        "n_interval",
+        "cover80",
+        "cover95",
+        "pinball",
+        "iscore80",
+        "iscore95",
+        "calibration_n",
+        "calibration_n_eff"
+      ],
+      "title": "MetricRow",
+      "type": "object"
+    },
+    "PathRow": {
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "target_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "validation",
+            "holdout"
+          ],
+          "type": "string"
+        },
+        "crop_roll": {
+          "type": "boolean"
+        },
+        "p0": {
+          "type": "number"
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "forecast": {
+          "type": "number"
+        },
+        "q025": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "q10": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "q90": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "q975": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "origin",
+        "target_date",
+        "split",
+        "crop_roll",
+        "p0",
+        "actual",
+        "forecast",
+        "q025",
+        "q10",
+        "q90",
+        "q975"
+      ],
+      "title": "PathRow",
+      "type": "object"
+    },
+    "TestRow": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "h": {
+          "type": "integer"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "dm_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dm_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cw_t": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cw_p": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cw_p_holm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model",
+        "h",
+        "n",
+        "dm_t",
+        "dm_p",
+        "cw_t",
+        "cw_p",
+        "cw_p_holm"
+      ],
+      "title": "TestRow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "metrics": {
+      "items": {
+        "$ref": "#/$defs/MetricRow"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "tests": {
+      "items": {
+        "$ref": "#/$defs/TestRow"
+      },
+      "type": "array"
+    },
+    "fob_illustrative": {
+      "items": {
+        "$ref": "#/$defs/FobRow"
+      },
+      "type": "array"
+    },
+    "fob_illustrative_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "interval_choice": {
+      "items": {
+        "$ref": "#/$defs/IntervalChoiceRow"
+      },
+      "type": "array"
+    },
+    "paths": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "items": {
+            "$ref": "#/$defs/PathRow"
+          },
+          "type": "array"
+        },
+        "propertyNames": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ]
+        },
+        "type": "object"
+      },
+      "minProperties": 1,
+      "type": "object"
+    }
+  },
+  "required": [
+    "metrics",
+    "tests",
+    "fob_illustrative",
+    "fob_illustrative_note",
+    "interval_choice",
+    "paths"
+  ],
+  "title": "TrackRecord",
+  "type": "object"
+}

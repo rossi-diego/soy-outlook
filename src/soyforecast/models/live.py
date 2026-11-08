@@ -36,7 +36,7 @@ def live_forecast(
     bt: pd.DataFrame,
     champion: dict[int, str],
     centring: str = INTERVAL_BASELINE,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     anchor = pd.Timestamp(live["anchor_date"])
     history = pd.concat([df[df["origin"] < anchor], live.to_frame().T.infer_objects()])
     out = []
@@ -51,7 +51,7 @@ def live_forecast(
         resid = (g["y"] - g["pred"]).to_numpy()
         qs = residual_quantiles(resid, centring)
         p0 = float(live["p0_c_bu"])
-        row: dict[str, object] = {
+        row: dict[str, Any] = {
             "h": h,
             "model": name,
             "target_date": (anchor + pd.DateOffset(months=h)).date().isoformat(),
@@ -273,7 +273,7 @@ def release_day_reaction(
     }
 
 
-def evidence(df: pd.DataFrame, p_now_c_bu: float) -> list[dict[str, object]]:
+def evidence(df: pd.DataFrame, p_now_c_bu: float) -> list[dict[str, Any]]:
     """OLS with HAC errors of each h-month return on the feature set (full realized sample).
 
     Shown as weak evidence: it is in-sample and the features did not earn a place in the

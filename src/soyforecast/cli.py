@@ -142,9 +142,9 @@ def validate(
     """Validation gate: shape, freshness and row deltas. Exits 1 on any problem."""
     import os
 
+    from soyforecast.publish.schema import SCHEMA_VERSION
     from soyforecast.publish.validate import summary_markdown
     from soyforecast.publish.validate import validate as run_validate
-    from soyforecast.publish.web_json import SCHEMA_VERSION
 
     report = run_validate(data, SCHEMA_VERSION, baseline=baseline, require_fresh=not allow_stale)
     summary = os.getenv("GITHUB_STEP_SUMMARY")
@@ -164,6 +164,18 @@ def validate(
         log.error("validate.failed", problems=report.problems)
         raise typer.Exit(1)
     log.info("validate.passed", as_of_close=report.as_of_close, bdays_old=report.bdays_old)
+
+
+SCHEMA_OPTION = typer.Option(Path("web/lib/schema"), help="Folder for the JSON Schema files.")
+
+
+@app.command("export-schema")
+def export_schema(out: Path = SCHEMA_OPTION) -> None:
+    """Write the site contract (publish/schema.py) as JSON Schema for the web build and codegen."""
+    from soyforecast.publish.schema import export_schemas
+
+    paths = export_schemas(out)
+    log.info("schema.exported", files=[p.name for p in paths], path=str(out))
 
 
 @app.command("make-fixtures")

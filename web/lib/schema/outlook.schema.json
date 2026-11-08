@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "nominal": {
+          "$ref": "#/$defs/Nominal"
+        },
+        "validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSplit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "holdout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoverageSplit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warn80": {
+          "description": "Validation hit rate more than coverage_warn_pp below 80%.",
+          "type": "boolean"
+        },
+        "warn95": {
+          "description": "Validation hit rate more than coverage_warn_pp below 95%.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "nominal",
+        "validation",
+        "holdout",
+        "warn80",
+        "warn95"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "CoverageSplit": {
+      "additionalProperties": false,
+      "properties": {
+        "years": {
+          "type": "string"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "cover80": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "cover95": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "calibration_n_eff": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "years",
+        "n",
+        "cover80",
+        "cover95",
+        "calibration_n_eff"
+      ],
+      "title": "CoverageSplit",
+      "type": "object"
+    },
+    "Horizon": {
+      "additionalProperties": false,
+      "properties": {
+        "h": {
+          "type": "integer"
+        },
+        "model": {
+          "enum": [
+            "rw",
+            "drift",
+            "arima",
+            "ridge"
+          ],
+          "type": "string"
+        },
+        "target_date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "mean_logret": {
+          "type": "number"
+        },
+        "calibration_n": {
+          "type": "integer"
+        },
+        "calibration_n_eff": {
+          "type": "number"
+        },
+        "tail_obs_95": {
+          "type": "number"
+        },
+        "q025": {
+          "type": "number"
+        },
+        "q100": {
+          "type": "number"
+        },
+        "q500": {
+          "type": "number"
+        },
+        "q900": {
+          "type": "number"
+        },
+        "q975": {
+          "type": "number"
+        },
+        "central": {
+          "type": "number"
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "premium_reference": {
+          "$ref": "#/$defs/PremiumReference"
+        }
+      },
+      "required": [
+        "h",
+        "model",
+        "target_date",
+        "mean_logret",
+        "calibration_n",
+        "calibration_n_eff",
+        "tail_obs_95",
+        "q025",
+        "q100",
+        "q500",
+        "q900",
+        "q975",
+        "central",
+        "coverage",
+        "premium_reference"
+      ],
+      "title": "Horizon",
+      "type": "object"
+    },
+    "Nominal": {
+      "additionalProperties": false,
+      "properties": {
+        "80": {
+          "type": "number"
+        },
+        "95": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "80",
+        "95"
+      ],
+      "title": "Nominal",
+      "type": "object"
+    },
+    "PremiumNowDefault": {
+      "additionalProperties": false,
+      "description": "The one premium used for the headline and every horizon until the user enters a quote.",
+      "properties": {
+        "month": {
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "median": {
+          "type": "number"
+        },
+        "p10": {
+          "type": "number"
+        },
+        "p90": {
+          "type": "number"
+        },
+        "years": {
+          "description": "e.g. \"2015-2024\", derived from the data.",
+          "type": "string"
+        },
+        "n_years": {
+          "type": "integer"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "source_last": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "illustrative": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "month",
+        "median",
+        "p10",
+        "p90",
+        "years",
+        "n_years",
+        "basis",
+        "source_last",
+        "stale",
+        "illustrative"
+      ],
+      "title": "PremiumNowDefault",
+      "type": "object"
+    },
+    "PremiumReference": {
+      "additionalProperties": false,
+      "description": "Reference text only (\"historical median, not validated\"); never used as the default.",
+      "properties": {
+        "month": {
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "median": {
+          "type": "number"
+        },
+        "p10": {
+          "type": "number"
+        },
+        "p90": {
+          "type": "number"
+        },
+        "years": {
+          "description": "e.g. \"2015-2024\", derived from the data.",
+          "type": "string"
+        },
+        "n_years": {
+          "type": "integer"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "month",
+        "median",
+        "p10",
+        "p90",
+        "years",
+        "n_years",
+        "note"
+      ],
+      "title": "PremiumReference",
+      "type": "object"
+    },
+    "PricePoint": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        "c_bu": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "date",
+        "c_bu"
+      ],
+      "title": "PricePoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "as_of_close": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "type": "string"
+    },
+    "last": {
+      "$ref": "#/$defs/PricePoint"
+    },
+    "horizons": {
+      "items": {
+        "$ref": "#/$defs/Horizon"
+      },
+      "type": "array"
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/PricePoint"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "premium_last": {
+      "$ref": "#/$defs/PricePoint"
+    },
+    "premium_now_default": {
+      "$ref": "#/$defs/PremiumNowDefault"
+    }
+  },
+  "required": [
+    "as_of_close",
+    "last",
+    "horizons",
+    "history",
+    "premium_last",
+    "premium_now_default"
+  ],
+  "title": "Outlook",
+  "type": "object"
+}

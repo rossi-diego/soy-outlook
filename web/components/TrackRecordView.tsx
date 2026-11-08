@@ -318,7 +318,7 @@ export default function TrackRecordView({ meta, track, archive }: { meta: Meta; 
                     <td className="py-1.5">{meta.models[r.model]}</td>
                     <td className="py-1.5">{horizonLabel(r.h)}</td>
                     <td className="tabular py-1.5 text-right">
-                      {num(r.dm_p, 3)} {r.dm_t > 0 && r.dm_p < 0.05 ? <span className="text-down">(worse)</span> : null}
+                      {num(r.dm_p, 3)} {r.dm_t != null && r.dm_p != null && r.dm_t > 0 && r.dm_p < 0.05 ? <span className="text-down">(worse)</span> : null}
                     </td>
                     <td className="tabular py-1.5 text-right">{num(r.cw_p_holm, 3)}</td>
                   </tr>

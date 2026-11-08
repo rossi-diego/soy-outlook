@@ -1,9 +1,9 @@
 """Validation gate for published site data (used by the refresh workflow before any PR).
 
-Three kinds of check, each returning human-readable problems (an empty list passes):
-  shape     - every file exists, the schema version matches, horizons are complete with
-              finite, monotone quantiles (a structural check until the pydantic contract
-              of P25 replaces it);
+Four kinds of check, each returning human-readable problems (an empty list passes):
+  shape     - every file exists, the schema version matches, and every JSON file validates
+              against its pydantic model in publish/schema.py (complete horizons with
+              finite, monotone quantiles, no nulls where the site expects numbers);
   freshness - the as-of close is at most STALE_CLOSE_BDAYS business days old;
   deltas    - against the previously published copy: the as-of close and the latest WASDE
               never go backwards, backtest rows and weekly history do not shrink by more
@@ -14,17 +14,16 @@ Three kinds of check, each returning human-readable problems (an empty list pass
 
 from __future__ import annotations
 
-import itertools
 import json
-import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
 from soyforecast.config import (
     ARCHIVE_MAX_LAG_BDAYS,
-    HORIZONS,
     MAX_ROW_LOSS_SHARE,
     STALE_CLOSE_BDAYS,
 )
@@ -37,6 +36,7 @@ from soyforecast.publish.archive import (
     build_lag_bdays,
     load_archive,
 )
+from soyforecast.publish.schema import FILES, validate_payload
 
 REQUIRED_FILES = (
     "meta.json",
@@ -48,7 +48,6 @@ REQUIRED_FILES = (
     "run_manifest.json",
     f"{ARCHIVE_DIR}/{INDEX}",
 )
-QUANTILE_KEYS = ("q025", "q100", "q500", "q900", "q975")
 
 
 @dataclass
@@ -74,39 +73,32 @@ def _csv_rows(path: Path) -> int:
 
 
 def check_shape(data: Path, schema_version: int) -> list[str]:
+    """Every file exists and validates against its pydantic model (publish/schema.py)."""
     missing = [f for f in REQUIRED_FILES if not (data / f).exists()]
     if missing:
         return [f"missing file: {f}" for f in missing]
-    problems: list[str] = []
-    meta, outlook = _json(data / "meta.json"), _json(data / "outlook.json")
+    meta = _json(data / "meta.json")
     if meta.get("schema_version") != schema_version:
-        problems.append(f"schema_version {meta.get('schema_version')} != {schema_version}")
-    for key in ("as_of_close", "latest_wasde", "freshness", "generated_at"):
-        if key not in meta:
-            problems.append(f"meta.json lacks {key}")
-    if outlook.get("as_of_close") != meta.get("as_of_close"):
+        return [f"schema_version {meta.get('schema_version')} != {schema_version}"]
+    problems: list[str] = []
+    for name in FILES:
+        try:
+            validate_payload(name, _json(data / name))
+        except ValidationError as exc:
+            problems += [f"{name}: {_loc(e['loc'])}: {e['msg']}" for e in exc.errors()]
+        except ValueError as exc:  # not JSON at all
+            problems.append(f"{name}: {exc}")
+    if problems:
+        return problems
+    if _json(data / "outlook.json")["as_of_close"] != meta["as_of_close"]:
         problems.append("outlook and meta disagree on as_of_close")
-    horizons = outlook.get("horizons") or []
-    if [h.get("h") for h in horizons] != list(HORIZONS):
-        problems.append(f"outlook horizons {[h.get('h') for h in horizons]} != {list(HORIZONS)}")
-    for h in horizons:
-        qs = [h.get(k) for k in QUANTILE_KEYS]
-        if any(not isinstance(q, int | float) or not math.isfinite(q) for q in qs):
-            problems.append(f"horizon {h.get('h')}: missing or non-finite quantile")
-        elif any(a > b for a, b in itertools.pairwise(qs)):
-            problems.append(f"horizon {h.get('h')}: quantiles are not monotone")
-        if not isinstance(h.get("central"), int | float):
-            problems.append(f"horizon {h.get('h')}: no central value")
-    if not outlook.get("history"):
-        problems.append("outlook history is empty")
-    track = _json(data / "track_record.json")
-    if not track.get("metrics") or not track.get("paths"):
-        problems.append("track_record.json has no metrics or paths")
-    if len(_json(data / "wasde.json").get("lines") or []) == 0:
-        problems.append("wasde.json has no balance-sheet lines")
     if _csv_rows(data / "backtest.csv") == 0:
         problems.append("backtest.csv is empty")
     return problems
+
+
+def _loc(loc: tuple[Any, ...]) -> str:
+    return ".".join(str(p) for p in loc) or "(root)"
 
 
 def check_freshness(meta: dict[str, Any], now: datetime | None, max_bdays: int) -> tuple[bool, int]:

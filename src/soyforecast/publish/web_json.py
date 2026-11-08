@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import shutil
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
+from pydantic import ValidationError
 
 from soyforecast import __version__
 from soyforecast.config import (
@@ -33,19 +37,21 @@ from soyforecast.config import (
     VALIDATION_START,
     Settings,
 )
+from soyforecast.errors import ContractError
 from soyforecast.features.vintages import FEATURE_META
 from soyforecast.freshness import freshness_block
 from soyforecast.logs import get_logger
 from soyforecast.models.ladder import MODEL_LABELS
 from soyforecast.publish.archive import publish_archive
 from soyforecast.publish.lineage import build_run_manifest
+from soyforecast.publish.schema import SCHEMA_VERSION, dump, validate_payload
+from soyforecast.publish.validate import check_deltas, check_shape
 from soyforecast.units import BUSHELS_PER_TONNE, SACK_KG
 
 if TYPE_CHECKING:
     from soyforecast.pipeline import Artefacts
 
 log = get_logger(__name__)
-SCHEMA_VERSION = 2
 TRACK_MODELS = ("rw", "arima", "ridge")
 
 
@@ -200,12 +206,12 @@ def build_outlook(a: Artefacts) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
     horizons = []
     for row in a.forecast:
-        target = pd.Timestamp(row["target_date"])  # type: ignore[arg-type]
-        h = int(row["h"])  # type: ignore[call-overload]
+        target = pd.Timestamp(row["target_date"])
+        h = int(row["h"])
         horizons.append(
             {
                 **row,
-                "central": _r(float(a.live["p0_c_bu"]) * math.exp(float(row["mean_logret"]))),  # type: ignore[arg-type]
+                "central": _r(float(a.live["p0_c_bu"]) * math.exp(float(row["mean_logret"]))),
                 "coverage": _coverage(a, str(row["model"]), h),
                 # Reference text only: the default premium is held flat at premium_now_default.
                 "premium_reference": {
@@ -309,35 +315,115 @@ def build_wasde(a: Artefacts) -> dict[str, Any]:
     }
 
 
+BACKTEST_COLUMNS = [
+    "report_month",
+    "origin",
+    "h",
+    "model",
+    "split",
+    "target_date",
+    "p0_c_bu",
+    "pT_c_bu",
+    "pred",
+    "y",
+    "q0.025",
+    "q0.1",
+    "q0.5",
+    "q0.9",
+    "q0.975",
+    "crop_roll",
+]
+
+
+def build_payloads(a: Artefacts, settings: Settings, now: datetime) -> dict[str, Any]:
+    """Every JSON file, validated against its model in publish/schema.py (P25).
+
+    Raises ContractError listing every violation; nothing has been written at that point.
+    """
+    raw = {
+        "meta.json": build_meta(a, now),
+        "outlook.json": build_outlook(a),
+        "track_record.json": build_track_record(a),
+        "wasde.json": build_wasde(a),
+        "run_manifest.json": build_run_manifest(a, settings, now),
+    }
+    out: dict[str, Any] = {}
+    problems: list[str] = []
+    for name, payload in raw.items():
+        try:
+            out[name] = dump(validate_payload(name, _clean(payload)))
+        except ValidationError as exc:
+            problems += [f"{name}: {_loc(e['loc'])}: {e['msg']}" for e in exc.errors()]
+    if problems:
+        raise ContractError(f"{len(problems)} contract violations: {problems[:20]}")
+    return out
+
+
+def _loc(loc: tuple[Any, ...]) -> str:
+    return ".".join(str(p) for p in loc) or "(root)"
+
+
+def _stage(out: Path) -> Path:
+    """A sibling temp folder seeded with the current publish (archive, any extra files)."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{out.name}.staging-", dir=out.parent))
+    if out.exists():
+        shutil.copytree(out, staging, dirs_exist_ok=True)
+    return staging
+
+
+def _swap(staging: Path, out: Path) -> None:
+    """Replace `out` with `staging` by renames (os.replace), keeping the old copy until done.
+
+    Directory renames are atomic per call; between the two calls `out` is briefly absent. If
+    the folder cannot be renamed (on Windows, a dev server holding a handle in it), each file
+    is moved in with its own os.replace instead, so no reader ever sees a half-written file.
+    """
+    backup = out.parent / f"{staging.name.replace('staging', 'previous')}"
+    try:
+        if out.exists():
+            os.replace(out, backup)
+    except PermissionError as exc:
+        log.warning("publish.swap_per_file", reason=str(exc))
+        for src in sorted(p for p in staging.rglob("*") if p.is_file()):
+            dst = out / src.relative_to(staging)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(src, dst)
+        return
+    try:
+        os.replace(staging, out)
+    except OSError:
+        if backup.exists():
+            os.replace(backup, out)
+        raise
+    shutil.rmtree(backup, ignore_errors=True)
+
+
 def publish(a: Artefacts, settings: Settings, now: datetime | None = None) -> None:
+    """Validate, write everything into a staging folder, check it, then swap it in.
+
+    The post-publish assertions run on the staging folder against the live one: every file
+    re-validates (monotone quantiles, no nulls in horizons, schema_version), and the as-of close
+    and latest WASDE never go backwards. On any failure the published data is left untouched.
+    """
     out = settings.web_data_dir
     now = now or datetime.now(UTC)
-    meta = _clean(build_meta(a, now))
-    outlook = _clean(build_outlook(a))
-    _dump(meta, out / "meta.json")
-    _dump(outlook, out / "outlook.json")
-    _dump(build_track_record(a), out / "track_record.json")
-    _dump(build_wasde(a), out / "wasde.json")
-    _dump(build_run_manifest(a, settings, now), out / "run_manifest.json")
-    cols = [
-        "report_month",
-        "origin",
-        "h",
-        "model",
-        "split",
-        "target_date",
-        "p0_c_bu",
-        "pT_c_bu",
-        "pred",
-        "y",
-        "q0.025",
-        "q0.1",
-        "q0.5",
-        "q0.9",
-        "q0.975",
-        "crop_roll",
-    ]
-    a.backtest[cols].to_csv(out / "backtest.csv", index=False, float_format="%.6g")
-    a.metrics.to_csv(out / "metrics.csv", index=False, float_format="%.6g")
-    publish_archive(meta, outlook, a.prices, out)
+    payloads = build_payloads(a, settings, now)
+    staging = _stage(out)
+    try:
+        for name, content in payloads.items():
+            _dump(content, staging / name)
+        a.backtest[BACKTEST_COLUMNS].to_csv(
+            staging / "backtest.csv", index=False, float_format="%.6g"
+        )
+        a.metrics.to_csv(staging / "metrics.csv", index=False, float_format="%.6g")
+        publish_archive(payloads["meta.json"], payloads["outlook.json"], a.prices, staging)
+        problems = check_shape(staging, SCHEMA_VERSION)
+        if (out / "meta.json").exists():
+            problems += check_deltas(staging, out)
+        if problems:
+            raise ContractError(f"post-publish checks failed: {problems}")
+        _swap(staging, out)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     log.info("publish.done", path=str(out), files=sorted(p.name for p in out.iterdir()))

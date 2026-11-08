@@ -9,6 +9,8 @@
     "start": "npx serve out",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "gen:types": "node scripts/gen-types.mjs",
+    "check:types": "node scripts/gen-types.mjs --check",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -24,8 +26,10 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "ajv": "8.17.1",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "json-schema-to-typescript": "15.0.4",
     "tailwindcss": "4.3.5",
     "typescript": "5.9.3"
   }
