@@ -2,12 +2,15 @@
 
 **Where could Paranaguá export soybeans trade 1, 3 and 6 months after a USDA WASDE report, and how sure can anyone be?**
 
+**[Live site → soy-outlook.vercel.app](https://soy-outlook.vercel.app)**
+
 Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 
 [![CI](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml/badge.svg)](https://github.com/rossi-diego/sarimax-brazilian-soybean-forecasting/actions/workflows/ci.yml)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Vercel](https://img.shields.io/badge/live-soy--outlook.vercel.app-black?logo=vercel)](https://soy-outlook.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Outlook page: three cards with the 80% range for 1, 3 and 6 months in USD per tonne FOB, a no-direction-signal note, unit and premium controls, and a fan chart of the CBOT price](docs/screenshots/outlook-light.png)
