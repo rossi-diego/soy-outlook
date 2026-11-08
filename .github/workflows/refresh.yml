@@ -43,11 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-          cache: pip
-      - run: pip install .
+          enable-cache: true
+      - name: Install exactly the locked versions
+        run: |
+          uv sync --locked --no-dev
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Guard (CBOT close in Chicago, or WASDE day for the second pass)
         id: guard

@@ -1,8 +1,11 @@
-.PHONY: install run test lint web e2e all ci-offline validate fixtures
+.PHONY: install lock run test lint web e2e all ci-offline validate fixtures
 
-install:            ## Python package + dev tools, and the site's node modules
-	pip install -e ".[dev]"
+install:            ## Locked Python env (uv.lock) + dev tools, and the site's node modules
+	uv sync --locked --extra dev
 	cd web && npm ci
+
+lock:               ## Re-resolve uv.lock after a change to pyproject.toml dependencies
+	uv lock
 
 run:                ## Ingest, backtest, forecast, write web/public/data
 	soyforecast run

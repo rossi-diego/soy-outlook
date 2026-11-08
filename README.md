@@ -126,7 +126,7 @@ Without Docker:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+uv sync --locked --extra dev                        # exact versions from uv.lock (or: pip install -e ".[dev]")
 soyforecast run                                     # writes web/public/data/*.json
 cd web && npm ci && npm run build && npx serve out  # or: npm run dev
 ```
