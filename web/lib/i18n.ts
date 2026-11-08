@@ -120,10 +120,10 @@ export function dataText(loc: Locale, s: string): string {
 // Chrome shared by every page.
 
 export const NAV: { href: string; en: string; pt: string }[] = [
-  { href: "/", en: "Outlook", pt: "Perspectiva" },
-  { href: "/wasde/", en: "This WASDE", pt: "Este WASDE" },
+  { href: "/", en: "Outlook", pt: "Panorama" },
+  { href: "/wasde/", en: "Report day", pt: "Dia do relatório" },
   { href: "/track-record/", en: "Track record", pt: "Histórico" },
-  { href: "/methodology/", en: "Methodology", pt: "Metodologia" },
+  { href: "/methodology/", en: "Method", pt: "Método" },
 ];
 
 /** One-line definitions of the statistical terms, shown on hover and focus. */
@@ -164,3 +164,243 @@ export const TERMS: Record<
     pt: "Teste de Christoffersen: os erros fora da faixa se agrupam no tempo em vez de chegarem de forma independente? p pequeno = agrupamento.",
   },
 };
+
+// ---------------------------------------------------------------------------------------------
+// The home page story (Outlook). Every number is passed in from the published data; the copy
+// only words it. STORY_PT is typed as STORY_EN, so a key added to one language must be added to
+// the other. The Portuguese is written for a Brazilian trading desk, not translated word for word.
+
+const WEEKDAYS_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// "na terça-feira", "no sábado": the article follows the weekday's gender.
+const WEEKDAYS_PT = ["no domingo", "na segunda-feira", "na terça-feira", "na quarta-feira", "na quinta-feira", "na sexta-feira", "no sábado"];
+
+type Side = "up" | "down" | null;
+
+const STORY_EN = {
+  eyebrow: "Brazilian soybean price outlook",
+  h1Lead: "How far could soybeans move",
+  h1Accent: (month: string) => `by ${month}?`,
+  lede: (nInTen: number, since: string) =>
+    `Nobody can reliably call the direction, and we tested that. So we show how far the price is likely to travel, using ranges that held about ${nInTen} times in 10 in tests since ${since}.`,
+  settings: "Settings",
+  settingsState: (unit: string, fob: boolean) => `${unit}, ${fob ? "with your premium" : "CBOT only"}`,
+  ticketLabel: (fob: boolean): string => (fob ? "Paranaguá FOB, your premium" : "CBOT soybeans"),
+  ticketClose: (date: string) => `${date} close`,
+  perUnit: { usd_t: "per tonne", brl_sack: "per 60 kg sack", c_bu: "per bushel" } as Record<string, string>,
+  months12: "12 months",
+  nextReport: "Next USDA report",
+  noDate: "see USDA calendar",
+  inH: (h: string) => `In ${h}`,
+  to: "to",
+  heldFlag: (held: number, nominal: number) => `⚠ held ${held} in 10, not ${nominal}`,
+  ladderLabel: (unit: string) => `Likely price ranges in 1, 3 and 6 months on one shared scale, ${unit}`,
+  ladderNote: (nInTen: number) =>
+    `Bars show the 80% range (built to hold ${nInTen} times in 10) on one shared scale; the vertical line is today's price.`,
+
+  ch1Eyebrow: "1 · The problem",
+  ch1Title: "Soybean prices swing hard, and fast.",
+  ch1Body: (since: string, lo: string, hi: string, minMove: number, maxMove: number) =>
+    `Since ${since} the CBOT price has ranged from ${lo} to ${hi} per tonne. Each episode marked below moved it by ${minMove} to ${maxMove} percent within three months. If you sell or buy soybeans, that is your budget moving.`,
+  ch1Chart: (since: string) => `CBOT soybean price per tonne since ${since}, with past stress episodes marked`,
+  ch1Move: (pct: string, months: number) => `${pct} in ${months} months`,
+  ch1Cap: (from: string, to: string) =>
+    `CBOT front-month soybeans in US$ per tonne (CBOT only, no premium), weekly closes from ${from} to ${to}. Marked: the episodes named in advance for the stress test, with the price move over the three months that followed.`,
+
+  ch2Eyebrow: "2 · We tried to predict it",
+  ch2Title: (n: number) => `${n} models, one honest result.`,
+  ch2Body: (n: number) =>
+    `We put the forecasters in a contest, including a machine-learning model that reads every USDA WASDE report. Each one only saw what was public on the day it made its forecast. Then we scored them against what the price actually did three months later, ${n} times.`,
+  model: {
+    rw: ["No change", "the price stays where it is"],
+    arima: ["ARIMA", "a classic time-series model"],
+    drift: ["Average past change", "the recent trend continues"],
+    ridge: ["Machine learning on WASDE", "ridge regression on USDA supply data"],
+  } as Record<string, [string, string]>,
+  lowest: "lowest",
+  typicalMiss: "Typical miss",
+  pull:
+    "None of them beat the simplest guess, “the price stays where it is”. That is not a failure. It is what an efficient market looks like, and most forecasts you read online would not survive this test.",
+  pullNoWin: "The simplest guess, “the price stays where it is”, kept up with every challenger. Track record has the full tests.",
+  ch2Cap: (unit: string, years: string, holm: boolean) =>
+    `Typical miss = mean absolute error of the 3-month forecast, ${unit}, validation period ${years}. ${
+      holm
+        ? "No challenger beat “no change” once the tests were adjusted for running several at once (Holm)."
+        : "Some differences pass the Holm-adjusted test."
+    } Full results on Track record.`,
+
+  ch3Eyebrow: "3 · So we changed the question",
+  ch3Title: "Not “where will it go?” but “how far could it go?”",
+  ch3Body: (n: number) =>
+    `Every past forecast left a miss behind. We collected those misses and turned them into a range. Then we checked the range the hard way: ${n} times, we drew it before knowing the outcome.`,
+  of: "of",
+  statHeld: (years: string) => `3-month ranges held the actual price, ${years}`,
+  statRate: (nominal: string) => `hit rate, against the ${nominal} promised`,
+  statHoldout: (years: string, held: number, n: number) => `in ${years}, kept aside as a final exam (${held} of ${n})`,
+  ch3Chart: (n: number) => `${n} past 3-month ranges against the actual price, CBOT US$ per tonne`,
+  ch3Exam: (years: string) => `final exam, ${years}`,
+  ch3CapIn: "price ended inside the range",
+  ch3CapOut: "price ended outside",
+  ch3Cap: (years: string) =>
+    `Each bar is a 3-month 80% range drawn before its date, in CBOT US$ per tonne. The shaded area is the ${years} final exam, never used to tune anything.`,
+
+  ch4Eyebrow: "4 · Today's outlook",
+  ch4Title: (price: string) => `From ${price} today, here is the road ahead.`,
+  ch4Body: (n80: number, n95: number) =>
+    `The further out you look, the wider the road. The thick bar is the range built to hold ${n80} times in 10; the thin line, ${n95} times in 20.`,
+  ch4Chart: (unit: string) => `Recent price and the 1, 3 and 6-month ranges, ${unit}`,
+  ch4NoChange: "no change",
+  ch4Warn: (h: number, held: string, years: string, nominal: string, side: Side) =>
+    `The ${h}-month range held ${held} of the time in ${years} rather than ${nominal}, so treat it as a little too narrow${
+      side === "up" ? ", mostly on the upside" : side === "down" ? ", mostly on the downside" : ""
+    }.`,
+  ch4Unit: (unitLong: string) => `${unitLong}. The dashed line is “no change”, the central forecast.`,
+  ch4Table: "The ranges by horizon",
+
+  ch5Eyebrow: "5 · What it means for you",
+  ch5Title: "Turn the range into money.",
+  ch5Body: (oneIn: number) =>
+    `Tell us your position. We show what a bad outcome (1 in ${oneIn}) would cost compared with locking in today's price.`,
+  iAm: "I am a",
+  seller: "Seller",
+  buyer: "Buyer",
+  volume: "Volume, tonnes",
+  hedged: "Already hedged",
+  badCase: (oneIn: number, price: string) => `In a bad case (1 in ${oneIn}), compared with locking in ${price} today:`,
+  hintHalf: "Hedging half your volume would cut the 3-month bad case to about",
+  hintAt: (pct: number) => `With ${pct}% hedged, the 3-month bad case is`,
+  tryHalf: "Try 50% hedged",
+  tailUp: (pct: string) => `Prices rose above this range in ${pct} of tested reports: the bad case is likely understated.`,
+  tailDown: (pct: string) => `Prices fell below this range in ${pct} of tested reports: the bad case is likely understated.`,
+  ch5Cap:
+    "Bad case = the edge of the 80% range on your side. CBOT only: premium, freight, basis, margin calls and contract rolls are left out. An illustration, not advice.",
+  ch5More: "The full panel (rough 1 in 40, sacks, target price, tail checks) is on Track record, under “For analysts”.",
+
+  ch6Eyebrow: "6 · Your next decision point",
+  ch6Title: (weekday: number) => `USDA's WASDE report lands on ${WEEKDAYS_EN[weekday]}.`,
+  ch6TitleNone: "The next USDA WASDE report",
+  ch6Body: (typ: string, tail: string) =>
+    `On report day the price usually moves about ±${typ}. One report in ten moves it more than ±${tail}. If a decision depends on the price, that is the day to watch.`,
+  ch6Link: "See what the last report changed",
+  ch6Chart: (typ: string, tail: string, price: string) =>
+    `Typical report-day move of ±${typ} and a 1-in-10 move of ±${tail} around today's ${price}`,
+  ch6Legend: ["inner band: a typical report day", "outer band: 9 reports in 10"] as [string, string],
+  today: "today",
+  analysts: "For analysts",
+};
+
+const STORY_PT: typeof STORY_EN = {
+  eyebrow: "Panorama de preço da soja brasileira",
+  h1Lead: "Quanto o preço da soja pode andar",
+  h1Accent: (month: string) => `até ${month}?`,
+  lede: (nInTen: number, since: string) =>
+    `Ninguém acerta a direção do preço com consistência, e nós testamos isso. Por isso mostramos até onde o preço deve andar, com faixas que acertaram cerca de ${nInTen} em cada 10 vezes nos testes desde ${since}.`,
+  settings: "Ajustes",
+  settingsState: (unit: string, fob: boolean) => `${unit}, ${fob ? "com o seu prêmio" : "só CBOT"}`,
+  ticketLabel: (fob: boolean) => (fob ? "FOB Paranaguá, com o seu prêmio" : "Soja na CBOT"),
+  ticketClose: (date: string) => `fechamento de ${date}`,
+  perUnit: { usd_t: "por tonelada", brl_sack: "por saca de 60 kg", c_bu: "por bushel" },
+  months12: "12 meses",
+  nextReport: "Próximo relatório do USDA",
+  noDate: "veja o calendário do USDA",
+  inH: (h: string) => `Em ${h}`,
+  to: "a",
+  heldFlag: (held: number, nominal: number) => `⚠ acertou ${held} em 10, não ${nominal}`,
+  ladderLabel: (unit: string) => `Faixas prováveis de preço em 1, 3 e 6 meses numa escala comum, ${unit}`,
+  ladderNote: (nInTen: number) =>
+    `As barras mostram a faixa de 80% (feita para acertar ${nInTen} em cada 10 vezes) numa escala comum; a linha vertical é o preço de hoje.`,
+
+  ch1Eyebrow: "1 · O problema",
+  ch1Title: "O preço da soja oscila forte, e rápido.",
+  ch1Body: (since: string, lo: string, hi: string, minMove: number, maxMove: number) =>
+    `Desde ${since}, o preço na CBOT andou entre ${lo} e ${hi} por tonelada. Cada episódio marcado abaixo moveu o preço entre ${minMove}% e ${maxMove}% em três meses. Para quem vende ou compra soja, é o orçamento que se mexe junto.`,
+  ch1Chart: (since: string) => `Preço da soja na CBOT por tonelada desde ${since}, com os episódios de estresse marcados`,
+  ch1Move: (pct: string, months: number) => `${pct} em ${months} meses`,
+  ch1Cap: (from: string, to: string) =>
+    `Soja na CBOT, primeiro vencimento, em US$ por tonelada (só CBOT, sem prêmio), fechamentos semanais de ${from} a ${to}. Marcados: os episódios definidos de antemão para o teste de estresse, com o movimento do preço nos três meses seguintes.`,
+
+  ch2Eyebrow: "2 · Tentamos prever",
+  ch2Title: (n: number) => `${n} modelos, um resultado honesto.`,
+  ch2Body: (n: number) =>
+    `Colocamos os modelos para competir, inclusive um de machine learning que lê cada relatório WASDE do USDA. Cada um só via o que era público no dia da previsão. Depois comparamos cada previsão com o que o preço de fato fez três meses depois, ${n} vezes.`,
+  model: {
+    rw: ["Sem variação", "o preço fica onde está"],
+    arima: ["ARIMA", "um modelo clássico de séries temporais"],
+    drift: ["Variação média passada", "a tendência recente continua"],
+    ridge: ["Machine learning com o WASDE", "regressão ridge com dados de oferta do USDA"],
+  },
+  lowest: "menor",
+  typicalMiss: "Erro típico",
+  pull:
+    "Nenhum deles superou o palpite mais simples, “o preço fica onde está”. Isso não é um fracasso. É assim que um mercado eficiente se comporta, e a maioria das previsões que circulam por aí não passaria neste teste.",
+  pullNoWin: "O palpite mais simples, “o preço fica onde está”, acompanhou todos os desafiantes. Os testes completos estão no Histórico.",
+  ch2Cap: (unit: string, years: string, holm: boolean) =>
+    `Erro típico = erro absoluto médio da previsão de 3 meses, ${unit}, período de validação ${years}. ${
+      holm
+        ? "Nenhum desafiante superou o “sem variação” depois de ajustar os testes por terem sido feitos vários de uma vez (Holm)."
+        : "Algumas diferenças passam no teste com ajuste de Holm."
+    } Resultados completos no Histórico.`,
+
+  ch3Eyebrow: "3 · Então mudamos a pergunta",
+  ch3Title: "Não “para onde vai?”, mas “até onde pode ir?”",
+  ch3Body: (n: number) =>
+    `Cada previsão passada deixou um erro para trás. Juntamos esses erros e os transformamos em uma faixa. Depois testamos a faixa do jeito difícil: ${n} vezes, ela foi traçada antes de se saber o resultado.`,
+  of: "de",
+  statHeld: (years: string) => `faixas de 3 meses contiveram o preço real, ${years}`,
+  statRate: (nominal: string) => `de acerto, contra os ${nominal} prometidos`,
+  statHoldout: (years: string, held: number, n: number) => `em ${years}, separado como prova final (${held} de ${n})`,
+  ch3Chart: (n: number) => `${n} faixas de 3 meses passadas contra o preço real, CBOT em US$ por tonelada`,
+  ch3Exam: (years: string) => `prova final, ${years}`,
+  ch3CapIn: "preço terminou dentro da faixa",
+  ch3CapOut: "preço terminou fora",
+  ch3Cap: (years: string) =>
+    `Cada barra é uma faixa de 80% para 3 meses, traçada antes da data, em US$ por tonelada na CBOT. A área sombreada é a prova final de ${years}, nunca usada para ajustar nada.`,
+
+  ch4Eyebrow: "4 · O panorama de hoje",
+  ch4Title: (price: string) => `Partindo de ${price} hoje, este é o caminho à frente.`,
+  ch4Body: (n80: number, n95: number) =>
+    `Quanto mais longe, mais largo o caminho. A barra grossa é a faixa feita para acertar ${n80} em cada 10 vezes; a linha fina, ${n95} em cada 20.`,
+  ch4Chart: (unit: string) => `Preço recente e as faixas de 1, 3 e 6 meses, ${unit}`,
+  ch4NoChange: "sem variação",
+  ch4Warn: (h: number, held: string, years: string, nominal: string, side: Side) =>
+    `A faixa de ${h === 1 ? "1 mês" : `${h} meses`} acertou ${held} das vezes em ${years}, e não ${nominal}; trate-a como um pouco estreita demais${
+      side === "up" ? ", sobretudo para cima" : side === "down" ? ", sobretudo para baixo" : ""
+    }.`,
+  ch4Unit: (unitLong: string) => `${unitLong}. A linha tracejada é o “sem variação”, a previsão central.`,
+  ch4Table: "As faixas por horizonte",
+
+  ch5Eyebrow: "5 · O que isso significa para você",
+  ch5Title: "Transforme a faixa em dinheiro.",
+  ch5Body: (oneIn: number) =>
+    `Conte qual é a sua posição. Mostramos quanto um cenário ruim (1 em ${oneIn}) custaria em comparação com travar o preço de hoje.`,
+  iAm: "Eu sou",
+  seller: "Vendedor",
+  buyer: "Comprador",
+  volume: "Volume, toneladas",
+  hedged: "Já com hedge",
+  badCase: (oneIn: number, price: string) => `Num cenário ruim (1 em ${oneIn}), em comparação com travar ${price} hoje:`,
+  hintHalf: "Fazer hedge de metade do volume reduziria o cenário ruim de 3 meses para cerca de",
+  hintAt: (pct: number) => `Com ${pct}% de hedge, o cenário ruim de 3 meses é`,
+  tryHalf: "Testar 50% de hedge",
+  tailUp: (pct: string) => `O preço subiu acima desta faixa em ${pct} dos relatórios testados: o cenário ruim provavelmente está subestimado.`,
+  tailDown: (pct: string) => `O preço caiu abaixo desta faixa em ${pct} dos relatórios testados: o cenário ruim provavelmente está subestimado.`,
+  ch5Cap:
+    "Cenário ruim = a ponta da faixa de 80% do seu lado. Só CBOT: prêmio, frete, base, chamadas de margem e rolagens de contrato ficam de fora. É uma ilustração, não uma recomendação.",
+  ch5More: "O painel completo (1 em 40 aproximado, sacas, preço-alvo, alertas de cauda) está no Histórico, em “Para analistas”.",
+
+  ch6Eyebrow: "6 · Seu próximo ponto de decisão",
+  ch6Title: (weekday: number) => `O relatório WASDE do USDA sai ${WEEKDAYS_PT[weekday]}.`,
+  ch6TitleNone: "O próximo relatório WASDE do USDA",
+  ch6Body: (typ: string, tail: string) =>
+    `No dia do relatório o preço costuma se mover cerca de ±${typ}. Um relatório em cada dez move mais de ±${tail}. Se uma decisão depende do preço, esse é o dia de ficar de olho.`,
+  ch6Link: "Veja o que o último relatório mudou",
+  ch6Chart: (typ: string, tail: string, price: string) =>
+    `Movimento típico no dia do relatório de ±${typ} e movimento de 1 em 10 de ±${tail} em torno dos ${price} de hoje`,
+  ch6Legend: ["faixa interna: um dia de relatório típico", "faixa externa: 9 relatórios em 10"],
+  today: "hoje",
+  analysts: "Para analistas",
+};
+
+export type StoryCopy = typeof STORY_EN;
+
+/** The home page copy in one locale. */
+export const storyCopy = (loc: Locale): StoryCopy => (loc === "pt-BR" ? STORY_PT : STORY_EN);

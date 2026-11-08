@@ -10,7 +10,7 @@
    - up / down:      diverging poles for signed changes. */
 :root {
   color-scheme: light;
-  --page: #f9f9f7;
+  --page: #ffffff;
   --surface: #fcfcfb;
   --surface-2: #f3f2ee;
   --ink: #0b0b0b;
@@ -34,6 +34,13 @@
   --warn: #b7791f;
   --warn-text: #8a5310;
   --warn-soft: #fbefd9;
+  /* Story (home page): soybean-field green as the accent, range bars, losses. */
+  --field: #1f6b3a;
+  --field-soft: #d8eadc;
+  --range: #9cc7a8;
+  --range-warn: #e9c48a;
+  --loss: #b42318;
+  --hold: #f2f5f1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -63,6 +70,12 @@
     --warn: #e0a23a;
     --warn-text: #f2c475;
     --warn-soft: #3d2a0b;
+  --field: #6cc58a;
+  --field-soft: #1d3325;
+  --range: #3f7a54;
+  --range-warn: #8a6020;
+  --loss: #ff8a7d;
+  --hold: #161d18;
   }
 }
 
@@ -92,6 +105,12 @@
   --warn: #e0a23a;
   --warn-text: #f2c475;
   --warn-soft: #3d2a0b;
+  --field: #6cc58a;
+  --field-soft: #1d3325;
+  --range: #3f7a54;
+  --range-warn: #8a6020;
+  --loss: #ff8a7d;
+  --hold: #161d18;
 }
 
 @theme inline {
@@ -111,7 +130,12 @@
   --color-warn: var(--warn-text);
   --color-warn-soft: var(--warn-soft);
   --color-warn-line: var(--warn);
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-field: var(--field);
+  --color-field-soft: var(--field-soft);
+  --color-loss: var(--loss);
+  --font-sans: var(--font-sans-face), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-serif-face), Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
 
 html,
@@ -121,12 +145,18 @@ body {
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-sans-face), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Shared display face: every page title is set in the serif (cheap, consistent with the home page). */
+h1 {
+  font-family: var(--font-serif-face), Georgia, "Times New Roman", serif;
+  letter-spacing: -0.01em;
 }
 
 .card {
@@ -231,5 +261,640 @@ body {
   }
   table.stack-sm td:first-child::before {
     content: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Home page story. One reading column that widens for each chart; chapters are separated by
+   space and a thin rule, not boxes. Only the ticket, the range ladder and the calculator are
+   framed. Serif display, Plex Sans body, Plex Mono numbers. */
+.story {
+  --rule: var(--grid);
+  --serif: var(--font-serif-face), Georgia, "Times New Roman", serif;
+  --sans: var(--font-sans-face), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-mono-face), ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.story :focus-visible {
+  outline-color: var(--field);
+}
+.story h1,
+.story h2 {
+  font-family: var(--serif);
+  font-weight: 600;
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.story h1 {
+  font-size: clamp(2.3rem, 6vw, 4.2rem);
+  line-height: 1.04;
+}
+.story h1 em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--field);
+}
+.story h2 {
+  font-size: clamp(1.65rem, 3.6vw, 2.5rem);
+  line-height: 1.12;
+}
+.story .col {
+  max-width: 640px;
+}
+.story .lede {
+  font-size: 1.2rem;
+  color: var(--ink-2);
+}
+.story .num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.story .eyebrow {
+  font: 500 0.78rem/1 var(--sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--field);
+}
+.story .small,
+.story .cap {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.story .cap {
+  max-width: 680px;
+}
+.story a.more {
+  color: var(--field);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* hero */
+.story .hero {
+  padding-block: 40px 48px;
+  display: grid;
+  gap: 32px;
+}
+.story .herogrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 48px;
+  align-items: end;
+}
+.story .herotext {
+  display: grid;
+  gap: 20px;
+}
+.story .heroside {
+  display: grid;
+  gap: 12px;
+}
+.story .ticket {
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 20px 22px;
+  display: grid;
+  gap: 10px;
+  background: var(--page);
+}
+.story .tk-top,
+.story .tk-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.story .tk-row {
+  border-top: 1px solid var(--rule);
+  padding-top: 10px;
+}
+.story .tk-row .num {
+  color: var(--ink);
+}
+.story .tk-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.story .tk-price .num {
+  font-weight: 500;
+  font-size: clamp(2.4rem, 5vw, 3.4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.story .tk-price small {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.story .spark {
+  width: 100%;
+  height: 64px;
+  display: block;
+}
+
+/* settings disclosure: a small button, the panel opens under it */
+.story .settings > summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.story .settings > summary::-webkit-details-marker {
+  display: none;
+}
+.story .settings .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.story .settings > summary:hover .btn,
+.story .settings[open] .btn {
+  border-color: var(--field);
+}
+.story .settings .panel {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 0.95rem;
+}
+
+/* range ladder */
+.story .ladder {
+  display: grid;
+}
+.story .lrow,
+.story .laxis {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 180px;
+  gap: 20px;
+  align-items: center;
+}
+.story .lrow {
+  padding-block: 14px;
+  border-top: 1px solid var(--rule);
+}
+.story .lrow:last-of-type {
+  border-bottom: 1px solid var(--rule);
+}
+.story .lwhen b {
+  display: block;
+  font-weight: 600;
+}
+.story .lwhen span {
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.story .ltrack {
+  position: relative;
+  height: 44px;
+}
+.story .ltrack .bar {
+  position: absolute;
+  top: 14px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--range);
+}
+.story .ltrack .now {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+.story .ltrack .lo,
+.story .ltrack .hi {
+  position: absolute;
+  top: 11px;
+  font: 500 0.95rem var(--mono);
+  white-space: nowrap;
+}
+.story .ltrack .lo {
+  transform: translateX(calc(-100% - 8px));
+}
+.story .ltrack .hi {
+  margin-left: 8px;
+}
+.story .lpct {
+  font: 0.9rem var(--mono);
+  color: var(--muted);
+  text-align: right;
+}
+.story .lpct .flag {
+  display: block;
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: var(--warn-text);
+}
+.story .laxis .ticks {
+  position: relative;
+  height: 22px;
+}
+.story .laxis .ticks span {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  font: 0.75rem var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* chapters */
+.story .chapter {
+  padding-block: 80px;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 22px;
+}
+.story .chapter .head {
+  display: grid;
+  gap: 14px;
+}
+.story .figure {
+  margin-top: 8px;
+  width: 100%;
+}
+.story .pull {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  color: var(--field);
+  max-width: 640px;
+}
+
+/* model contest */
+.story .contest {
+  display: grid;
+  gap: 14px;
+  max-width: 780px;
+}
+.story .crow {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 14px;
+}
+.story .crow .lbl {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.story .crow .lbl small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.story .crow .track {
+  height: 12px;
+  background: var(--surface-2);
+  border-radius: 6px;
+  position: relative;
+}
+.story .crow .track i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+  background: var(--muted);
+  opacity: 0.45;
+}
+.story .crow.win .track i {
+  background: var(--field);
+  opacity: 1;
+}
+.story .crow .val {
+  font: 0.9rem var(--mono);
+  text-align: right;
+  white-space: nowrap;
+}
+.story .crow.win .val {
+  color: var(--field);
+  font-weight: 500;
+}
+.story .chead {
+  font: 500 0.72rem/1 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* stat strip */
+.story .stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.story .stat .n {
+  font: 500 2.4rem/1 var(--mono);
+  letter-spacing: -0.03em;
+}
+.story .stat .t {
+  font-size: 0.92rem;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.story .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+/* calculator */
+.story .calc {
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 28px;
+  display: grid;
+  gap: 24px;
+}
+.story .controls {
+  display: flex;
+  gap: 20px 28px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.story .ctl {
+  display: grid;
+  gap: 8px;
+}
+.story .ctl .lab {
+  font: 500 0.78rem/1 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.story .seg {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--page);
+}
+.story .seg button {
+  font: 500 0.95rem var(--sans);
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 9px 14px;
+  cursor: pointer;
+}
+.story .seg button[aria-pressed="true"] {
+  background: var(--field);
+  color: var(--page);
+}
+.story .calc input[type="text"] {
+  font: 500 1rem var(--mono);
+  width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--ink);
+}
+.story .calc input[type="range"] {
+  width: 220px;
+  max-width: 100%;
+  accent-color: var(--field);
+}
+.story .out {
+  display: grid;
+  gap: 12px;
+}
+.story .orow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 130px;
+  gap: 14px;
+  align-items: center;
+}
+.story .orow .lbl {
+  color: var(--ink-2);
+  font-size: 0.95rem;
+}
+.story .orow .track {
+  height: 14px;
+  background: var(--page);
+  border-radius: 7px;
+  position: relative;
+  overflow: hidden;
+}
+.story .orow .track i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--loss);
+  border-radius: 7px;
+  transition: width 0.35s ease;
+}
+.story .orow .v {
+  font: 500 1.1rem var(--mono);
+  text-align: right;
+  color: var(--loss);
+  white-space: nowrap;
+}
+.story .orow .warn {
+  grid-column: 2 / -1;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--warn-text);
+  margin-top: -4px;
+}
+.story .hint {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.story .hint button {
+  font: 500 0.92rem var(--sans);
+  border: 1px solid var(--field);
+  color: var(--field);
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+/* next event */
+.story .event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+}
+.story .date {
+  font: 500 1rem var(--mono);
+  color: var(--field);
+}
+
+/* svg marks */
+.story svg text {
+  font-family: var(--sans);
+}
+.story .ax {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+.story .axt {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.story .line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+}
+.story .ann {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.story .anns {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.story .annl {
+  stroke: var(--muted);
+  stroke-dasharray: 2 3;
+}
+.story .bandr {
+  fill: var(--range);
+}
+.story .bandr95 {
+  stroke: var(--range);
+  stroke-width: 2;
+}
+.story .in {
+  fill: var(--field);
+}
+.story .outd {
+  fill: var(--warn);
+}
+.story .hold {
+  fill: var(--hold);
+}
+.story .dash {
+  stroke: var(--muted);
+  stroke-dasharray: 4 4;
+  stroke-width: 1.2;
+}
+
+@media (max-width: 760px) {
+  .story {
+    font-size: 16px;
+  }
+  .story .stats,
+  .story .event,
+  .story .herogrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .story .herogrid {
+    gap: 28px;
+  }
+  .story .lrow,
+  .story .laxis {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+  }
+  .story .lrow .ltrack,
+  .story .laxis .ticks {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .story .laxis > span {
+    display: none;
+  }
+  .story .crow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 14px;
+  }
+  .story .crow .track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .story .orow {
+    grid-template-columns: 76px minmax(0, 1fr) 100px;
+    gap: 10px;
+  }
+  .story .orow .v {
+    font-size: 1rem;
+  }
+  .story .calc {
+    padding: 20px 16px;
+  }
+  .story .chapter {
+    padding-block: 56px;
+  }
+  .story .hero {
+    padding-block: 16px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story .orow .track i {
+    transition: none;
+  }
+}
+
+/* Chapter 1 episode list: the narrow chart numbers its markers; wide charts label them inline. */
+.story .eplist {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.story .eplist b {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  font-size: 0.7rem;
+  color: var(--ink);
+}
+@media (max-width: 591.98px) {
+  .story .eplist {
+    display: grid;
+    gap: 4px;
+  }
+}
+
+/* Range ladder: marks are placed in % of an inner box; on phones it is inset so the end labels fit. */
+.story .ltrack .lin,
+.story .laxis .ticks .lin {
+  position: absolute;
+  inset: 0;
+}
+@media (max-width: 760px) {
+  .story .ltrack .lin,
+  .story .laxis .ticks .lin {
+    left: var(--lpad, 48px);
+    right: var(--lpad, 48px);
+  }
+  /* Every other tick on phones, so the labels never touch. */
+  .story .laxis .ticks .alt {
+    display: none;
   }
 }

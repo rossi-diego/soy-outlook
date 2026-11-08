@@ -2,8 +2,10 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import type { AnalystData } from "@/components/AnalystOutlook";
 import Chart from "@/components/Chart";
 import ChartData from "@/components/ChartData";
+import ForAnalysts from "@/components/ForAnalysts";
 import RadioGroup from "@/components/RadioGroup";
 import { axisCommon, timeAxisLabel, baseOption, type Tokens } from "@/lib/chart";
 import type { Fmt } from "@/lib/format";
@@ -228,7 +230,17 @@ export function mdeText(values: number[], loc: Locale = "en"): string | null {
   return lo === hi ? `~${lo}%` : `~${Math.round(med * 100)}% (${lo}–${hi}% ${loc === "pt-BR" ? "por horizonte" : "by horizon"})`;
 }
 
-export default function TrackRecordView({ meta, view, archive }: { meta: Meta; view: TrackView; archive: ArchiveIndex }) {
+export default function TrackRecordView({
+  meta,
+  view,
+  archive,
+  analyst,
+}: {
+  meta: Meta;
+  view: TrackView;
+  archive: ArchiveIndex;
+  analyst: AnalystData;
+}) {
   const { t, f, d, loc } = useI18n();
   const SHORT = short(loc);
   const signedPct = signedPctF(f);
@@ -731,6 +743,8 @@ export default function TrackRecordView({ meta, view, archive }: { meta: Meta; v
       </section>
 
       <ForStatisticians meta={meta} view={view} testsBy={testsBy} valYears={valYears} holdYears={holdYears} />
+
+      <ForAnalysts meta={meta} outlook={analyst} />
     </div>
   );
 }
