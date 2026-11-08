@@ -37,7 +37,7 @@ class SourceLog:
     sources: dict[str, SourceStatus] = field(default_factory=dict)
 
     def record(
-        self, name: str, status: Status, last: object = None, detail: str | None = None
+        self, name: str, status: Status, last: Any = None, detail: str | None = None
     ) -> None:
         last_s = None
         if last is not None:
@@ -53,7 +53,7 @@ class SourceLog:
         return {k: asdict(v) for k, v in sorted(self.sources.items())}
 
 
-def business_days_between(start: object, end: object) -> int:
+def business_days_between(start: Any, end: Any) -> int:
     """Weekdays after `start` up to and including `end` (0 when end <= start)."""
     a = pd.Timestamp(start).date()
     b = pd.Timestamp(end).date()
@@ -89,7 +89,7 @@ def is_wasde_day(next_release: str | None, now: datetime | None = None) -> bool:
 
 
 def freshness_block(
-    as_of_close: object,
+    as_of_close: Any,
     generated_at: datetime,
     next_wasde: str | None,
     sources: SourceLog,

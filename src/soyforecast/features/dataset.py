@@ -21,7 +21,7 @@ CROP_ROLL_MONTHS = (7, 8, 9)
 
 def close_on_or_before(prices: pd.Series, when: pd.Timestamp) -> tuple[pd.Timestamp, float] | None:
     """The last close dated on or before `when`."""
-    idx = prices.index.searchsorted(when, side="right") - 1
+    idx = int(prices.index.searchsorted(when, side="right")) - 1
     if idx < 0:
         return None
     return prices.index[idx], float(prices.iloc[idx])

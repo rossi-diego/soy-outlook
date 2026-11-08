@@ -63,7 +63,7 @@ When a refresh fails, including a failed gate, when its close is stale (even on 
 ## What the owner must enable
 
 1. **Auto-merge.** Settings → General → Pull Requests → *Allow auto-merge*.
-2. **Branch protection on `main`** with the required checks from `ci.yml` (`python`, `pipeline-offline`, `web`). Auto-merge only waits for required checks; without any, it merges at once.
+2. **Branch protection on `main`** with the required checks from `ci.yml` (`python (3.11)`, `python (3.12)`, `pipeline-offline`, `docker`, `web`). Auto-merge only waits for required checks; without any, it merges at once.
 3. **A token that triggers CI on the bot PR.** PRs opened with the default `GITHUB_TOKEN` do not start other workflows, so the required checks would never report. Add a fine-grained PAT, or a GitHub App token, as the repository secret `REFRESH_TOKEN`. It needs *Contents: read and write*, *Pull requests: read and write* and *Issues: read and write* on this repository only. Without the secret, the workflow falls back to `GITHUB_TOKEN`. The PR is still opened, and the refresh job has already built and tested the site on the new data, but you would merge it by hand or drop the required checks.
 4. **Actions permissions.** Settings → Actions → General → Workflow permissions: allow GitHub Actions to create and approve pull requests. This is needed when no `REFRESH_TOKEN` is set.
 5. **Deploys.** The Vercel Git integration deploys `main` when the PR merges, and no deploy secret is needed in Actions.

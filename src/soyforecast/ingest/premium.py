@@ -71,8 +71,12 @@ class PremiumTable:
         return pd.Timestamp(self.card["valid_until"])
 
     def years_label(self, month: int) -> str:
-        r = self.profile.loc[month]
-        return f"{int(r['first_year'])}-{int(r['last_year'])}"
+        first, last = self.stat(month, "first_year"), self.stat(month, "last_year")
+        return f"{int(first)}-{int(last)}"
+
+    def stat(self, month: int, column: str) -> float:
+        """One statistic of the monthly profile (median, p10, p90, n_years, ...)."""
+        return float(self.profile[column].loc[month])
 
     def is_stale(self, as_of: pd.Timestamp) -> bool:
         return bool(pd.Timestamp(as_of) > self.valid_until)
@@ -93,9 +97,10 @@ def monthly_premium_profile(
     premium: pd.Series, first_year: int = PREMIUM_PROFILE_FIRST_YEAR
 ) -> pd.DataFrame:
     """Median and 10th/90th percentile premium per calendar month, from first_year on."""
-    p = premium[premium.index.year >= first_year]
-    g = p.groupby(p.index.month)
-    years = pd.Series(p.index.year, index=p.index).groupby(p.index.month)
+    p = premium[pd.DatetimeIndex(premium.index).year >= first_year]
+    idx = pd.DatetimeIndex(p.index)
+    g = p.groupby(idx.month)
+    years = pd.Series(idx.year, index=p.index).groupby(idx.month)
     out = pd.DataFrame(
         {
             "median": g.median(),

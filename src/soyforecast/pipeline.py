@@ -139,7 +139,7 @@ def derive_premium(settings: Settings, raw_path: Path) -> Path:
     fob = fob_illustrative(bt, raw, dict.fromkeys(HORIZONS, "rw"))
     fob_rows = [
         {
-            k: int(v) if k in ("h", "n") else round(v, 3) if isinstance(v, float) else v
+            str(k): int(v) if k in ("h", "n") else round(v, 3) if isinstance(v, float) else v
             for k, v in r.items()
         }
         for r in fob.to_dict(orient="records")

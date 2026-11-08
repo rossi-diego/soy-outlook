@@ -8,8 +8,11 @@ is applied on dates, never on row counts.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pandas as pd
+from numpy.typing import ArrayLike
 
 from soyforecast.config import (
     CALIB_MIN,
@@ -121,7 +124,7 @@ def add_intervals(bt: pd.DataFrame, centring: str = INTERVAL_BASELINE) -> pd.Dat
     return bt
 
 
-def interval_score(y: np.ndarray, lo: np.ndarray, hi: np.ndarray, alpha: float) -> np.ndarray:
+def interval_score(y: ArrayLike, lo: ArrayLike, hi: ArrayLike, alpha: float) -> np.ndarray:
     """Gneiting-Raftery interval score of a central (1 - alpha) interval; lower is better."""
     y, lo, hi = (np.asarray(a, dtype=float) for a in (y, lo, hi))
     return (hi - lo) + (2 / alpha) * (lo - y) * (y < lo) + (2 / alpha) * (y - hi) * (y > hi)
@@ -150,13 +153,15 @@ def select_centring(
     rows = []
     for split in ("validation", "holdout"):
         base: dict[tuple[str, int], float] = {}
-        for (model, h), g in variants[INTERVAL_BASELINE][
+        for key, g in variants[INTERVAL_BASELINE][
             variants[INTERVAL_BASELINE]["split"] == split
         ].groupby(["model", "h"]):
+            model, h = cast(tuple[str, int], key)
             base[(str(model), int(h))] = _mean_interval_score(g)
         for c, v in variants.items():
             ratios = []
-            for (model, h), g in v[v["split"] == split].groupby(["model", "h"]):
+            for key, g in v[v["split"] == split].groupby(["model", "h"]):
+                model, h = cast(tuple[str, int], key)
                 b = base.get((str(model), int(h)), float("nan"))
                 s_ = _mean_interval_score(g)
                 if np.isfinite(b) and b > 0 and np.isfinite(s_):
@@ -279,10 +284,10 @@ def summarize(bt: pd.DataFrame) -> tuple[pd.DataFrame, dict[int, str], pd.DataFr
             "rw",
             float(vm[(vm["model"] == "rw") & (vm["h"] == h)]["mae_usd_t"].iloc[0]),
         )
-        for _, t in tests_df[tests_df["h"] == h].iterrows():
-            mae = float(vm[(vm["model"] == t["model"]) & (vm["h"] == h)]["mae_usd_t"].iloc[0])
-            if t["cw_p_holm"] < CHAMPION_ALPHA and mae < best_mae:
-                best, best_mae = t["model"], mae
+        for _, row in tests_df[tests_df["h"] == h].iterrows():
+            mae = float(vm[(vm["model"] == row["model"]) & (vm["h"] == h)]["mae_usd_t"].iloc[0])
+            if row["cw_p_holm"] < CHAMPION_ALPHA and mae < best_mae:
+                best, best_mae = str(row["model"]), mae
         champion[h] = best
     log.info("backtest.champion", **{f"h{h}": m for h, m in champion.items()})
     return metrics, champion, tests_df
@@ -295,7 +300,7 @@ def fob_illustrative(
     prem = premium.sort_index()
 
     def prem_at(d: pd.Timestamp) -> float:
-        i = prem.index.searchsorted(d, side="right") - 1
+        i = int(prem.index.searchsorted(d, side="right")) - 1
         if i < 0 or (d - prem.index[i]).days > 7:
             return np.nan
         return float(prem.iloc[i])
@@ -316,17 +321,15 @@ def fob_illustrative(
     df = pd.DataFrame(rows)
     if df.empty:
         return df
-    return (
-        df.groupby(["split", "model", "h"])
-        .apply(
-            lambda g: pd.Series(
-                {
-                    "n": len(g),
-                    "mae_usd_t": g["err"].abs().mean(),
-                    "mape_pct": (g["err"].abs() / g["actual"]).mean() * 100,
-                }
-            ),
-            include_groups=False,
-        )
-        .reset_index()
-    )
+    # cast: pandas-stubs does not know apply's include_groups keyword (pandas >= 2.2).
+    grouped = cast(Any, df.groupby(["split", "model", "h"]))
+    return grouped.apply(
+        lambda g: pd.Series(
+            {
+                "n": len(g),
+                "mae_usd_t": g["err"].abs().mean(),
+                "mape_pct": (g["err"].abs() / g["actual"]).mean() * 100,
+            }
+        ),
+        include_groups=False,
+    ).reset_index()

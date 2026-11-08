@@ -15,16 +15,35 @@ FIXTURES = Path(__file__).parent / "fixtures" / "bronze"
 FIXTURE_NOW = datetime(2026, 11, 6, 21, tzinfo=UTC)
 
 
-@pytest.fixture
-def synthetic_wasde() -> pd.DataFrame:
-    """Monthly reports 2010-07..2026-10; the projected MY rolls every May."""
+@pytest.fixture(scope="session")
+def _wasde_once() -> pd.DataFrame:
     return fixtures.synthetic_wasde()
 
 
-@pytest.fixture
-def synthetic_prices() -> pd.Series:
-    """Business-day random walk in cents per bushel, 2004 to 2026-11-06."""
+@pytest.fixture(scope="session")
+def _prices_once() -> pd.Series:
     return fixtures.synthetic_prices()
+
+
+@pytest.fixture
+def synthetic_wasde(_wasde_once) -> pd.DataFrame:
+    """Monthly reports 2010-07..2026-10; the projected MY rolls every May (a fresh copy)."""
+    return _wasde_once.copy()
+
+
+@pytest.fixture
+def synthetic_prices(_prices_once) -> pd.Series:
+    """Business-day random walk in cents per bushel, 2004 to 2026-11-06 (a fresh copy)."""
+    return _prices_once.copy()
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Tests that need the full offline pipeline run are slow (deselect with -m "not slow")."""
+    for item in items:
+        if "fixture_run" in getattr(item, "fixturenames", ()) or "published" in getattr(
+            item, "fixturenames", ()
+        ):
+            item.add_marker(pytest.mark.slow)
 
 
 @pytest.fixture(scope="session")

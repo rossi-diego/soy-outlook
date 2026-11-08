@@ -191,14 +191,14 @@ def _coverage(a: Artefacts, model: str, h: int) -> dict[str, Any]:
 
 
 def _premium_row(a: Artefacts, month: int) -> dict[str, Any]:
-    p = a.premium.profile.loc[month]
+    stat = a.premium.stat
     return {
         "month": month,
-        "median": _r(p["median"], 0),
-        "p10": _r(p["p10"], 0),
-        "p90": _r(p["p90"], 0),
+        "median": _r(stat(month, "median"), 0),
+        "p10": _r(stat(month, "p10"), 0),
+        "p90": _r(stat(month, "p90"), 0),
         "years": a.premium.years_label(month),
-        "n_years": int(p["n_years"]),
+        "n_years": int(stat(month, "n_years")),
     }
 
 

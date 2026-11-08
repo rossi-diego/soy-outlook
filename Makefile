@@ -1,4 +1,4 @@
-.PHONY: install lock run test lint web e2e all ci-offline validate fixtures
+.PHONY: install lock run test test-fast schema lint web e2e all ci-offline validate fixtures
 
 install:            ## Locked Python env (uv.lock) + dev tools, and the site's node modules
 	uv sync --locked --extra dev
@@ -10,8 +10,15 @@ lock:               ## Re-resolve uv.lock after a change to pyproject.toml depen
 run:                ## Ingest, backtest, forecast, write web/public/data
 	soyforecast run
 
-test:
-	pytest --cov --cov-report=term-missing
+test:               ## Full suite with coverage (what CI runs)
+	pytest -m "not network" --cov --cov-report=term-missing
+
+test-fast:          ## Everything except the end-to-end pipeline runs (about 6 s)
+	pytest -m "not slow and not network"
+
+schema:             ## Re-export the site contract and regenerate the TypeScript types
+	soyforecast export-schema
+	cd web && npm run gen:types
 
 lint:
 	ruff format --check src tests

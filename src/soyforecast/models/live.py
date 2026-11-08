@@ -114,7 +114,7 @@ def release_day_events(
         prev_release = d
         if gap is None or gap > 45:
             continue  # first report, or a two-month revision after a shutdown
-        i = prices.index.searchsorted(d, side="right") - 1
+        i = int(prices.index.searchsorted(d, side="right")) - 1
         if i < 1 or prices.index[i] != d:
             continue  # no session on the release day
         j = i - lag_sessions

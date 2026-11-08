@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from soyforecast import pipeline
 from soyforecast.config import HORIZONS, Settings
@@ -18,6 +19,7 @@ from soyforecast.ingest.premium import (
 from soyforecast.publish.web_json import SCHEMA_VERSION, publish
 
 
+@pytest.mark.slow
 def test_pipeline_publishes_the_site_contract(
     tmp_path, monkeypatch, synthetic_wasde, synthetic_prices
 ):

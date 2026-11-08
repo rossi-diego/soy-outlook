@@ -136,7 +136,9 @@ The repository ships the latest `web/public/data`, so `cd web && npm ci && npm r
 ## Development
 
 ```bash
-make test     # pytest: no-look-ahead, purging, intervals, stats, units, cache checks, end-to-end JSON contract
+make test     # pytest: no-look-ahead, purging, intervals, stats, units, ingest checks, JSON contract, end to end
+make test-fast   # the same without the end-to-end pipeline runs (marked slow), about 6 s
+make schema   # after changing publish/schema.py: re-export JSON Schema and regenerate web/lib/types.generated.ts
 make lint     # ruff, mypy, eslint, tsc
 make e2e      # Playwright on desktop and mobile: copy-vs-JSON contract, stale banner (pinned clock), archive, metadata, no horizontal scroll
 make ci-offline  # the hermetic CI run: offline pipeline on synthetic fixtures, then the validation gate
@@ -144,7 +146,7 @@ make ci-offline  # the hermetic CI run: offline pipeline on synthetic fixtures, 
 
 Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](docs/REFRESH.md)):
 
-- **`ci.yml`, on every push and PR, is hermetic.** It runs lint, mypy and pytest, then `soyforecast run --offline` on committed synthetic fixtures behind a dead-proxy network tripwire, then the site build and Playwright against the committed `web/public/data`.
+- **`ci.yml`, on every push and PR, is hermetic.** Every action is pinned by commit SHA (Dependabot keeps the pins current). It installs exactly `uv.lock`, runs lint, mypy (with pandas-stubs) and pytest on Python 3.11 and 3.12, builds the multi-stage, non-root Docker image, and runs `soyforecast run --offline` on committed synthetic fixtures behind a dead-proxy network tripwire, then the site build and Playwright against the committed `web/public/data`.
 - **`refresh.yml`, on weekdays after the CBOT close.** The cron is DST-safe, with a Chicago-clock guard in code, and a second pass runs on WASDE days. It does a live run, then the validation gate (`soyforecast validate`: shape, freshness, row deltas, append-only archive), then the site build and e2e on the new data. It finishes with a bot PR that auto-merges. Only this job can write, and it opens a `data-alert` issue when a run is stale, degraded or failed.
 - **On the site, a banner appears when the data is stale.** That means the close is more than 3 business days old, a newer WASDE is out, or the refresh fell back to cache. The as-of date stays in the header on mobile.
 - **The JSON the site reads is a checked contract.** `src/soyforecast/publish/schema.py` defines every published file as a pydantic model (unknown keys, nulls where numbers are expected, NaN, non-monotone quantiles and missing horizons are all rejected). `publish` validates before writing, writes into a staging folder, re-checks it against the live copy (as-of close and latest WASDE never go backwards) and only then swaps it in with `os.replace`; a failure leaves the published data untouched (exit code 4). `soyforecast export-schema` writes the models as JSON Schema to `web/lib/schema/`; `npm run gen:types` turns that into `web/lib/types.generated.ts`, and `web/lib/data.ts` validates every file against the same schema at build time, so a wrong `schema_version` or shape fails `next build`. CI fails when the schema or the generated types are stale. Generated types rather than zod: zod would be a second, hand-written copy of the contract in TypeScript, while generated types and the schema check both come from the one pydantic definition.
@@ -160,7 +162,7 @@ Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](
 │   ├── evaluation/   backtest.py (purging, empirical-quantile ranges, centring rule, champion) · stats.py (DM-HLN, Clark-West, Holm)
 │   ├── publish/      schema.py (pydantic site contract) · web_json.py (validated, staged publish) · archive.py (append-only outlook archive) · lineage.py (run manifest) · validate.py (refresh gate)
 │   ├── pipeline.py · cli.py · errors.py (exit codes) · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
-├── tests/            56 tests: no look-ahead, intervals, event study, premium card, JSON contract, close guard, gate, archive
+├── tests/            82 tests: no look-ahead, intervals, event study, premium card, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
 │   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources

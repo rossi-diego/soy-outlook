@@ -1,0 +1,11 @@
+# Keeps the SHA-pinned actions (and their version comments) current, and proposes lock updates.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
