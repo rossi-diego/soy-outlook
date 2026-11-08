@@ -5,7 +5,7 @@ import { useCallback, useState } from "react";
 import Chart from "@/components/Chart";
 import ChartData from "@/components/ChartData";
 import RadioGroup from "@/components/RadioGroup";
-import { axisCommon, baseOption, type Tokens } from "@/lib/chart";
+import { axisCommon, baseOption, isNarrow, type Tokens } from "@/lib/chart";
 import type { Stress } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
 /** Simple return (%) of a log return. */
@@ -52,7 +52,8 @@ export default function StressBody({ stress, buPerT }: { stress: Stress; buPerT:
           data: cats,
           ...axisCommon(tk),
           splitLine: { show: false },
-          axisLabel: { ...axisCommon(tk).axisLabel, interval: 3 },
+          // Phones: every 6th bin, so the percent labels never collide (P27).
+          axisLabel: { ...axisCommon(tk).axisLabel, interval: isNarrow() ? 5 : 3 },
         },
         yAxis: { type: "value", ...axisCommon(tk), name: t("windows", "janelas"), nameTextStyle: { color: tk.muted } },
         series: [

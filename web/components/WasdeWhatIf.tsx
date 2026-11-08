@@ -130,8 +130,9 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
   const flagged = reaction.items.filter((it) => it.weak || it.wrong_sign).length;
   const lr = reaction.latest_revisions;
   const canLoad = !lr.may && reaction.items.some((it) => it.latest_rev !== null);
-  const monthWord = (m: string) => f.monthName(m).replace(/^./, (c) => c.toUpperCase());
-  const latestLabel = lr.previous ? `${monthWord(lr.month)} ${t("vs", "vs.")} ${monthWord(lr.previous)}` : f.month(lr.month);
+  // Portuguese month names are lower case ("outubro contra setembro"); English ones are capitalised.
+  const monthWord = (m: string) => t(f.monthName(m).replace(/^./, (c) => c.toUpperCase()), f.monthName(m));
+  const latestLabel = lr.previous ? `${monthWord(lr.month)} ${t("vs", "contra")} ${monthWord(lr.previous)}` : f.month(lr.month);
 
   const loadLatest = () => {
     setMoves(Object.fromEntries(reaction.items.map((it) => [it.feature, it.latest_rev ?? 0])));

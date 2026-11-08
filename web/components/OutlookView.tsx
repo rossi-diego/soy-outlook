@@ -8,7 +8,7 @@ import ChartData from "@/components/ChartData";
 import DecisionPanel from "@/components/DecisionPanel";
 import RadioGroup from "@/components/RadioGroup";
 import StressReplay from "@/components/StressReplay";
-import { axisCommon, baseOption, type Tokens } from "@/lib/chart";
+import { axisCommon, baseOption, isNarrow, type Tokens } from "@/lib/chart";
 import { type Assumptions, convert, decimalsFor, parseBasis, parseFx, premiumUsdT, type Unit } from "@/lib/format";
 import type { Horizon, Meta, Outlook } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
@@ -131,7 +131,7 @@ function HorizonCard({
           )}
           <span className="block text-xs text-muted">
             {ct.crosses_roll
-              ? `${t("price series rolls", "a série de preços rola")} ${ct.front_at_origin} → ${ct.front_at_target}${
+              ? `${t("price series rolls", "a série de preços passa de")} ${ct.front_at_origin} → ${ct.front_at_target}${
                   ct.crosses_crop_roll ? t(", old to new crop", ", safra velha para safra nova") : ""
                 }`
               : `${t("price series stays on", "a série de preços fica em")} ${ct.front_at_origin}`}
@@ -308,17 +308,23 @@ export default function OutlookView({ meta, outlook }: Props) {
       const lines: { xAxis: string; name: string; label: { align: "left" | "right"; padding: number[] } }[] = [
         { xAxis: outlook.as_of_close, name: t("today", "hoje"), label: { align: "right", padding: [0, 4, 0, 0] } },
       ];
+      // Phones (P27): the label starts just right of "today", so it drops the year (the release
+      // is days away) and Portuguese abbreviates "próximo", keeping it inside the chart.
+      const narrow = isNarrow();
       if (meta.next_wasde && meta.next_wasde > outlook.as_of_close)
         lines.push({
           xAxis: meta.next_wasde,
-          name: `${t("next WASDE", "próximo WASDE")} ${f.date(meta.next_wasde)}`,
+          name: narrow
+            ? `${t("next WASDE", "próx. WASDE")} ${f.date(meta.next_wasde).replace(/,?\s+\d{4}$/, "")}`
+            : `${t("next WASDE", "próximo WASDE")} ${f.date(meta.next_wasde)}`,
           label: { align: "left", padding: [0, 0, 0, 4] },
         });
       const fm = (v: number) => f.num(v, dec);
       return {
         ...baseOption(tk),
         legend: { show: false },
-        grid: { ...baseOption(tk).grid, right: 64, top: 48 },
+        // The end label ("no change" / "sem variação") needs its width right of the plot.
+        grid: { ...baseOption(tk).grid, right: t(64, 80), top: 48 },
         tooltip: {
           ...baseOption(tk).tooltip,
           trigger: "axis",

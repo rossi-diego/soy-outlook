@@ -7,10 +7,26 @@ const ROUTES = ["/", "/wasde/", "/track-record/", "/methodology/"];
 test.use({ viewport: { width: 390, height: 844 } });
 
 for (const route of ROUTES)
-  for (const theme of ["light", "dark"] as const)
-    test(`390 px ${theme}: ${route} fits the screen`, async ({ page }, info) => {
-      await page.addInitScript((t) => localStorage.setItem("wasde-theme", t), theme);
+  for (const [theme, loc] of [
+    ["light", "en"],
+    ["dark", "en"],
+    ["light", "pt-BR"],
+  ] as const)
+    test(`390 px ${theme} ${loc}: ${route} fits the screen`, async ({ page }, info) => {
+      await page.addInitScript(
+        ([t, l]) => {
+          localStorage.setItem("wasde-theme", t);
+          localStorage.setItem("soy-locale", l);
+        },
+        [theme, loc],
+      );
       await page.goto(route);
+      await page.waitForTimeout(600);
+      // Every fold open (data tables, statistician notes, stress replay): none may widen the page.
+      for (let i = 0; i < (await page.locator("details").count()); i++) {
+        const d = page.locator("details").nth(i);
+        if (!(await d.evaluate((el) => (el as HTMLDetailsElement).open))) await d.locator("summary").first().click();
+      }
       await page.waitForTimeout(600);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);

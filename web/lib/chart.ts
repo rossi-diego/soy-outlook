@@ -92,3 +92,10 @@ export const axisCommon = (t: Tokens) => ({
 /** An ECharts option object; typed loosely so this module never imports ECharts. */
 export type ChartOption = Record<string, unknown>;
 export type OptionBuilder = (t: Tokens) => ChartOption;
+
+/**
+ * True below the sm breakpoint (640 px). Option builders run in the browser only (ECharts is
+ * client-side), so phones can get fewer axis labels and shorter marker text (P27).
+ */
+export const isNarrow = (): boolean =>
+  typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639.98px)").matches;

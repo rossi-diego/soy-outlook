@@ -149,3 +149,11 @@ for (const route of ROUTES)
     };
     expect({ onlyEn: diff(en, pt), onlyPt: diff(pt, en) }).toEqual({ onlyEn: [], onlyPt: [] });
   });
+
+test("pt-BR what-if button reads in plain Portuguese: lower-case months joined by 'contra'", async ({ page }) => {
+  await setLocale(page, "pt-BR");
+  await page.goto("/wasde/");
+  await expect(page.getByRole("button", { name: /^Carregar o último/ })).toHaveText(
+    /^Carregar o último \((janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro) contra [a-zç]+\)$/,
+  );
+});
