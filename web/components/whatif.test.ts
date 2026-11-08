@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { predictionInterval, sliderRange } from "./WasdeWhatIf";
+import { predictionInterval, sliderRange, typicalRevText } from "./WasdeWhatIf";
 
 describe("sliderRange", () => {
   it("uses the realistic base range when history and the latest revision fit in it", () => {
@@ -24,5 +24,17 @@ describe("predictionInterval", () => {
     const pi = predictionInterval([-2, 0], [[0.75, 0], [0, 1]], 3, [1, 0]);
     expect(pi.mean).toBe(-2);
     expect(pi.sd).toBeCloseTo(Math.sqrt(0.75 + 9), 10);
+  });
+});
+
+describe("typicalRevText", () => {
+  it("prints median, 1-in-10 and latest revisions with units", () => {
+    expect(typicalRevText("pp", 0.41, 2.07, 0.09)).toBe("Typical revision ±0.41 pp · 1 in 10 beyond ±2.07 pp · latest +0.09 pp");
+  });
+  it("says 'usually unchanged' for a zero median and 'latest unchanged' for a zero revision", () => {
+    expect(typicalRevText("Mt", 0, 2, 0)).toBe("Usually unchanged · 1 in 10 beyond ±2.0 Mt · latest unchanged");
+  });
+  it("handles missing statistics", () => {
+    expect(typicalRevText("Mt", null, null, null)).toBe("Typical revision —");
   });
 });

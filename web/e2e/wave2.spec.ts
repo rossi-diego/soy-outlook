@@ -20,6 +20,10 @@ test("hero chart: CBOT by default, 18-month/3-year toggle, labelled FOB shift (P
   await expect(caption).toContainText("CBOT soybeans, US cents per bushel");
   await expect(chart.locator("svg").getByText("no change")).toBeVisible();
   await expect(chart.locator("svg").getByText("today")).toBeVisible();
+  const meta = await json(page, "meta.json");
+  if ([1, 3, 6].every((h) => meta.champion[String(h)] === "rw")) {
+    await expect(page.getByTestId("validation-start")).toHaveText(meta.splits.validation[0].slice(0, 4));
+  }
   await chart.getByRole("radio", { name: "FOB shift" }).click();
   await expect(caption).toContainText("constant shift");
   await expect(caption).toContainText("not a historical FOB series");

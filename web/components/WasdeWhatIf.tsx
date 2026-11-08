@@ -22,6 +22,22 @@ const fmtRev = (v: number, unit: string) => {
 };
 
 /**
+ * The line under each slider: median and 90th-percentile absolute revision and the latest one.
+ * A zero median (most reports leave the line unchanged, e.g. Brazil's crop) reads "usually
+ * unchanged" rather than "±0.0 Mt", and a zero latest revision reads "latest unchanged".
+ */
+export function typicalRevText(unit: string, median: number | null, p90: number | null, latest: number | null): string {
+  const d = unit === "pp" ? 2 : 1;
+  const zero = (v: number) => Math.abs(v) < 0.5 * 10 ** -d;
+  const parts = [
+    median === null ? "Typical revision —" : zero(median) ? "Usually unchanged" : `Typical revision ±${num(median, d)} ${unit}`,
+  ];
+  if (p90 !== null) parts.push(`1 in 10 beyond ±${num(p90, d)} ${unit}`);
+  if (latest !== null) parts.push(zero(latest) ? "latest unchanged" : `latest ${fmtRev(latest, unit)}`);
+  return parts.join(" · ");
+}
+
+/**
  * Slider half-range for one revision: the realistic base (±1 pp, ±3 Mt), widened only so the
  * historical 1-in-10 revision and the latest revision both fit. Data-driven, never narrower.
  */
@@ -165,9 +181,7 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
                 className={`w-full accent-[var(--accent)] ${grey ? "opacity-60" : ""}`}
               />
               <p className="tabular text-xs text-ink-2" data-testid="typical-rev">
-                Typical revision {it.median_abs_rev === null ? "—" : `±${num(it.median_abs_rev, it.unit === "pp" ? 2 : 1)} ${it.unit}`}
-                {it.p90_abs_rev !== null && ` · 1 in 10 beyond ±${num(it.p90_abs_rev, it.unit === "pp" ? 2 : 1)}`}
-                {it.latest_rev !== null && ` · latest ${fmtRev(it.latest_rev, it.unit)}`}
+                {typicalRevText(it.unit, it.median_abs_rev, it.p90_abs_rev, it.latest_rev)}
               </p>
               <p className="text-xs text-muted">
                 Each {it.unit === "pp" ? "+1 pp" : "+1 Mt"}: {it.usd_t_per_unit > 0 ? "+" : "−"}
@@ -215,7 +229,8 @@ export default function WasdeWhatIf({ reaction, buPerT }: Props) {
         new marketing year starts), estimated jointly and scaled to today&apos;s price. The interval adds the estimation
         uncertainty of the coefficients (HC1 covariance) to the release-day noise they do not explain (residual sd{" "}
         {num(reaction.resid_sd_usd_t, 1)} USD/t); the revisions explain {num(reaction.r2 * 100, 0)}% of release-day moves.
-        Typical revision: the median absolute revision over the same {reaction.n_reports} reports.
+        Typical revision: the median absolute revision over the same {reaction.n_reports} reports (&ldquo;usually
+        unchanged&rdquo; when most of them left the line as it was).
         {flagged > 0 &&
           ` ${flagged} of ${reaction.items.length} coefficients are greyed because they do not survive the Holm adjustment or have an unexpected sign. They stay in the total: dropping them after seeing the results would be selection.`}{" "}
         No new regressors are added here: any would be a pre-registered change tested under Holm.

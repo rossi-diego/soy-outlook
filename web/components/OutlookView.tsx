@@ -425,7 +425,8 @@ export default function OutlookView({ meta, outlook }: Props) {
 
       {championAllRw && (
         <aside className="card border-l-4 p-4 text-sm leading-relaxed text-ink-2" style={{ borderLeftColor: "var(--accent)" }}>
-          <strong className="text-ink">No reliable direction signal.</strong> Tested on every WASDE since 2016, no model
+          <strong className="text-ink">No reliable direction signal.</strong> Tested on every WASDE since{" "}
+          <span data-testid="validation-start">{meta.splits.validation[0].slice(0, 4)}</span>, no model
           (including one built on WASDE revisions) predicted CBOT soybeans better than &ldquo;no change&rdquo;. So the
           central line is today&apos;s price, and what this page adds is a <em>tested range</em> labelled with the hit rate
           it actually achieved.{" "}
