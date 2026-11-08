@@ -38,6 +38,20 @@ async function openFolds(page: Page) {
     if (!(await d.evaluate((el) => (el as HTMLDetailsElement).open))) await d.locator("summary").first().click();
   }
   await expect(page.locator('main [aria-busy="true"]')).toHaveCount(0, { timeout: 30_000 });
+  // Folds render their body lazily after the click; wait until <main> stops changing so both
+  // locales are read in the same, fully rendered state.
+  let prev = -1;
+  await expect
+    .poll(
+      async () => {
+        const len = await page.locator("main").evaluate((el) => el.textContent?.length ?? 0);
+        const stable = len === prev;
+        prev = len;
+        return stable;
+      },
+      { timeout: 30_000, intervals: [400] },
+    )
+    .toBe(true);
 }
 
 test.describe("browser language pt-BR", () => {

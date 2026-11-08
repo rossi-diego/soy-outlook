@@ -68,6 +68,33 @@ Fixed in `src/soyforecast/config.py` and committed before any of the numbers bel
 
 **Decision panel (P18).** The published range method's quantiles are also exported on a finer grid (5% to 95% in 5% steps). It is the same method on more levels, so nothing is chosen on it. The panel on / is client-side arithmetic: side (producer long or buyer short), tonnes, hedge ratio and currency; downside vs selling (or buying) at today's close at the 1-in-10 adverse level (q10 for a producer, q90 for a buyer) and the rough 1-in-40 level (q2.5 / q97.5), times tonnes × (1 − hedge ratio). CBOT only, with premium and BRL held fixed, so the hedge is futures at today's close and the basis is unhedged. Labelled "illustrative, range-based, not VaR", with the 6-month under-coverage shown inline. No target-price probability (it reads as directional advice) and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors).
 
+## v2.1 panel round (2026-11-08)
+
+Twelve reviewer lenses (quant, stats, trader, farmer, risk, UX, dataviz, frontend, data engineering, software engineering, recruiter, skeptic) scored v2 and voted on 28 proposals in two rounds (adoption bar: two thirds). The agreed final wording of each adopted proposal was the spec; each unit was implemented, then audited against that wording by a separate reviewer.
+
+**Adopted and shipped (25).**
+
+| Wave | Proposals | What shipped |
+|---|---|---|
+| 1 · honesty and operations | P9, P6, P8, P15, P3, P11, P5, P1 (phase 1), P26, P23 | Raw premium export removed; only a derived 12-row monthly table with a validated data card is committed. Flat stale-flagged premium default and an explicit-sum headline. Origin-distance flag. Ranges renamed "empirical quantiles of past errors", centring pre-registered and chosen on validation. Event study with Holm, HC1 covariance, placebo, split-sample and roll-exclusion checks; what-if with an 80% prediction interval. Range labels built from measured coverage, amber below nominal. "CBOT price risk only" label on FOB/R$ bands. Author, metadata, OG card. Hermetic CI, gated scheduled refresh, freshness banner and an append-only outlook archive. |
+| 2 · rigour and contracts | P25, P24, P4, P2, P16, P19, P10 (minimum step), P21, P22, P13, P28 | Pydantic site contract with staged publish and generated TS types. Pinned WASDE input, PTAX checks, uv.lock, run manifest and snapshots. Overlap-aware calibration (CIs, n_eff, tail split, Kupiec, Christoffersen, MDE). Pre-registered vol-scaled range challengers (the baseline won). Inference rule v2. Stress replay. Reference contract and roll flags. Hero chart whiskers, Track record verdict and "For statisticians" fold, realistic what-if sliders, lazy charts and a size budget. |
+| 3 · decision use and audience | P18, P14, P20, P27 | Decision panel (downside vs selling today at 1-in-10 and rough 1-in-40, illustrative, not VaR). Release-day move band with an out-of-sample hit rate and the pre-registered v2 volatility ladder. pt-BR toggle with R$/saca and an optional user-entered port-to-interior discount. WCAG AA, axe gate in CI and a tested 390 px layout. |
+
+**Rejected (2).** P12, measuring surprise instead of revision (25% support): applying a revision beta to user-entered surprises is inconsistent, and analyst-poll data has provenance and licence problems; P11's relabelling covers it. P17, a second pre-registered feature set (8%): designed after seeing v1's null result, it would read as specification search.
+
+**Unresolved (1).** P7, a premium curve by shipment month tied to a named contract (58%). Its agreed part, one FOB bridge line per card, shipped with P6, and each card shows the shipment-month median as reference text only. Whether to add an opt-in seasonal premium path stays open; without a sourced premium series (the owner confirmed there is no alternative source) it would invent provenance.
+
+**Still partial, by design.**
+- P1 phase 2 (a joint CBOT × PTAX × premium band with a coverage backtest) needs a premium series with documented provenance. The cards show the seasonal p10-p90 premium as a separate band instead.
+- P10: targets are not rebuilt on specific contracts; that is the v2.1 roadmap item.
+- P14: the volatility ladder is pre-registered only (v2).
+- P13: the optional display-only US yield/area/production/export lines need new ingest work.
+- The validation gate's shape check is now the P25 pydantic contract; Docker was built only in CI.
+
+**Final numbers (live run, CBOT close of 6 Nov 2026, October 2026 WASDE).** Champion: no change at every horizon; all nine Holm-adjusted Clark-West p = 1.0. No-change MAE, validation 2016-2023: 20.3 / 37.3 / 50.8 USD/t at 1 / 3 / 6 months; holdout 2024+: 14.2 / 20.3 / 31.4. Published range method: empirical quantiles of past errors, median-centred (0.974 of the raw score on validation; 1.008 on the holdout, reported only). It beat EWMA FHS (1.096) and the lognormal vol band (1.071) on validation; the vol band scored 0.804 on the holdout, reported only. 80% range hit rate, validation / holdout: 80% / 84%, 75% / 90%, 71% / 85% (6 months flagged); 95%: 96% / 97%, 90% / 97%, 89% / 100%. Event study: no revision survives Holm (strongest, US soybean stocks-to-use, −2.06 USD/t per pp, p 0.019, Holm p 0.112); joint p 0.00041, R² 0.18. Release-day move ±4.5 USD/t typical, ±11.6 for 1 report in 10 (out-of-sample hit rate 89.5% in validation, 96.6% in the holdout).
+
+The live run re-fetched the 6 Nov 2026 close as 1,193.75¢/bu; the outlook archived earlier from the cached prices used 1,189¢/bu. The archive is append-only, so it keeps the value that was published.
+
 ## Definition of done
 Static Next.js site with real data, an honest README with backtest numbers and screenshots, `docker compose up`,
 CI (Python checks → live pipeline → site build + Playwright), tests for no look-ahead.

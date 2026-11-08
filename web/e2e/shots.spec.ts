@@ -30,3 +30,22 @@ for (const [name, url] of PAGES) {
     });
   }
 }
+
+// pt-BR captures of the Outlook page (P20): R$/saca by default, Brazilian number and date formats.
+// The README shows the desktop page in light and the phone page in dark.
+for (const [theme, width] of [["light", 1280], ["dark", 390]] as const) {
+  test(`outlook pt-BR ${theme} ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.addInitScript((t) => {
+      localStorage.setItem("wasde-theme", t);
+      localStorage.setItem("soy-locale", "pt-BR");
+    }, theme);
+    await page.goto("/");
+    await page.waitForTimeout(1200);
+    if (width === 390) {
+      await page.screenshot({ path: `${DIR}/outlook-pt-mobile-${theme}.png`, clip: { x: 0, y: 0, width: 390, height: 1688 } });
+    } else {
+      await page.screenshot({ path: `${DIR}/outlook-pt-${theme}.png`, fullPage: true });
+    }
+  });
+}

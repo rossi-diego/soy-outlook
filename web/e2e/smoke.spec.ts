@@ -17,7 +17,9 @@ test("wasde what-if responds to a revision", async ({ page }) => {
   const slider = page.getByLabel("US soybean stocks-to-use");
   await slider.focus();
   const before = await page.getByTestId("pi80").textContent();
-  await page.keyboard.press("ArrowRight");
+  // Sliders step by 0.01; a single step can move the interval by less than its display rounding,
+  // so move a quarter of a point (well inside the typical revision) before comparing.
+  for (let i = 0; i < 25; i++) await page.keyboard.press("ArrowRight");
   await expect(page.getByText(/Historical average reaction on release day/)).toBeVisible();
   await expect(page.getByTestId("pi80")).not.toHaveText(before ?? "");
   await expect(page.getByRole("button", { name: "Clear" })).toBeEnabled();

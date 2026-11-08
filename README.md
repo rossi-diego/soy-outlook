@@ -33,7 +33,7 @@ Built by **Diego Rossi** · [LinkedIn](https://www.linkedin.com/in/rossi-diego/)
 The Paranaguá FOB price is the CBOT soybean price plus a port premium. This project forecasts the CBOT part after every WASDE since July 2010, using only what was public that day. **The finding: no model beat "no change".** That includes ARIMA, the average past change and a ridge regression on WASDE revisions, and it holds for both the 2016–2023 validation period and the 2024–2026 holdout, which was not used for any model choice (I had seen 2024–25 prices, so it is not a blind test). In a liquid futures market that is the expected result, and showing it with a test fixed in advance is more useful than a leaky "1.46% MAPE". What the project does deliver:
 
 1. **A tested range, labelled by what it achieved.** Over 2016–2023, the 1-month 80% range held the actual price 80% of the time; on the holdout it held 84%. The 6-month 80% range held only 71% in validation, and the site says so next to it.
-2. **The size of a WASDE release-day move, and an honest read of what drives it.** The typical release-day move is about ±4.4 USD/t, and 1 report in 10 moves CBOT by more than ±11.6 USD/t. The revisions jointly explain 18% of those moves, but no single revision coefficient survives a Holm adjustment across the six tested (the strongest, US soybean stocks-to-use, has Holm p = 0.11), and that one is unstable: about −5.6 USD/t per pp in 2010–2017, −0.6 from 2018.
+2. **The size of a WASDE release-day move, and an honest read of what drives it.** The typical release-day move is about ±4.5 USD/t (1.0% of the price), and 1 report in 10 moves CBOT by more than ±11.6 USD/t. The revisions jointly explain 18% of those moves, but no single revision coefficient survives a Holm adjustment across the six tested (the strongest, US soybean stocks-to-use, has Holm p = 0.11), and that one is unstable: about −5.7 USD/t per pp in 2010–2017, −0.6 from 2018 (difference p = 0.001).
 3. **The premium and the exchange rate as explicit inputs.** That turns the CBOT range into FOB USD/t or R$ per sack. The default premium is one stale monthly median held flat, so "CBOT unchanged" means FOB unchanged.
 
 | CBOT, USD/t, mean absolute error | 1 month | 3 months | 6 months |
@@ -77,7 +77,7 @@ Everything above was removed. The old notebooks stay in `notebooks/archive/` for
 | Page | Question it answers |
 |---|---|
 | **Outlook** | How far could FOB / CBOT / R$ per sack move in 1, 3 and 6 months, within an 80% and a 95% range? Premium and FX are your inputs. A decision panel (side, tonnes, hedge ratio, USD or BRL) turns the ranges into downside vs selling today at the 1-in-10 and rough 1-in-40 levels, from a published 5–95% quantile grid; it is labelled illustrative, range-based not VaR, CBOT only with the basis unhedged, and shows the 6-month under-coverage inline. No target-price probability and no expected shortfall (each 95% tail rests on about 1.5 of 60 overlapping errors). The chart shows the ranges as whiskers next to 18 months (or 3 years) of CBOT closes, with today and the next WASDE marked; a folded stress replay applies five pre-registered past shocks to today's price (illustrative scenarios, not probabilities). |
-| **This WASDE** | How far does CBOT usually move on release day? The empirical band (±4.4 USD/t typical, ±11.6 for 1 report in 10) is drawn around today's price with its out-of-sample hit rate: scored on earlier reports only, the 1-in-10 band held 90% of 86 reports in 2016–2023 and 97% of 29 in 2024+. What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. |
+| **This WASDE** | How far does CBOT usually move on release day? The empirical band (±4.5 USD/t typical, ±11.6 for 1 report in 10) is drawn around today's price with its out-of-sample hit rate: scored on earlier reports only, the 1-in-10 band held 90% of 86 reports in 2016–2023 and 97% of 29 in 2024+. What changed in the latest report? What has the market paid on release day for each revision? Includes a what-if calculator with realistic slider ranges, the typical size of each revision, and a *Load latest* button that fills in the latest report's revisions, always shown with its 80% prediction interval. |
 | **Track record** | Did any model beat "no change"? A one-line verdict with the smallest effect the tests could have detected, where the 80% range missed (below vs above), a dot plot of each model's error against no change, and past forecasts against actual prices (holdout shaded, misses and crop-roll windows marked). The DM/CW tests, Kupiec/Christoffersen calibration tests and the range-method comparison sit in a **For statisticians** fold. |
 | **Methodology** | Plain-language method, units, limitations and the audit of v1. |
 
@@ -90,6 +90,12 @@ On a phone (390 px): cards stack, charts are 260 px high, segmented controls use
 | Outlook, light | Outlook, dark | This WASDE, light | Track record, dark |
 |---|---|---|---|
 | ![Outlook page on a 390 px phone, light theme](docs/screenshots/outlook-mobile-light.png) | ![Outlook page on a 390 px phone, dark theme](docs/screenshots/outlook-mobile-dark.png) | ![This WASDE page on a 390 px phone, light theme](docs/screenshots/wasde-mobile-light.png) | ![Track record page on a 390 px phone, dark theme](docs/screenshots/track-record-mobile-dark.png) |
+
+In Portuguese (pt-BR), the same page defaults to R$/saca with Brazilian number and date formats; every number matches the English page.
+
+| Perspectiva, desktop | Perspectiva, celular (escuro) |
+|---|---|
+| ![Outlook page in Portuguese, light theme, prices in R$ per sack](docs/screenshots/outlook-pt-light.png) | ![Outlook page in Portuguese on a 390 px phone, dark theme](docs/screenshots/outlook-pt-mobile-dark.png) |
 
 ## Architecture
 
@@ -176,7 +182,7 @@ Two workflows close the data loop (details and owner setup in [docs/REFRESH.md](
 │   ├── evaluation/   backtest.py (purging, range methods and their rule, centring rule, calibration stats, champion) · stats.py (DM-HLN, Clark-West, Holm, HAC / block-bootstrap hit-rate CIs, Kupiec, Christoffersen, MDE, Pesaran-Timmermann)
 │   ├── publish/      schema.py (pydantic site contract) · web_json.py (validated, staged publish) · archive.py (append-only outlook archive) · lineage.py (run manifest) · validate.py (refresh gate)
 │   ├── pipeline.py · cli.py · errors.py (exit codes) · config.py (pre-registered horizons, splits, features) · freshness.py (close guard, source status) · fixtures.py · units.py · logs.py
-├── tests/            100 tests: no look-ahead, intervals, event study, premium card, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
+├── tests/            109 tests: no look-ahead, intervals, event study, premium card, ingest checks (httpx.MockTransport), JSON contract, close guard, gate, archive
 │   └── fixtures/bronze/  synthetic WASDE, CBOT and PTAX inputs for the hermetic CI run
 ├── web/              Next.js static site (Outlook, This WASDE, Track record, Methodology)
 │   └── scripts/      brand-assets.mjs: static social card (og.png) and icons from their sources
