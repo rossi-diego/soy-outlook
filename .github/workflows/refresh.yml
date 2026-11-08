@@ -38,6 +38,7 @@ jobs:
     env:
       SOY_DATA_DIR: ${{ github.workspace }}/data
       SOY_WEB_DATA_DIR: ${{ github.workspace }}/web/public/data
+      SOY_WASDE_LOCK: ${{ github.workspace }}/data/wasde.lock.json
       GH_TOKEN: ${{ secrets.REFRESH_TOKEN || github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -73,9 +74,11 @@ jobs:
         if: steps.guard.outputs.should_run == 'true'
         run: cp -r web/public/data "$RUNNER_TEMP/previous"
 
+      # --update-pin moves data/wasde.lock.json to the latest WASDE Tracker release once the new
+      # file passes the checks against the cache; the pin change is part of the data PR.
       - name: Live pipeline run
         if: steps.guard.outputs.should_run == 'true'
-        run: soyforecast --json-logs run
+        run: soyforecast --json-logs run --update-pin
 
       - name: Save the bronze cache
         if: steps.guard.outputs.should_run == 'true'
@@ -129,7 +132,9 @@ jobs:
           token: ${{ secrets.REFRESH_TOKEN || github.token }}
           branch: bot/data-refresh
           delete-branch: true
-          add-paths: web/public/data
+          add-paths: |
+            web/public/data
+            data/wasde.lock.json
           commit-message: "chore(data): refresh to the ${{ steps.validate.outputs.as_of_close }} close"
           title: "chore(data): refresh to the ${{ steps.validate.outputs.as_of_close }} close"
           body: |
@@ -140,7 +145,7 @@ jobs:
             - validation gate: passed (shape, freshness, row deltas, append-only archive)
             - site build and Playwright: passed on this data
 
-            Only `web/public/data` changes. Archived outlooks are append-only.
+            Only `web/public/data` and the WASDE pin (`data/wasde.lock.json`) change. Archived outlooks are append-only.
           labels: data-refresh
 
       - name: Enable auto-merge

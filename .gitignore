@@ -15,6 +15,8 @@ htmlcov/
 # The raw daily premium export must never be committed (see DATA_LICENSES.md).
 data/*
 !data/seed/
+# The WASDE input pin (release tag + sha256) is reviewed like code.
+!data/wasde.lock.json
 data/seed/*
 !data/seed/paranagua_premium_monthly.csv
 !data/seed/paranagua_premium_monthly.meta.json

@@ -1,18 +1,47 @@
-"""Command line: `soyforecast run` builds everything and publishes the site data."""
+"""Command line: `soyforecast run` builds everything and publishes the site data.
+
+Exit codes are documented in soyforecast.errors: 1 validation gate, 2 usage, 3 input data
+unavailable, 4 contract broken (nothing published).
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
+from typing import TypeVar
 
 import typer
 
 from soyforecast.config import Settings
+from soyforecast.errors import SoyError
 from soyforecast.logs import configure_logging, get_logger
 
 app = typer.Typer(
     add_completion=False, help="Point-in-time soybean price forecasts after each WASDE."
 )
 log = get_logger(__name__)
+T = TypeVar("T")
+
+OFFLINE_OPTION = typer.Option(False, help="Use cached bronze files only (no network).")
+UPDATE_PIN_OPTION = typer.Option(
+    False, help="Move the WASDE pin (data/wasde.lock.json) to the latest checked release."
+)
+
+
+def _settings(offline: bool) -> Settings:
+    """Settings from the environment; --offline overrides SOY_OFFLINE for this run only."""
+    settings = Settings()
+    return replace(settings, offline=True) if offline else settings
+
+
+def _guarded(fn: Callable[[], T]) -> T:
+    """Run a command body and turn our errors into a logged message and an exit code."""
+    try:
+        return fn()
+    except SoyError as exc:
+        log.error("command.failed", error=type(exc).__name__, detail=str(exc))
+        raise typer.Exit(exc.exit_code) from exc
 
 
 @app.callback()
@@ -21,26 +50,26 @@ def main(json_logs: bool = typer.Option(False, "--json-logs", help="JSON log lin
 
 
 @app.command()
-def run(offline: bool = typer.Option(False, help="Use cached bronze files only.")) -> None:
+def run(offline: bool = OFFLINE_OPTION, update_pin: bool = UPDATE_PIN_OPTION) -> None:
     """Ingest, build features, backtest, forecast and write web/public/data/*.json."""
-    import os
-
-    if offline:
-        os.environ["SOY_OFFLINE"] = "1"
     from soyforecast.pipeline import run as run_pipeline
     from soyforecast.publish.web_json import publish
 
-    settings = Settings()
-    artefacts = run_pipeline(settings)
-    publish(artefacts, settings)
+    settings = _settings(offline)
+
+    def body() -> None:
+        publish(run_pipeline(settings, update_pin=update_pin), settings)
+
+    _guarded(body)
 
 
 @app.command()
-def ingest() -> None:
+def ingest(offline: bool = OFFLINE_OPTION, update_pin: bool = UPDATE_PIN_OPTION) -> None:
     """Refresh the bronze layer only (WASDE parquet, CBOT closes, PTAX)."""
     from soyforecast.pipeline import ingest as do_ingest
 
-    do_ingest(Settings())
+    settings = _settings(offline)
+    _guarded(lambda: do_ingest(settings, update_pin=update_pin))
 
 
 RAW_PREMIUM_OPTION = typer.Option(..., help="Private daily premium export (date, premium_c_bu).")
@@ -55,13 +84,10 @@ def derive_premium(
 
     The raw file stays outside the repository; only the derived table and card are committed.
     """
-    import os
-
-    if offline:
-        os.environ["SOY_OFFLINE"] = "1"
     from soyforecast.pipeline import derive_premium as do_derive
 
-    do_derive(Settings(), raw)
+    settings = _settings(offline)
+    _guarded(lambda: do_derive(settings, raw))
 
 
 def _github_output(**values: object) -> None:
@@ -151,5 +177,5 @@ def make_fixtures(
     log.info("fixtures.written", files=[p.name for p in paths], path=str(out))
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     app()

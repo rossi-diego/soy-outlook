@@ -37,7 +37,7 @@ def test_pipeline_publishes_the_site_contract(
         "reports": 196,
     }
 
-    def fake_ingest(settings, sources=None):
+    def fake_ingest(settings, sources=None, **kw):
         settings.ensure()
         return synthetic_wasde, synthetic_prices, ptax, premium, manifest
 

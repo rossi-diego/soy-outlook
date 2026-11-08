@@ -55,7 +55,7 @@ jobs:
           HTTP_PROXY: http://127.0.0.1:9
           HTTPS_PROXY: http://127.0.0.1:9
           ALL_PROXY: http://127.0.0.1:9
-          SOY_WASDE_URL: http://127.0.0.1:9/blocked.parquet
+          SOY_WASDE_RELEASES_URL: http://127.0.0.1:9/blocked
         run: soyforecast --json-logs run --offline
       - name: Validation gate on the fixture output (shape only; fixture dates are fixed)
         run: soyforecast --json-logs validate --data "$SOY_WEB_DATA_DIR" --allow-stale

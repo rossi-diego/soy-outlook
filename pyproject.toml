@@ -62,7 +62,7 @@ disallow_untyped_defs = false
 
 [tool.coverage.run]
 source = ["soyforecast"]
-omit = ["src/soyforecast/cli.py"]
+omit = []
 
 [tool.coverage.report]
 show_missing = true

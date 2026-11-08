@@ -27,6 +27,7 @@ from typing import Any
 import pandas as pd
 
 from soyforecast.config import PREMIUM_PROFILE_FIRST_YEAR, STALE_PREMIUM_DAYS
+from soyforecast.errors import InputDataError
 
 PREMIUM_LIMIT_C_BU = 300  # quotes at exactly +/-300 look like terminal placeholders
 CARD_SCHEMA = 1
@@ -46,7 +47,7 @@ CARD_REQUIRED = (
 )
 
 
-class PremiumDataError(ValueError):
+class PremiumDataError(InputDataError, ValueError):
     """The derived premium table or its data card is missing or inconsistent."""
 
 

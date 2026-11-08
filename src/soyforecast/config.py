@@ -112,9 +112,18 @@ MAX_ROW_LOSS_SHARE = 0.02
 # but never enters the unseen record, so the archive cannot be backfilled with hindsight.
 ARCHIVE_MAX_LAG_BDAYS = 1
 
-WASDE_RELEASE_URL = "https://github.com/rossi-diego/wasde-monthly-report/releases/latest/download/wasde_full.parquet"
+# Inputs (v2.1, P24). The WASDE history is pinned to one release tag of the WASDE Tracker and
+# its sha256 in data/wasde.lock.json; a normal run downloads exactly that asset and rejects any
+# other bytes. `--update-pin` (the scheduled refresh) resolves the latest tag, checks the new file
+# against the cache, and rewrites the lock, so every change of input is a reviewable diff.
+WASDE_RELEASES_URL = "https://github.com/rossi-diego/wasde-monthly-report/releases"
+WASDE_ASSET = "wasde_full.parquet"
 SOY_TICKER = "ZS=F"
 PTAX_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados"
+# A PTAX download only replaces the cache when every rate lies in this open BRL/USD range,
+# no day-on-day move is larger than PTAX_MAX_DAILY_CHANGE, and it ends at or after the cache.
+PTAX_BOUNDS: tuple[float, float] = (1.0, 15.0)
+PTAX_MAX_DAILY_CHANGE = 0.15
 
 
 @dataclass(frozen=True)
@@ -127,7 +136,13 @@ class Settings:
             os.getenv("SOY_WEB_DATA_DIR", ROOT / "web" / "public" / "data")
         )
     )
-    wasde_url: str = field(default_factory=lambda: os.getenv("SOY_WASDE_URL", WASDE_RELEASE_URL))
+    wasde_releases_url: str = field(
+        default_factory=lambda: os.getenv("SOY_WASDE_RELEASES_URL", WASDE_RELEASES_URL)
+    )
+    # The pin is part of the repository, not of the data folder (CI points SOY_DATA_DIR elsewhere).
+    wasde_lock: Path = field(
+        default_factory=lambda: Path(os.getenv("SOY_WASDE_LOCK", ROOT / "data" / "wasde.lock.json"))
+    )
     wasde_local: str | None = field(default_factory=lambda: os.getenv("SOY_WASDE_PARQUET") or None)
     offline: bool = field(default_factory=lambda: os.getenv("SOY_OFFLINE", "0") == "1")
     log_level: str = field(default_factory=lambda: os.getenv("SOY_LOG_LEVEL", "INFO"))

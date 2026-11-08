@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from soyforecast.config import SOY_TICKER
+from soyforecast.errors import InputDataError
 from soyforecast.freshness import SourceLog
 from soyforecast.ingest._cache import atomic_write_parquet
 from soyforecast.logs import get_logger
@@ -26,7 +27,7 @@ MAX_CACHE_RATIO_DRIFT = 0.02
 START = "2004-01-01"
 
 
-class PriceDataError(RuntimeError):
+class PriceDataError(InputDataError):
     pass
 
 

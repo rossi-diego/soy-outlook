@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pandas as pd
 
 from soyforecast.config import HORIZONS, Settings
@@ -60,20 +61,28 @@ class Artefacts:
 
 
 def ingest(
-    settings: Settings, sources: SourceLog | None = None
+    settings: Settings,
+    sources: SourceLog | None = None,
+    *,
+    update_pin: bool = False,
+    transport: httpx.BaseTransport | None = None,
 ) -> tuple[pd.DataFrame, pd.Series, pd.Series, PremiumTable, dict[str, Any]]:
+    """Bronze layer. `transport` replaces the network in tests (httpx.MockTransport)."""
     settings.ensure()
-    wasde = load_wasde(fetch_wasde(settings, sources))
-    manifest = json.loads((settings.bronze / "wasde_manifest.json").read_text())
+    wasde_path = fetch_wasde(settings, sources, update_pin=update_pin, transport=transport)
+    wasde = load_wasde(wasde_path)
+    manifest = json.loads((settings.bronze / "wasde_manifest.json").read_text(encoding="utf-8"))
     prices = fetch_soy_prices(settings.bronze, offline=settings.offline, sources=sources)
-    ptax = fetch_ptax(settings.bronze, offline=settings.offline, sources=sources)
+    ptax = fetch_ptax(
+        settings.bronze, offline=settings.offline, sources=sources, transport=transport
+    )
     premium = load_premium_table(settings.premium_table, settings.premium_card)
     return wasde, prices, ptax, premium, manifest
 
 
-def run(settings: Settings) -> Artefacts:
+def run(settings: Settings, *, update_pin: bool = False) -> Artefacts:
     sources = SourceLog()
-    wasde, prices, ptax, premium, manifest = ingest(settings, sources)
+    wasde, prices, ptax, premium, manifest = ingest(settings, sources, update_pin=update_pin)
     vintages = build_vintages(wasde)
     vintages.to_parquet(settings.silver / "wasde_vintages.parquet")
     dataset = build_dataset(vintages, prices)
@@ -93,24 +102,24 @@ def run(settings: Settings) -> Artefacts:
     reaction = release_day_reaction(vintages, prices, float(live["p0_c_bu"]))
     log.info("live.forecast", anchor=str(live["anchor_date"].date()), champion=champion)
     return Artefacts(
-        manifest,
-        vintages,
-        prices,
-        ptax,
-        premium,
-        dataset,
-        live,
-        bt,
-        metrics,
-        tests,
-        champion,
-        forecast,
-        ev,
-        reaction,
-        centring,
-        interval_choice,
-        sources,
-        settings.offline,
+        wasde_manifest=manifest,
+        vintages=vintages,
+        prices=prices,
+        ptax=ptax,
+        premium=premium,
+        dataset=dataset,
+        live=live,
+        backtest=bt,
+        metrics=metrics,
+        tests=tests,
+        champion=champion,
+        forecast=forecast,
+        evidence=ev,
+        reaction=reaction,
+        centring=centring,
+        interval_choice=interval_choice,
+        sources=sources,
+        offline=settings.offline,
     )
 
 
