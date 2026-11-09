@@ -1,4 +1,4 @@
-"""Bronze: the harmonized WASDE history published by rossi-diego/wasde-monthly-report.
+"""Bronze: the harmonized WASDE history published by rossi-diego/usda-reports-dashboard.
 
 Each report's values are kept as published (one vintage per release), which is what makes
 point-in-time features possible.
@@ -67,7 +67,7 @@ class WasdeDataError(InputDataError):
 
 @dataclass(frozen=True)
 class WasdePin:
-    """The WASDE Tracker release this repository is built on (data/wasde.lock.json)."""
+    """The USDA Reports Dashboard release this repository is built on (data/wasde.lock.json)."""
 
     release_tag: str
     asset: str

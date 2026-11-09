@@ -244,11 +244,11 @@ MAX_ROW_LOSS_SHARE = 0.02
 # but never enters the unseen record, so the archive cannot be backfilled with hindsight.
 ARCHIVE_MAX_LAG_BDAYS = 1
 
-# Inputs (v2.1, P24). The WASDE history is pinned to one release tag of the WASDE Tracker and
+# Inputs (v2.1, P24). The WASDE history is pinned to one release tag of the USDA Reports Dashboard and
 # its sha256 in data/wasde.lock.json; a normal run downloads exactly that asset and rejects any
 # other bytes. `--update-pin` (the scheduled refresh) resolves the latest tag, checks the new file
 # against the cache, and rewrites the lock, so every change of input is a reviewable diff.
-WASDE_RELEASES_URL = "https://github.com/rossi-diego/wasde-monthly-report/releases"
+WASDE_RELEASES_URL = "https://github.com/rossi-diego/usda-reports-dashboard/releases"
 WASDE_ASSET = "wasde_full.parquet"
 SOY_TICKER = "ZS=F"
 PTAX_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados"
