@@ -102,7 +102,7 @@ In Portuguese (pt-BR), the same page defaults to R$/saca with Brazilian number a
 ```mermaid
 flowchart LR
     subgraph Sources
-        A[WASDE history<br/>wasde-monthly-report release<br/>as-published vintages]
+        A[WASDE history<br/>usda-reports-dashboard release<br/>as-published vintages]
         B[CBOT ZS=F<br/>Yahoo, validated cache]
         C[BCB PTAX<br/>SGS 1]
         D[Premium: user input<br/>typed in the browser, no data shipped]
@@ -201,7 +201,7 @@ How data reaches the site, in short (details and owner setup in [docs/REFRESH.md
 
 Licences and terms for each source are in [DATA_LICENSES.md](DATA_LICENSES.md).
 
-- USDA WASDE, via [WASDE Tracker](https://github.com/rossi-diego/wasde-monthly-report): every report since July 2010, as published.
+- USDA WASDE, via [USDA Reports Dashboard](https://github.com/rossi-diego/usda-reports-dashboard): every report since July 2010, as published.
 - CBOT soybean futures, Yahoo Finance `ZS=F` (delayed CME data). The response checks follow [soybean-crush-margin](https://github.com/rossi-diego/soybean-crush-margin).
 - Banco Central do Brasil, PTAX selling rate (SGS series 1).
 - Paranaguá premium: not distributed; a user input only.
