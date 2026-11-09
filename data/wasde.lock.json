@@ -1,9 +1,9 @@
 {
   "release_tag": "data-2026-10",
   "asset": "wasde_full.parquet",
-  "sha256": "9455df76b547fa4c78c2b9d0bf5b00a3672d9fd1a4d39acad141b0808d011d4a",
-  "bytes": 2273067,
+  "sha256": "ecbfcc22c05284ac1c461688c9225e3363abef6283a6167d40142e2a6da3db0a",
+  "bytes": 2250360,
   "reports": 193,
   "latest_report": "2026-10",
-  "updated_at": "2026-11-08T00:00:00+00:00"
+  "updated_at": "2026-11-09T00:00:00+00:00"
 }
