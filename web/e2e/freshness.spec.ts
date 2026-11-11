@@ -33,13 +33,16 @@ test("no banner while the close is fresh and the next WASDE is still ahead", asy
 
 test("banner explains an old close and a WASDE that has been released since", async ({ page }) => {
   const f = await freshness(page);
-  await page.clock.setFixedTime(weekdaysAfter(f.as_of_close, f.stale_after_bdays + 1));
+  const now = weekdaysAfter(f.as_of_close, f.stale_after_bdays + 1);
+  await page.clock.setFixedTime(now);
   await page.goto("/");
   const banner = page.getByTestId("stale-banner");
   await expect(banner).toBeVisible();
   await expect(banner).toContainText("may be out of date");
   await expect(banner.locator('[data-reason="close"]')).toContainText(`${f.stale_after_bdays + 1} business days ago`);
-  if (f.next_wasde) await expect(banner.locator('[data-reason="wasde"]')).toBeVisible();
+  const wasdeOut = f.next_wasde !== null && now >= new Date(`${f.next_wasde}T17:00:00Z`);
+  await expect(banner.locator('[data-reason="wasde"]')).toHaveCount(wasdeOut ? 1 : 0);
+  await expect(banner.locator('[data-reason="cache"]')).toHaveCount(f.degraded ? 1 : 0);
   // Every route carries the banner (it lives in the layout).
   await page.goto("/track-record/");
   await expect(page.getByTestId("stale-banner")).toBeVisible();

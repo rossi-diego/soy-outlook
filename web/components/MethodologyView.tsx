@@ -1,5 +1,6 @@
 "use client";
 
+import { reportGapText } from "@/lib/issued";
 import type { Meta } from "@/lib/types";
 import { AUTHOR, REPO_URL } from "@/lib/site";
 import { useI18n } from "@/lib/useI18n";
@@ -136,8 +137,7 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
           </p>
           <p>
             As previsões são testadas a partir do fechamento de cada dia de divulgação do WASDE. A previsão ao vivo é emitida a
-            partir do último fechamento, {meta.days_since_report} dias depois do relatório de{" "}
-            {f.date(meta.latest_wasde.release_date)}.
+            partir do último fechamento, {reportGapText(meta.days_since_report, f.date(meta.latest_wasde.release_date), "pt-BR")}.
           </p>
         </Block>
 
@@ -311,7 +311,7 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
         </p>
         <p>
           Forecasts are tested from the close of each WASDE release day. The live forecast is issued from the latest close,{" "}
-          {meta.days_since_report} days after the {f.date(meta.latest_wasde.release_date)} report.
+          {reportGapText(meta.days_since_report, f.date(meta.latest_wasde.release_date), "en")}.
         </p>
       </Block>
 
