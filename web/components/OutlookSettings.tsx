@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import RadioGroup from "@/components/RadioGroup";
 import { type Assumptions, convert, parseBasis, parseFx, type Unit } from "@/lib/format";
+import { issuedLabel } from "@/lib/issued";
 import { parsePremium, premiumInputText, usePremium } from "@/lib/premium";
 import type { Meta } from "@/lib/types";
 import { useI18n } from "@/lib/useI18n";
@@ -266,13 +267,6 @@ export function PriceHeadline({ s, last, className = "" }: { s: Settings; last: 
 
 /** P15: how far the live forecast is from the release-day origins the ranges were tested on. */
 export function useIssuedLabel(meta: Meta): string {
-  const { t, f } = useI18n();
-  const month = f.monthAbbr(Number(meta.latest_wasde.month.slice(5, 7)));
-  const days = meta.days_since_report;
-  return days <= 0
-    ? t(`Issued on the ${month} WASDE release day`, `Emitida no dia de divulgação do WASDE de ${month}`)
-    : t(
-        `Issued from the ${month} WASDE, ${days} day${days === 1 ? "" : "s"} after its release`,
-        `Emitida a partir do WASDE de ${month}, ${days} dia${days === 1 ? "" : "s"} após a divulgação`,
-      );
+  const { loc } = useI18n();
+  return issuedLabel(meta.days_since_report, meta.latest_wasde.month, loc);
 }

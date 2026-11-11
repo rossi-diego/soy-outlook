@@ -54,9 +54,11 @@ test("origin flag and next-WASDE move follow the published data", async ({ page 
   const meta = await (await page.request.get("/data/meta.json")).json();
   const wasde = await (await page.request.get("/data/wasde.json")).json();
   await page.goto("/");
-  await expect(page.getByText(new RegExp(`${meta.days_since_report} days after its release`)).first()).toBeVisible();
+  const d: number = meta.days_since_report;
+  const issued = d <= 0 ? /WASDE release day/ : new RegExp(`\\b${d} day${d === 1 ? "" : "s"} after its release`);
+  await expect(page.getByText(issued).first()).toBeVisible();
   await page.goto("/wasde/");
   const move = wasde.reaction.release_move;
-  await expect(page.getByText(new RegExp(`±\s*${move.typical_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
-  await expect(page.getByText(new RegExp(`±\s*${move.one_in_ten_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
+  await expect(page.getByText(new RegExp(`±\\s*${move.typical_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
+  await expect(page.getByText(new RegExp(`±\\s*${move.one_in_ten_usd_t.toFixed(1)} USD/t`)).first()).toBeVisible();
 });
