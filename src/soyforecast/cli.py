@@ -95,22 +95,34 @@ def guard(
     event: str = typer.Option("close", help="'close' (after the CBOT close) or 'wasde'."),
     meta: Path = META_OPTION,
 ) -> None:
-    """Decide whether a scheduled refresh should run now (writes should_run to GITHUB_OUTPUT)."""
+    """Decide whether a refresh should run now (writes should_run to GITHUB_OUTPUT).
+
+    close: a settled CBOT session is newer than the published close (catches up after a
+    delayed or missed run, never runs before the close). wasde: today is the release day.
+    """
     import json
 
-    from soyforecast.freshness import cbot_closed_today, chicago_now, is_wasde_day
+    from soyforecast.freshness import (
+        chicago_now,
+        close_to_publish,
+        is_wasde_day,
+        settled_through,
+    )
 
-    if event == "close":
-        should_run = cbot_closed_today()
-    elif event == "wasde":
-        next_release = None
-        if meta.exists():
-            next_release = json.loads(meta.read_text(encoding="utf-8")).get("next_wasde")
-        should_run = is_wasde_day(next_release)
-    else:
+    if event not in ("close", "wasde"):
         raise typer.BadParameter("event must be 'close' or 'wasde'")
+    published = json.loads(meta.read_text(encoding="utf-8")) if meta.exists() else {}
+    if event == "close":
+        should_run = close_to_publish(published.get("as_of_close"))
+    else:
+        should_run = is_wasde_day(published.get("next_wasde"))
     log.info(
-        "guard", trigger=event, chicago=chicago_now().isoformat(timespec="minutes"), run=should_run
+        "guard",
+        trigger=event,
+        chicago=chicago_now().isoformat(timespec="minutes"),
+        settled_through=settled_through().isoformat(),
+        published=published.get("as_of_close"),
+        run=should_run,
     )
     _github_output(should_run=should_run)
 

@@ -8,7 +8,7 @@ and gives the site's stale banner the facts it needs.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -79,6 +79,34 @@ def cbot_closed_today(now: datetime | None = None) -> bool:
     """
     local = chicago_now(now)
     return local.weekday() < 5 and local.time() >= time(*CLOSE_GUARD_LOCAL)
+
+
+def settled_through(now: datetime | None = None) -> date:
+    """The latest Chicago weekday whose CBOT day session has closed (CLOSE_GUARD_LOCAL passed).
+
+    Any bar dated after this is an unfinished session: the overnight Globex session that opens
+    at 19:00 CT is already labelled with the next trading day. Exchange holidays are not
+    modelled; on those days there is simply no bar to take.
+    """
+    local = chicago_now(now)
+    day = local.date()
+    if local.weekday() < 5 and local.time() >= time(*CLOSE_GUARD_LOCAL):
+        return day
+    day -= timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def close_to_publish(as_of_close: str | None, now: datetime | None = None) -> bool:
+    """Close guard: True when a settled session is newer than the published close.
+
+    A catch-up rule rather than "after the close today": a scheduled run that GitHub delays
+    past Chicago midnight still picks up the previous session instead of skipping it.
+    """
+    if not as_of_close:
+        return True
+    return settled_through(now).isoformat() > str(as_of_close)[:10]
 
 
 def is_wasde_day(next_release: str | None, now: datetime | None = None) -> bool:

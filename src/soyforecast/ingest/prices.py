@@ -8,6 +8,7 @@ of the cached history and are not rescaled against it. Otherwise the cache is us
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,7 @@ import pandas as pd
 
 from soyforecast.config import SOY_TICKER
 from soyforecast.errors import InputDataError
-from soyforecast.freshness import SourceLog
+from soyforecast.freshness import SourceLog, settled_through
 from soyforecast.ingest._cache import atomic_write_parquet, write_snapshot
 from soyforecast.logs import get_logger
 
@@ -42,6 +43,21 @@ def _download_yahoo(ticker: str, start: str) -> pd.Series:
         close = close.iloc[:, 0]
     close.index = pd.DatetimeIndex(close.index).tz_localize(None).normalize()
     return close.astype("float64").dropna()
+
+
+def drop_unsettled(series: pd.Series, now: datetime | None = None) -> pd.Series:
+    """Keep only sessions that have closed in Chicago; Yahoo also returns the live session."""
+    if series.empty:
+        return series
+    cutoff = pd.Timestamp(settled_through(now))
+    late = series.index > cutoff
+    if late.any():
+        log.warning(
+            "prices.unsettled_dropped",
+            dates=[str(d.date()) for d in series.index[late]],
+            settled_through=str(cutoff.date()),
+        )
+    return series[~late]
 
 
 def price_problems(new: pd.Series, cached: pd.Series | None) -> list[str]:
@@ -72,8 +88,13 @@ def fetch_soy_prices(
     offline: bool = False,
     downloader: Callable[[str, str], pd.Series] = _download_yahoo,
     sources: SourceLog | None = None,
+    now: datetime | None = None,
 ) -> pd.Series:
-    """Daily ZS=F closes in US cents per bushel, indexed by session date."""
+    """Daily ZS=F closes in US cents per bushel, indexed by session date.
+
+    Live runs keep only settled sessions (see `drop_unsettled`), in the download and in the
+    cache, whatever triggered the run: a manual dispatch, a local run or a delayed cron.
+    """
     path = bronze / "zs_daily.parquet"
     cached = pd.read_parquet(path)["close_c_bu"] if path.exists() else None
     if offline:
@@ -87,6 +108,9 @@ def fetch_soy_prices(
     except Exception as exc:  # network, parsing, rate limit: fall back to the cache
         new = pd.Series(dtype="float64")
         log.warning("prices.download_failed", error=str(exc))
+    new = drop_unsettled(new, now)
+    if cached is not None:
+        cached = drop_unsettled(cached, now)
     problems = price_problems(new, cached)
     if problems:
         if cached is None:
