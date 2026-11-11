@@ -14,6 +14,10 @@ on:
     - cron: "30 22 * * 1-5"
   workflow_dispatch:
     inputs:
+      force:
+        description: "Skip the close guard (the pipeline still drops unsettled sessions)"
+        type: boolean
+        default: false
       allow_stale:
         description: "Publish even if the latest close is older than the freshness limit"
         type: boolean
@@ -55,12 +59,12 @@ jobs:
       - name: Guard (CBOT close in Chicago, or WASDE day for the second pass)
         id: guard
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then
             soyforecast --json-logs guard --event wasde --meta web/public/data/meta.json
           else
-            soyforecast --json-logs guard --event close
+            soyforecast --json-logs guard --event close --meta web/public/data/meta.json
           fi
 
       # The bronze cache (gitignored) survives between runs, so a failed download falls back to
@@ -170,3 +174,10 @@ jobs:
           else
             gh issue create --title "$title" --label data-alert --body "$body"
           fi
+
+      - name: Resolve the alert after a healthy refresh
+        if: success() && steps.guard.outputs.should_run == 'true' && steps.validate.outputs.degraded == 'false' && steps.validate.outputs.stale == 'false'
+        run: |
+          for num in $(gh issue list --label data-alert --state open --json number --jq '.[].number'); do
+            gh issue close "$num" --comment "Resolved by a healthy refresh: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} (as-of close ${{ steps.validate.outputs.as_of_close }})."
+          done
