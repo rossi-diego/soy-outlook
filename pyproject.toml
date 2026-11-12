@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soyforecast"
-version = "2.0.0"
+version = "2.1.0"
 description = "Honest, point-in-time forecasts of the CBOT soybean price and Paranaguá FOB after each USDA WASDE report."
 readme = "README.md"
 license = { text = "MIT" }
@@ -46,6 +46,7 @@ addopts = "-ra --tb=short"
 markers = [
     "network: hits real endpoints (deselected in CI)",
     "slow: end-to-end runs of the full pipeline (deselect with -m \"not slow\" while iterating)",
+    "settlement: exercises the newest-session settlement quote (other tests skip it, no network)",
 ]
 
 [tool.ruff]

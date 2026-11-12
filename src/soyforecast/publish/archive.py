@@ -35,7 +35,7 @@ from typing import Any
 
 import pandas as pd
 
-from soyforecast.config import ARCHIVE_MAX_LAG_BDAYS
+from soyforecast.config import ARCHIVE_MAX_LAG_BDAYS, CLOSE_REVISION_TOL_C_BU
 from soyforecast.features.dataset import close_on_or_before
 from soyforecast.freshness import business_days_between, chicago_now
 from soyforecast.logs import get_logger
@@ -235,10 +235,66 @@ def score(entries: list[dict[str, Any]], prices: pd.Series) -> dict[str, Any]:
     }
 
 
+def revised_close_snapshots(
+    entries: list[dict[str, Any]],
+    prices: pd.Series,
+    meta: dict[str, Any],
+    current_as_of: str | None = None,
+) -> list[dict[str, Any]]:
+    """Revision snapshots for archived outlooks whose close differs from the final series.
+
+    Yahoo can show a provisional value for a session (the last trade, an overnight print, or
+    another contract) and settle it later; the outlook archived from it then rests on a price
+    the series no longer has. Each such outlook gets a revision at the final close: the newest
+    record with p0 replaced and every number rescaled by the same ratio. That is exact for the
+    published ranges (log offsets around p0 under the no-change champion) and keeps a model's
+    own predicted move unchanged otherwise. The scored tally still uses revision 1. The
+    outlook being published now (`current_as_of`) is left to `write_snapshot`, which compares
+    it with its own record.
+    """
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    for e in entries:
+        key = (e["as_of_close"], e["latest_wasde"]["month"])
+        if key not in latest or revision_of(e) > revision_of(latest[key]):
+            latest[key] = e
+    out = []
+    for (as_of, _), rec in sorted(latest.items()):
+        day = pd.Timestamp(as_of)
+        if as_of == current_as_of or day not in prices.index:
+            continue
+        final = round(float(prices.loc[day]), 2)
+        old = float(rec["p0_c_bu"])
+        if abs(final - old) <= CLOSE_REVISION_TOL_C_BU:
+            continue
+        ratio = final / old
+        horizons = [
+            {k: (round(h[k] * ratio, 2) if k in NUMBER_KEYS else h[k]) for k in HORIZON_KEYS}
+            for h in rec["horizons"]
+        ]
+        snap = {
+            k: v
+            for k, v in rec.items()
+            if k not in ("file", "revision", "revises", "revision_reason")
+        }
+        snap.update(
+            generated_at=meta["generated_at"],
+            version=meta["version"],
+            p0_c_bu=final,
+            horizons=horizons,
+        )
+        log.warning("archive.close_revised", as_of=as_of, archived=old, final=final)
+        out.append(snap)
+    return out
+
+
 def publish_archive(
     meta: dict[str, Any], outlook: dict[str, Any], prices: pd.Series, out: Path
 ) -> dict[str, Any]:
-    """Archive today's outlook (if new) and rewrite archive/index.json."""
+    """Archive today's outlook (if new), revise archived closes that the final series has changed,
+    and rewrite archive/index.json."""
+    current = str(outlook["as_of_close"])
+    for snap in revised_close_snapshots(load_archive(out), prices, meta, current):
+        write_snapshot(snap, out)
     write_snapshot(snapshot(meta, outlook), out)
     index = score(load_archive(out), prices)
     (out / ARCHIVE_DIR / INDEX).write_text(

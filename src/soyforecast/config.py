@@ -227,11 +227,20 @@ FEATURES: tuple[str, ...] = (
 )
 
 # Data freshness (v2.1, P23). These change how the published data is labelled and gated,
-# never a forecast. The CBOT soybean day session closes at 13:20 America/Chicago; the
-# scheduled refresh runs at 19:45 UTC (13:45 CST / 14:45 CDT) and a guard in code skips
-# any run that starts before CLOSE_GUARD_LOCAL on a Chicago weekday, whatever the season.
+# never a forecast. Only final daily bars are published: a session's settlement is taken the
+# morning after (freshness.final_through), so the refresh runs at 16:00 UTC Tue-Sat.
 CBOT_TZ = "America/Chicago"
-CLOSE_GUARD_LOCAL = (13, 30)
+# Yahoo's continuous ZS=F may quote a different contract than its history on recent days (it
+# moves to the liquid next contract before the front expires) and rewrites those bars later.
+# Over this many recent business days the front contract (contracts.front_contract) is read
+# from its own Yahoo symbol instead, when Yahoo lists it.
+PRICE_CONTRACT_WINDOW_BDAYS = 60
+# On the newest PRICE_REQUIRE_CONTRACT_BDAYS sessions a front-contract bar is required: a date
+# without one ends the series there rather than falling back to ZS=F.
+PRICE_REQUIRE_CONTRACT_BDAYS = 10
+# An archived close that differs from the final series by more than this (cents/bu) gets a
+# "close revised" revision record.
+CLOSE_REVISION_TOL_C_BU = 0.25
 # The site shows a stale banner (and the refresh gate fails) once the as-of close is more
 # than this many business days old.
 STALE_CLOSE_BDAYS = 3

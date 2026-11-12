@@ -1,7 +1,8 @@
 """CBOT soybean contract calendar: the reference (hedge) contract per horizon (P10).
 
-The published prices are the Yahoo continuous front month (ZS=F), which quotes the nearest
-contract until its last trading day and then rolls to the next one. These helpers only label
+The published prices are the continuous front month, which quotes the nearest contract until
+its last trading day and then rolls to the next one (Yahoo's ZS=F for history, each front
+contract's own symbol for recent sessions; see `ingest.prices`). These helpers only label
 which listed contract a horizon refers to and whether the series rolls inside the window;
 targets are not rebuilt on specific contracts (roadmap v2.1).
 

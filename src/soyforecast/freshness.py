@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from soyforecast.config import CBOT_TZ, CLOSE_GUARD_LOCAL, STALE_CLOSE_BDAYS
+from soyforecast.config import CBOT_TZ, STALE_CLOSE_BDAYS
 
 # live    - downloaded in this run and accepted by the checks;
 # offline - the cache was used on purpose (--offline or a local file);
@@ -71,29 +71,43 @@ def chicago_now(now: datetime | None = None) -> datetime:
     return now.astimezone(ZoneInfo(CBOT_TZ))
 
 
-def cbot_closed_today(now: datetime | None = None) -> bool:
-    """True on a Chicago weekday once the local clock has passed the close guard.
+def final_through(now: datetime | None = None) -> date:
+    """The latest session whose Yahoo daily bar is final: the last weekday before today in Chicago.
 
-    Exchange holidays are not modelled: on those days the run finds no new close and the
-    validation gate leaves the published data as it is.
+    A bar dated today is never final, at any hour. Yahoo dates futures bars by the New York
+    calendar day and keeps rewriting the newest one: before the 13:20 CT close it is the live
+    session, after it the last trade rather than the settlement, and from 19:00 CT (Globex
+    reopens) to 23:00 CT it moves with overnight trades. Every published close is therefore a
+    previous day's settlement, taken the morning after. Exchange holidays are not modelled; on
+    those days there is simply no bar to take.
     """
-    local = chicago_now(now)
-    return local.weekday() < 5 and local.time() >= time(*CLOSE_GUARD_LOCAL)
+    day = chicago_now(now).date() - timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
 
 
-def settled_through(now: datetime | None = None) -> date:
-    """The latest Chicago weekday whose CBOT day session has closed (CLOSE_GUARD_LOCAL passed).
+# CBOT grains trade a day session that closes at 13:20 CT and an overnight session that opens at
+# 19:00 CT for the next trade date (Sunday 19:00 opens Monday's).
+SESSION_OPEN_LOCAL = time(19, 0)
 
-    Any bar dated after this is an unfinished session. This is a date cut only: Yahoo dates
-    ZS=F bars by the New York calendar day, so from 19:00 CT (Globex reopens) to 23:00 CT the
-    bar dated today also moves with overnight trades, and the newest bar can be the last trade
-    rather than the settlement. Exchange holidays are not modelled; on those days there is
-    simply no bar to take.
+
+def trade_date(now: datetime | None = None) -> date:
+    """The trade date of the latest session that has opened (Chicago).
+
+    19:00 CT Sunday to Thursday opens the next weekday's session; from Friday 19:00 to Sunday
+    19:00 the latest session is still Friday's.
     """
     local = chicago_now(now)
     day = local.date()
-    if local.weekday() < 5 and local.time() >= time(*CLOSE_GUARD_LOCAL):
-        return day
+    if local.time() >= SESSION_OPEN_LOCAL and local.weekday() in (6, 0, 1, 2, 3):
+        day += timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
+
+
+def previous_weekday(day: date) -> date:
     day -= timedelta(days=1)
     while day.weekday() >= 5:
         day -= timedelta(days=1)
@@ -101,14 +115,14 @@ def settled_through(now: datetime | None = None) -> date:
 
 
 def close_to_publish(as_of_close: str | None, now: datetime | None = None) -> bool:
-    """Close guard: True when a settled session is newer than the published close.
+    """Close guard: True when a final session is newer than the published close.
 
-    A catch-up rule rather than "after the close today": a scheduled run that GitHub delays
-    past Chicago midnight still picks up the previous session instead of skipping it.
+    A catch-up rule rather than a time window: a run that GitHub delays by hours, or one
+    started by hand, publishes the newest final session and nothing else.
     """
     if not as_of_close:
         return True
-    return settled_through(now).isoformat() > str(as_of_close)[:10]
+    return final_through(now).isoformat() > str(as_of_close)[:10]
 
 
 def is_wasde_day(next_release: str | None, now: datetime | None = None) -> bool:

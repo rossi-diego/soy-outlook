@@ -32,9 +32,10 @@ def test_pipeline_publishes_the_site_contract(
     monkeypatch.setattr(pipeline, "ingest", fake_ingest)
     settings = Settings(data_dir=tmp_path / "data", web_data_dir=tmp_path / "web")
     artefacts = pipeline.run(settings)
-    # Pin the build clock to the synthetic close (15:00 Chicago): the archive skips outlooks built
-    # more than ARCHIVE_MAX_LAG_BDAYS after their close, so the wall clock would break this test.
-    publish(artefacts, settings, now=datetime(2026, 11, 6, 21, 0, tzinfo=UTC))
+    # Pin the build clock to the morning after the synthetic close, as the scheduled refresh
+    # runs: the archive skips outlooks built more than ARCHIVE_MAX_LAG_BDAYS after their close,
+    # so the wall clock would break this test.
+    publish(artefacts, settings, now=datetime(2026, 11, 7, 16, 0, tzinfo=UTC))
 
     out = settings.web_data_dir
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))

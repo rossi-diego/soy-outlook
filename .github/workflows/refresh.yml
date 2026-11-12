@@ -5,17 +5,19 @@ name: Data refresh
 
 on:
   schedule:
-    # After the CBOT close (13:20 CT) in both seasons: 19:45 UTC = 13:45 CST / 14:45 CDT.
-    # `soyforecast guard --event close` re-checks the Chicago clock in code, so a delayed or
-    # mis-set cron can never publish before the close.
-    - cron: "45 19 * * 1-5"
-    # Second pass on WASDE days only (guarded): picks up the new report if the WASDE Tracker
-    # published it after the first run.
-    - cron: "30 22 * * 1-5"
+    # The morning after each session (Mon-Fri): 16:00 UTC = 10:00 CST / 11:00 CDT. Only final
+    # sessions are published (freshness.final_through: a session dated today never is) and the
+    # newest one at its settlement, which Yahoo's quote carries while the next session trades
+    # (ingest.prices.confirm_newest_settlement): Monday's run publishes Friday. A run GitHub
+    # delays past 19:00 CT holds the newest session back instead. A WASDE day's report goes out
+    # with that day's close, the morning after.
+    - cron: "0 16 * * 1-5"
+    # Retry later the same day (14:00 CST / 15:00 CDT); a no-op once the close is published.
+    - cron: "0 20 * * 1-5"
   workflow_dispatch:
     inputs:
       force:
-        description: "Skip the close guard (the pipeline still drops unsettled sessions)"
+        description: "Skip the close guard (the pipeline still publishes final sessions only)"
         type: boolean
         default: false
       allow_stale:
@@ -71,13 +73,11 @@ jobs:
           uv sync --locked --no-dev
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Guard (CBOT close in Chicago, or WASDE day for the second pass)
+      - name: Guard (a final session newer than the published close)
         id: guard
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then
-            soyforecast --json-logs guard --event wasde --meta web/public/data/meta.json
           else
             soyforecast --json-logs guard --event close --meta web/public/data/meta.json
           fi
