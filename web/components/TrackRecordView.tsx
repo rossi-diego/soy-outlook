@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AnalystData } from "@/components/AnalystOutlook";
 import Chart from "@/components/Chart";
 import ChartData from "@/components/ChartData";
 import ForAnalysts from "@/components/ForAnalysts";
 import RadioGroup from "@/components/RadioGroup";
+import type { ArchiveSummary } from "@/lib/archive";
 import { axisCommon, timeAxisLabel, baseOption, type Tokens } from "@/lib/chart";
 import type { Fmt } from "@/lib/format";
 import { type Locale, TERMS } from "@/lib/i18n";
@@ -87,12 +88,37 @@ function BreachStrip({ rows, years }: { rows: { h: number; lo: number; hi: numbe
   );
 }
 
-function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }) {
+type Entries = ArchiveIndex["entries"];
+
+/** The archived rows, read from the published /data/archive/index.json after the page loads,
+ * so the page's HTML does not grow with the archive (one outlook per session). */
+function useArchiveEntries(n: number): { entries: Entries | null; failed: boolean } {
+  const [entries, setEntries] = useState<Entries | null>(n === 0 ? [] : null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (n === 0) return;
+    let live = true;
+    fetch("/data/archive/index.json")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: ArchiveIndex) => {
+        if (live) setEntries(Array.isArray(j.entries) ? j.entries : []);
+      })
+      .catch(() => {
+        if (live) setFailed(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [n]);
+  return { entries, failed };
+}
+
+function PublishedVsOutcome({ archive, k }: { archive: ArchiveSummary; k: number }) {
   const { t, f } = useI18n();
   const usd = (v: number | null) => (v === null ? "—" : f.num(v * k, 0));
-  const rows = archive.entries.flatMap((e) => e.horizons.map((h) => ({ e, h })));
-  // The tally scores each outlook once, on its first-published record; revisions are shown, not re-scored.
-  const scored = archive.entries.filter((e) => e.revision === 1).reduce((n, e) => n + e.horizons.length, 0);
+  const { entries, failed } = useArchiveEntries(archive.n_outlooks);
+  const rows = (entries ?? []).flatMap((e) => e.horizons.map((h) => ({ e, h })));
+  const scored = archive.scored;
   const unit = t("CBOT USD/t, excl. premium", "CBOT em USD/t, sem prêmio");
   return (
     <section className="card space-y-3 p-5" data-testid="published-vs-outcome">
@@ -129,6 +155,20 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
           </span>
         )}
       </p>
+      {entries === null && !failed && (
+        <p className="text-sm text-muted" data-testid="archive-loading" aria-live="polite">
+          {t("Loading the archived outlooks…", "Carregando as perspectivas arquivadas…")}
+        </p>
+      )}
+      {failed && (
+        <p className="text-sm text-muted" data-testid="archive-failed">
+          {t("The archived outlooks could not be loaded here; they are published at", "Não foi possível carregar as perspectivas arquivadas aqui; elas estão publicadas em")}{" "}
+          <a className="underline hover:text-ink" href="/data/archive/index.json">
+            /data/archive/index.json
+          </a>
+          .
+        </p>
+      )}
       {rows.length > 0 && (
         <div className="overflow-x-auto">
           <table className="stack-sm w-full min-w-[40rem] text-sm" data-testid="archive-table">
@@ -208,8 +248,8 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
       )}
       <p className="text-xs text-muted">
         {t(
-          "CBOT front month, stored in ¢/bu and shown converted to USD/t, without the Paranaguá premium; the outcome is the last close on or before the target date. If the data vendor later revises a close, the site republishes and the change is added as a new revision record next to the original, never written over it. The archive files are published at",
-          "Primeiro vencimento da CBOT, guardado em ¢/bu e mostrado convertido para USD/t, sem o prêmio de Paranaguá; o resultado é o último fechamento até a data-alvo. Se o fornecedor depois revisar um fechamento, o site republica e a mudança entra como um novo registro de revisão ao lado do original, nunca por cima dele. Os arquivos ficam em",
+          "CBOT front month, stored in ¢/bu and shown converted to USD/t, without the Paranaguá premium; the outcome is the last close on or before the target date. If a close is later corrected to its final settlement, the correction is added as a new revision record next to the original, never written over it. The archive files are published at",
+          "Primeiro vencimento da CBOT, guardado em ¢/bu e mostrado convertido para USD/t, sem o prêmio de Paranaguá; o resultado é o último fechamento até a data-alvo. Se um fechamento for depois corrigido para o ajuste final, a correção entra como um novo registro de revisão ao lado do original, nunca por cima dele. Os arquivos ficam em",
         )}{" "}
         <a className="underline hover:text-ink" href="/data/archive/index.json">
           /data/archive/
@@ -238,7 +278,7 @@ export default function TrackRecordView({
 }: {
   meta: Meta;
   view: TrackView;
-  archive: ArchiveIndex;
+  archive: ArchiveSummary;
   analyst: AnalystData;
 }) {
   const { t, f, d, loc } = useI18n();
