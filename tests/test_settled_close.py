@@ -28,7 +28,7 @@ def utc(s: str) -> datetime:
         ("2026-11-11T10:46", "2026-11-10"),  # the incident: 04:46 CST, today's session is open
         ("2026-11-11T19:29", "2026-11-10"),  # 13:29 CST, one minute before the guard
         ("2026-11-11T19:30", "2026-11-11"),  # 13:30 CST, at the guard
-        ("2026-11-12T02:00", "2026-11-11"),  # 20:00 CST: Globex already trades the 12th
+        ("2026-11-12T02:00", "2026-11-11"),  # 20:00 CST: date cut only (see the docstring)
         ("2026-11-12T08:00", "2026-11-11"),  # 02:00 CST next day: a cron delayed past midnight
         ("2026-07-15T18:29", "2026-07-14"),  # CDT: 13:29 local
         ("2026-07-15T18:30", "2026-07-15"),  # CDT: 13:30 local

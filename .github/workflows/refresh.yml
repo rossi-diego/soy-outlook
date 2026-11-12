@@ -33,7 +33,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     # The only job in the repository with write access.
     permissions:
       contents: write
@@ -45,6 +45,21 @@ jobs:
       SOY_WASDE_LOCK: ${{ github.workspace }}/data/wasde.lock.json
       GH_TOKEN: ${{ secrets.REFRESH_TOKEN || github.token }}
     steps:
+      # Publishing goes through main one data PR at a time: a run that started while the previous
+      # run's PR was still waiting on its checks would otherwise build on, and could rewrite
+      # archive files of, a main that does not have that data yet. A PR still open after 20
+      # minutes fails the run, which alerts.
+      - name: Wait for a pending data PR to land
+        run: |
+          for i in $(seq 1 40); do
+            open=$(gh pr list -R "${{ github.repository }}" --head bot/data-refresh --state open --json number --jq '.[0].number')
+            [ -z "$open" ] && exit 0
+            echo "Data PR #$open is still open (check $i of 40)."
+            sleep 30
+          done
+          echo "::error::Data PR #$open did not merge within 20 minutes."
+          exit 1
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
@@ -161,7 +176,9 @@ jobs:
 
       - name: Alert on a failed, stale or degraded refresh
         # Stale counts on its own: a manual run with allow_stale passes the gate but still alerts.
-        if: always() && steps.guard.outputs.should_run == 'true' && (failure() || steps.validate.outputs.degraded == 'true' || steps.validate.outputs.stale == 'true')
+        # A failure before the guard decided (install, a pending data PR, an unreadable meta.json)
+        # alerts too; only a guard that said "nothing to do" stays quiet.
+        if: always() && ((failure() && steps.guard.outputs.should_run != 'false') || (steps.guard.outputs.should_run == 'true' && (steps.validate.outputs.degraded == 'true' || steps.validate.outputs.stale == 'true')))
         run: |
           title="Data refresh needs attention"
           body="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -174,10 +191,3 @@ jobs:
           else
             gh issue create --title "$title" --label data-alert --body "$body"
           fi
-
-      - name: Resolve the alert after a healthy refresh
-        if: success() && steps.guard.outputs.should_run == 'true' && steps.validate.outputs.degraded == 'false' && steps.validate.outputs.stale == 'false'
-        run: |
-          for num in $(gh issue list --label data-alert --state open --json number --jq '.[].number'); do
-            gh issue close "$num" --comment "Resolved by a healthy refresh: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} (as-of close ${{ steps.validate.outputs.as_of_close }})."
-          done

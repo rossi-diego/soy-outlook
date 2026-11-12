@@ -73,6 +73,15 @@ jobs:
         run: soyforecast --json-logs validate --data "$SOY_WEB_DATA_DIR" --allow-stale
       - name: Validation gate on the committed site data
         run: soyforecast --json-logs validate --data web/public/data --allow-stale
+      # Against the PR's base: closes never go backwards and archived outlooks are append-only
+      # relative to what main actually holds, not to what a refresh run happened to check out.
+      - name: Validation gate against the base branch (pull requests)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive FETCH_HEAD web/public/data | tar -x -C "$RUNNER_TEMP/base"
+          soyforecast --json-logs validate --data web/public/data             --baseline "$RUNNER_TEMP/base/web/public/data" --allow-stale
 
   docker:
     needs: python

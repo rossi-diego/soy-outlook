@@ -1,0 +1,39 @@
+# Closes the data alert once healthy data is actually on main: the bot's data PR merged and the
+# published meta.json is not degraded. Resolving here, not in refresh.yml, means an
+# alert stays open while a data PR is stuck on failing checks.
+name: Data merged
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  resolve-alert:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'bot/data-refresh'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - name: Close open data alerts if the merged data is healthy
+        run: |
+          meta=web/public/data/meta.json
+          degraded=$(jq -r '.freshness.degraded' "$meta")
+          close=$(jq -r '.as_of_close' "$meta")
+          if [ "$degraded" != "false" ]; then
+            echo "Merged data is degraded; the alert stays open." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for num in $(gh issue list -R "${{ github.repository }}" --label data-alert --state open --json number --jq '.[].number'); do
+            gh issue close "$num" -R "${{ github.repository }}" --comment "Resolved: healthy data for the ${close} close is on main (PR #${{ github.event.pull_request.number }})."
+          done
