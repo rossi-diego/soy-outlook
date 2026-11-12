@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import TrackRecordView from "@/components/TrackRecordView";
+import { archiveSummary } from "@/lib/archive";
 import { getArchive, getMeta, getOutlook, getTrackRecord } from "@/lib/data";
 import { pageMetadata } from "@/lib/site";
 import { buildTrackView } from "@/lib/trackView";
@@ -19,5 +20,7 @@ export default function TrackRecordPage() {
   // The "For analysts" fold gets today's outlook without its price history (it draws no history).
   const o = getOutlook();
   const analyst = { as_of_close: o.as_of_close, last: o.last, horizons: o.horizons, stress: o.stress };
-  return <TrackRecordView meta={meta} view={view} archive={getArchive()} analyst={analyst} />;
+  // The archive's tally only: its rows are read from /data/archive/index.json in the browser,
+  // because they grow by one outlook per session and would push the HTML past its budget.
+  return <TrackRecordView meta={meta} view={view} archive={archiveSummary(getArchive())} analyst={analyst} />;
 }
