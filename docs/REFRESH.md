@@ -17,7 +17,8 @@ This is how new data reaches the site, what stops bad data, and what the reposit
 ## Schedule (DST-safe)
 
 - `45 19 * * 1-5` UTC is 13:45 CST in winter and 14:45 CDT in summer, so it always falls after the 13:20 CT soybean close.
-- `soyforecast guard --event close` checks the Chicago clock again in code, using `America/Chicago`. A run that starts before 13:30 local time, or on a weekend, does nothing. `tests/test_freshness_and_archive.py` covers both seasons and the DST switch days.
+- `soyforecast guard --event close` runs only when a settled session is newer than the published `as_of_close` (`settled_through` in `freshness.py`: the last Chicago weekday at or after 13:30 local time, `America/Chicago`). A run before the close, on a weekend, or after the close is already published does nothing; a run that GitHub delays past Chicago midnight catches up instead of skipping the day. The ingest also drops any price bar dated after `settled_through`, whatever started the run. `tests/test_settled_close.py` covers both seasons and the DST switch days.
+- A run waits up to 20 minutes for a still-open `bot/data-refresh` PR to merge before it checks out `main`, so data PRs land one at a time; one still open after that fails the run and alerts.
 - `30 22 * * 1-5` is the second pass. It only proceeds when the Chicago date equals `next_wasde` in the published `meta.json`. It picks up a report that the WASDE Tracker published after the first run.
 - Exchange holidays are not modelled. On a holiday the run finds no new close, the "anything new?" step sees the same close, report and source status, and no PR is opened.
 
@@ -49,7 +50,7 @@ The as-of close stays in the header at every width.
 
 ## Alerts
 
-When a refresh fails, including a failed gate, when its close is stale (even on a manual `allow_stale` run), or when it runs on degraded data, the workflow opens an issue labelled `data-alert`. If one is already open, it comments on that issue instead. The README badge shows the status of the last refresh run.
+When a refresh fails, including a failed gate, when its close is stale (even on a manual `allow_stale` run), or when it runs on degraded data, the workflow opens an issue labelled `data-alert`. If one is already open, it comments on that issue instead. A failure before the guard has decided (install, a pending data PR, an unreadable `meta.json`) alerts too. `data-merged.yml` closes the open alerts once a data PR with non-degraded data has merged into `main`. The README badge shows the status of the last refresh run.
 
 ## Outlook archive: the unseen track record
 
@@ -76,4 +77,6 @@ When a refresh fails, including a failed gate, when its close is stale (even on 
 5. **Deploys.** The Vercel Git integration deploys `main` when the PR merges, and no deploy secret is needed in Actions.
 6. **Cron keep-alive.** GitHub disables scheduled workflows after 60 days without repository activity. Merged refresh PRs count as activity, but if the refresh has been failing for two months, re-enable it under Actions → Data refresh.
 
-A manual run (Actions → Data refresh → *Run workflow*) skips the close guard. Its `allow_stale` input lets an old close through, for example right after a long exchange holiday.
+A manual run (Actions → Data refresh → *Run workflow*) goes through the same close guard, so before the close or once the close is published it does nothing. Its `force` input skips the guard, for example to retry after a degraded run or to pick up a WASDE report published after the second pass; the ingest still drops unsettled sessions. Its `allow_stale` input lets an old close through, for example right after a long exchange holiday.
+
+Every pull request also runs the validation gate against its base branch (`ci.yml`), so a data PR can never move the close backwards or change or delete an archived outlook relative to what `main` holds. A deliberate correction of the archive therefore needs an admin merge.

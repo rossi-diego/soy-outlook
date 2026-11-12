@@ -84,9 +84,11 @@ def cbot_closed_today(now: datetime | None = None) -> bool:
 def settled_through(now: datetime | None = None) -> date:
     """The latest Chicago weekday whose CBOT day session has closed (CLOSE_GUARD_LOCAL passed).
 
-    Any bar dated after this is an unfinished session: the overnight Globex session that opens
-    at 19:00 CT is already labelled with the next trading day. Exchange holidays are not
-    modelled; on those days there is simply no bar to take.
+    Any bar dated after this is an unfinished session. This is a date cut only: Yahoo dates
+    ZS=F bars by the New York calendar day, so from 19:00 CT (Globex reopens) to 23:00 CT the
+    bar dated today also moves with overnight trades, and the newest bar can be the last trade
+    rather than the settlement. Exchange holidays are not modelled; on those days there is
+    simply no bar to take.
     """
     local = chicago_now(now)
     day = local.date()

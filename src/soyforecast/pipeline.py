@@ -100,6 +100,10 @@ def snapshot_inputs(bronze: Path) -> None:
 def run(settings: Settings, *, update_pin: bool = False) -> Artefacts:
     sources = SourceLog()
     wasde, prices, ptax, manifest = ingest(settings, sources, update_pin=update_pin)
+    # PTAX is final once published, but BCB can publish today's rate before today's CBOT session
+    # settles: keep the default FX and the stress replay on the as-of close's date or earlier.
+    if (ptax.index <= prices.index.max()).any():
+        ptax = ptax[ptax.index <= prices.index.max()]
     vintages = build_vintages(wasde)
     vintages.to_parquet(settings.silver / "wasde_vintages.parquet")
     dataset = build_dataset(vintages, prices)
