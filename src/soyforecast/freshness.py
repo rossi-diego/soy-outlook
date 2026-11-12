@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
+from functools import lru_cache
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -71,20 +72,90 @@ def chicago_now(now: datetime | None = None) -> datetime:
     return now.astimezone(ZoneInfo(CBOT_TZ))
 
 
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (n - 1))
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    last = date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)
+    return last - timedelta(days=(last.weekday() - weekday) % 7)
+
+
+def _easter(year: int) -> date:
+    """Gregorian Easter Sunday (anonymous Gregorian algorithm)."""
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    m = (32 + 2 * e + 2 * i - h - k) % 7
+    n = (a + 11 * h + 22 * m) // 451
+    month, day = divmod(h + m - 7 * n + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _observed(day: date) -> date:
+    """A fixed-date holiday on a weekend is observed on the nearest weekday."""
+    if day.weekday() == 5:
+        return day - timedelta(days=1)
+    if day.weekday() == 6:
+        return day + timedelta(days=1)
+    return day
+
+
+@lru_cache(maxsize=64)
+def cbot_holidays(year: int) -> frozenset[date]:
+    """Weekdays the CBOT grain markets are closed for a full day (no session, no Yahoo bar).
+
+    The standing US exchange holidays: New Year's Day (not moved back into the previous year
+    when it falls on a Saturday), Martin Luther King Jr. Day, Presidents' Day, Good Friday,
+    Memorial Day, Juneteenth (from 2022), Independence Day, Labor Day, Thanksgiving and
+    Christmas. Checked against every ZS=F bar since 2007; one-off closures (a state funeral,
+    a hurricane) are not modelled and only delay a publication by one run.
+    """
+    days = {
+        _nth_weekday(year, 1, 0, 3),
+        _nth_weekday(year, 2, 0, 3),
+        _easter(year) - timedelta(days=2),
+        _last_weekday(year, 5, 0),
+        _observed(date(year, 7, 4)),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 11, 3, 4),
+        _observed(date(year, 12, 25)),
+    }
+    if date(year, 1, 1).weekday() != 5:
+        days.add(_observed(date(year, 1, 1)))
+    if year >= 2022:
+        days.add(_observed(date(year, 6, 19)))
+    return frozenset(days)
+
+
+def is_session(day: date) -> bool:
+    """True when `day` is a CBOT trading day (a weekday that is not an exchange holiday)."""
+    return day.weekday() < 5 and day not in cbot_holidays(day.year)
+
+
+def previous_session(day: date) -> date:
+    """The last CBOT trading day before `day`."""
+    day -= timedelta(days=1)
+    while not is_session(day):
+        day -= timedelta(days=1)
+    return day
+
+
 def final_through(now: datetime | None = None) -> date:
-    """The latest session whose Yahoo daily bar is final: the last weekday before today in Chicago.
+    """The latest session whose Yahoo daily bar is final: the last session before today in Chicago.
 
     A bar dated today is never final, at any hour. Yahoo dates futures bars by the New York
     calendar day and keeps rewriting the newest one: before the 13:20 CT close it is the live
     session, after it the last trade rather than the settlement, and from 19:00 CT (Globex
     reopens) to 23:00 CT it moves with overnight trades. Every published close is therefore a
-    previous day's settlement, taken the morning after. Exchange holidays are not modelled; on
-    those days there is simply no bar to take.
+    previous day's settlement, taken the morning after. Exchange holidays (`cbot_holidays`) are
+    skipped: the day after Thanksgiving, the newest final session is the Wednesday.
     """
-    day = chicago_now(now).date() - timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
+    return previous_session(chicago_now(now).date())
 
 
 # CBOT grains trade a day session that closes at 13:20 CT and an overnight session that opens at
@@ -96,20 +167,14 @@ def trade_date(now: datetime | None = None) -> date:
     """The trade date of the latest session that has opened (Chicago).
 
     19:00 CT Sunday to Thursday opens the next weekday's session; from Friday 19:00 to Sunday
-    19:00 the latest session is still Friday's.
+    19:00 the latest session is still Friday's. A date that is not a session (a weekend, an
+    exchange holiday) maps back to the last session before it.
     """
     local = chicago_now(now)
     day = local.date()
     if local.time() >= SESSION_OPEN_LOCAL and local.weekday() in (6, 0, 1, 2, 3):
         day += timedelta(days=1)
-    while day.weekday() >= 5:
-        day -= timedelta(days=1)
-    return day
-
-
-def previous_weekday(day: date) -> date:
-    day -= timedelta(days=1)
-    while day.weekday() >= 5:
+    while not is_session(day):
         day -= timedelta(days=1)
     return day
 

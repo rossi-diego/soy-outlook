@@ -18,11 +18,13 @@ import pytest
 from typer.testing import CliRunner
 
 from soyforecast.cli import app
+from soyforecast.features.contracts import front_contract, price_contract
 from soyforecast.freshness import (
     SourceLog,
     close_to_publish,
     final_through,
-    previous_weekday,
+    is_session,
+    previous_session,
     trade_date,
 )
 from soyforecast.ingest.prices import (
@@ -45,13 +47,18 @@ def utc(s: str) -> datetime:
 # ---------------------------------------------------------------- the final-bar rule
 
 
-def test_final_through_is_a_weekday_before_today_in_chicago_at_every_hour():
-    """Hourly over a year (both DST switches): never today, never a weekend, never stale."""
+def test_final_through_is_the_last_session_before_today_in_chicago_at_every_hour():
+    """Hourly over a year (both DST switches): never today, never a closed day, and no
+    session is skipped between it and today."""
     for now in pd.date_range("2026-01-01", "2027-01-01", freq="h", tz="UTC"):
         local_day = now.tz_convert("America/Chicago").date()
         got = final_through(now.to_pydatetime())
-        assert got < local_day and got.weekday() < 5
-        assert (pd.Timestamp(local_day) - pd.Timestamp(got)).days <= 3
+        assert got < local_day and is_session(got)
+        between = pd.date_range(
+            pd.Timestamp(got) + pd.Timedelta(days=1), local_day, inclusive="left"
+        )
+        assert not any(is_session(d.date()) for d in between)
+        assert (pd.Timestamp(local_day) - pd.Timestamp(got)).days <= 4  # a long weekend
 
 
 @pytest.mark.parametrize(
@@ -150,7 +157,7 @@ def test_recent_sessions_come_from_the_front_contract_not_zs_f():
     assert got.loc["2026-07-01"] == 1100.0
 
 
-def test_after_the_roll_the_next_contract_is_the_front():
+def test_the_series_rolls_to_the_next_contract_on_the_last_trading_day():
     days = pd.bdate_range("2026-10-01", "2026-11-20")
     x26 = pd.Series(1100.0, index=days[days <= "2026-11-13"])
     f27 = pd.Series(1110.0, index=days)
@@ -158,9 +165,28 @@ def test_after_the_roll_the_next_contract_is_the_front():
     got = stitch_front_contracts(
         zs_f, _yahoo(zs_f, {"X26": x26, "F27": f27}), utc("2026-11-20T16:00")
     )
-    assert got.loc["2026-11-13"] == 1100.0  # X26's last trading day
-    assert got.loc["2026-11-16"] == 1110.0  # F27 from the next session
+    assert got.loc["2026-11-12"] == 1100.0  # X26 until the day before its last trading day
+    assert got.loc["2026-11-13"] == 1110.0  # X26 expires on the 13th: F27 already
+    assert got.loc["2026-11-16"] == 1110.0
     assert got.index.max() == pd.Timestamp("2026-11-19")
+
+
+def test_an_expired_contract_delisted_by_yahoo_does_not_stall_the_series():
+    """After X26 expires Yahoo answers 404 for it; its sessions come from the cache."""
+    days = pd.bdate_range("2026-08-03", "2026-11-25")
+    f27 = pd.Series(1210.0, index=days)
+    zs_f = pd.Series(1000.0, index=days)
+    trusted = pd.Series(1100.0, index=days[days <= "2026-11-12"])
+    for run in ("2026-11-17T16:00", "2026-11-24T16:00"):
+        got = stitch_front_contracts(zs_f, _yahoo(zs_f, {"F27": f27}), utc(run), trusted)
+        assert got.index.max() == pd.Timestamp(final_through(utc(run)))
+        assert got.loc["2026-11-12"] == 1100.0 and got.loc["2026-11-13"] == 1210.0
+
+
+def test_price_contract_rolls_on_the_last_trading_day_front_contract_after_it():
+    assert price_contract(pd.Timestamp("2026-11-12"))["code"] == "X26"
+    assert price_contract(pd.Timestamp("2026-11-13"))["code"] == "F27"
+    assert front_contract(pd.Timestamp("2026-11-13"))["code"] == "X26"  # models' convention
 
 
 def test_a_recent_session_without_its_contract_ends_the_series_before_it():
@@ -336,9 +362,58 @@ def test_trade_date_follows_the_19_00_session_open(now, expected):
     assert trade_date(utc(now)) == date.fromisoformat(expected)
 
 
-def test_previous_weekday_skips_weekends():
-    assert previous_weekday(date(2026, 11, 16)) == date(2026, 11, 13)
-    assert previous_weekday(date(2026, 11, 12)) == date(2026, 11, 11)
+def test_previous_session_skips_weekends_and_holidays():
+    assert previous_session(date(2026, 11, 16)) == date(2026, 11, 13)
+    assert previous_session(date(2026, 11, 12)) == date(2026, 11, 11)
+    assert previous_session(date(2026, 11, 27)) == date(2026, 11, 25)  # Thanksgiving
+    assert previous_session(date(2027, 1, 19)) == date(2027, 1, 15)  # MLK Day
+
+
+@pytest.mark.parametrize(
+    ("day", "closed"),
+    [
+        ("2026-11-26", True),  # Thanksgiving
+        ("2026-11-27", False),  # the early-close Friday after it trades
+        ("2026-07-03", True),  # Independence Day on a Saturday, observed Friday
+        ("2026-04-03", True),  # Good Friday
+        ("2027-03-26", True),  # Good Friday
+        ("2026-06-19", True),  # Juneteenth
+        ("2021-06-18", False),  # before Juneteenth was an exchange holiday
+        ("2021-12-24", True),  # Christmas on a Saturday
+        ("2022-12-26", True),  # Christmas on a Sunday
+        ("2021-12-31", False),  # New Year 2022 on a Saturday: not moved into 2021
+        ("2023-01-02", True),  # New Year on a Sunday
+        ("2026-01-19", True),  # MLK Day
+        ("2026-02-16", True),  # Presidents' Day
+        ("2026-05-25", True),  # Memorial Day
+        ("2026-09-07", True),  # Labor Day
+        ("2026-10-12", False),  # Columbus Day: CBOT trades
+        ("2026-11-11", False),  # Veterans Day: CBOT trades
+    ],
+)
+def test_cbot_holidays(day, closed):
+    d = date.fromisoformat(day)
+    assert (not is_session(d)) is closed
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        ("2026-11-26T16:00", "2026-11-25"),  # Thanksgiving: Wednesday
+        ("2026-11-27T16:00", "2026-11-25"),  # Friday after: still Wednesday
+        ("2026-11-30T16:00", "2026-11-27"),
+        ("2027-01-19T16:00", "2027-01-15"),  # Tuesday after MLK Day: Friday
+    ],
+)
+def test_final_through_skips_holidays(now, expected):
+    assert final_through(utc(now)).isoformat() == expected
+
+
+def test_trade_date_before_a_monday_holiday_stays_on_friday():
+    # Sunday 2027-01-17 20:00 CST: no session opens for MLK Day.
+    assert trade_date(utc("2027-01-18T02:00")) == date(2027, 1, 15)
+    # Monday 19:00 CST opens Tuesday's session.
+    assert trade_date(utc("2027-01-19T01:30")) == date(2027, 1, 19)
 
 
 def _series_through(last: str) -> pd.Series:
@@ -426,14 +501,118 @@ def test_fetch_end_to_end_publishes_the_settlement_not_the_overnight_print(tmp_p
 
 
 @pytest.mark.settlement
-def test_a_quote_from_the_session_right_after_the_newest_one_is_enough():
-    """Wednesday was held back (or a holiday): on Thursday a quote still timed in Wednesday's
-    session carries Tuesday's settlement, which is what the newest session needs."""
+def test_an_evening_quote_not_yet_traded_in_the_new_session_is_not_used():
+    """Wed 20:30 CST, thin contract: the previous close has rolled to Wednesday's settlement,
+    but the last trade is still Wednesday 13:19. Taken as Tuesday's it would be a day off."""
     s = _series_through("2026-11-10")
     got, _ = confirm_newest_settlement(
-        s, _quote(1224.5, "2026-11-11T18:00"), utc("2026-11-12T16:00")
+        s, _quote(1229.0, "2026-11-11T19:19"), utc("2026-11-12T02:30")
     )
-    assert got.loc["2026-11-10"] == 1224.5
+    assert got.index.max() == pd.Timestamp("2026-11-09")
+    # The same stale quote time on Thursday morning is not used either.
+    got, _ = confirm_newest_settlement(
+        s, _quote(1229.0, "2026-11-11T19:19"), utc("2026-11-12T16:00")
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-09")
+
+
+@pytest.mark.settlement
+def test_thanksgiving_week():
+    s = _series_through("2026-11-25")
+    s.loc["2026-11-25"] = 1205.0  # pre-holiday bar: the last trade
+    # Thanksgiving (no run publishes anything new): the quote is still Wednesday's.
+    thu, _ = confirm_newest_settlement(
+        s, _quote(1200.0, "2026-11-25T19:15"), utc("2026-11-26T16:00")
+    )
+    assert thu.index.max() == pd.Timestamp("2026-11-24")
+    # Friday: its session follows Wednesday's, so the previous close is Wednesday's settlement.
+    fri, confirmed = confirm_newest_settlement(
+        s, _quote(1206.25, "2026-11-27T15:40"), utc("2026-11-27T16:00")
+    )
+    assert fri.loc["2026-11-25"] == 1206.25
+    assert confirmed == {pd.Timestamp("2026-11-25"): 1206.25}
+
+
+@pytest.mark.settlement
+def test_tuesday_after_a_monday_holiday_confirms_friday():
+    s = _series_through("2027-01-15")
+    got, _ = confirm_newest_settlement(
+        s, _quote(1190.5, "2027-01-19T15:30"), utc("2027-01-19T16:00")
+    )
+    assert got.loc["2027-01-15"] == 1190.5
+
+
+@pytest.mark.settlement
+def test_friday_settlement_survives_the_following_runs(tmp_path):
+    """Friday's bar keeps the last trade for good; Monday's quote settlement must stick."""
+    days = pd.bdate_range("2026-08-03", "2026-11-24")
+    f27 = pd.Series(1200.0, index=days)
+    f27.loc["2026-11-20"] = 1210.0  # Friday's bar: the last trade, never rewritten
+    zs_f = pd.Series(1200.0, index=days)
+    x26 = pd.Series(1100.0, index=days[days <= "2026-11-13"])
+    yahoo = _yahoo(zs_f, {"X26": x26, "F27": f27})
+    mon = fetch_soy_prices(
+        tmp_path,
+        downloader=yahoo,
+        now=utc("2026-11-23T16:00"),
+        quote=_quote(1212.25, "2026-11-23T15:30"),
+    )
+    assert mon.loc["2026-11-20"] == 1212.25
+    for run, stamp in (("2026-11-24T16:00", "2026-11-24T15:30"), ("2026-11-25T16:00", None)):
+        later = fetch_soy_prices(
+            tmp_path, downloader=yahoo, now=utc(run), quote=_quote(1200.0, stamp)
+        )
+        assert later.loc["2026-11-20"] == 1212.25, run
+
+
+@pytest.mark.settlement
+def test_an_unreadable_quote_is_reported_as_a_cache_fallback(tmp_path):
+    zs_f, contracts = _incident_market()
+    log = SourceLog()
+    got = fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, contracts),
+        sources=log,
+        now=utc("2026-11-11T16:00"),
+        quote=_quote(None, None),
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-09")
+    assert log.sources["prices"].status == "cache"
+    assert "quote unavailable" in (log.sources["prices"].detail or "")
+
+
+def test_quote_reads_the_chart_metadata(monkeypatch):
+    import yfinance as yf
+
+    from soyforecast.ingest.prices import _quote_yahoo
+
+    calls = []
+
+    class FakeTicker:
+        def __init__(self, symbol):
+            calls.append(symbol)
+            self.history_metadata = {}
+
+        def history(self, **kw):
+            calls.append(kw)
+            self.history_metadata = {
+                "chartPreviousClose": 1229.0,
+                "regularMarketTime": 1762963200,
+                "previousClose": None,
+            }
+
+    monkeypatch.setattr(yf, "Ticker", FakeTicker)
+    settle, stamp = _quote_yahoo("ZSX26.CBT")
+    assert settle == 1229.0 and stamp == datetime.fromtimestamp(1762963200, tz=UTC)
+    # yfinance itself hands back an exchange-local Timestamp
+    when = pd.Timestamp("2026-11-12 00:21:54-0500", tz="America/New_York")
+    FakeTicker.history = lambda self, **kw: setattr(  # type: ignore[method-assign]
+        self, "history_metadata", {"chartPreviousClose": 1230.75, "regularMarketTime": when}
+    )
+    settle, stamp = _quote_yahoo("ZSF27.CBT")
+    assert settle == 1230.75 and stamp == utc("2026-11-12T05:21:54")
+    assert trade_date(stamp) == date(2026, 11, 12)
+    assert calls[0] == "ZSX26.CBT" and calls[1]["period"] == "1d"
 
 
 @pytest.mark.settlement
@@ -472,7 +651,7 @@ def test_a_held_back_session_is_reported_in_the_source_status(tmp_path):
         downloader=_yahoo(zs_f, contracts),
         sources=log,
         now=utc("2026-11-11T16:00"),
-        quote=_quote(None, None),
+        quote=_quote(1182.0, "2026-11-10T19:15"),  # readable, but still Tuesday's session
     )
     assert got.index.max() == pd.Timestamp("2026-11-09")
     assert log.sources["prices"].status == "live"
@@ -516,18 +695,16 @@ def test_final_close_gate_parses_versions(version, held):
 
 
 @pytest.mark.settlement
-def test_a_contracts_last_trading_day_is_taken_from_its_bar_once_the_next_session_began():
-    """X26's last trading day is Fri 2026-11-13; no later X26 session carries its settlement."""
+def test_a_contracts_last_trading_day_is_confirmed_from_the_next_contract():
+    """X26's last trading day is Fri 2026-11-13: the close that day is F27's settlement."""
     s = _series_through("2026-11-13")
-    s.loc["2026-11-13"] = 1250.0
-    q = _quote(None, None)
+    q = _quote(1214.0, "2026-11-16T15:30")
     got, confirmed = confirm_newest_settlement(s, q, utc("2026-11-16T16:00"))
-    assert got.loc["2026-11-13"] == 1250.0 and confirmed == {pd.Timestamp("2026-11-13"): 1250.0}
-    assert q.seen == []
-    # A non-expiry Friday still needs Monday's quote.
-    s2 = _series_through("2026-11-20")
-    held, _ = confirm_newest_settlement(s2, _quote(None, None), utc("2026-11-23T16:00"))
-    assert held.index.max() == pd.Timestamp("2026-11-19")
+    assert got.loc["2026-11-13"] == 1214.0 and confirmed == {pd.Timestamp("2026-11-13"): 1214.0}
+    assert q.seen == ["ZSF27.CBT"]
+    held, _ = confirm_newest_settlement(s, _quote(None, None), utc("2026-11-16T16:00"))
+    assert held.index.max() == pd.Timestamp("2026-11-12")
+    assert "quote unavailable" in held.attrs["quote_unavailable"]
 
 
 @pytest.mark.settlement

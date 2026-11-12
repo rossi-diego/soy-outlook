@@ -1,13 +1,14 @@
 """Bronze: daily CBOT soybean settlements, front month by last trading day, with a validated cache.
 
 The series is the same one the models were built on: the continuous front month, i.e. the
-nearest contract until its last trading day, unadjusted (`features.contracts.front_contract`).
+nearest contract, unadjusted, rolling on its last trading day (`features.contracts.price_contract`).
 History comes from Yahoo's continuous symbol ZS=F. Its recent bars are not reliable, though:
 Yahoo moves ZS=F to the liquid next contract before the front expires (so for a few weeks the
 newest bars quote another contract than the history) and rewrites those bars later. Over the
 last PRICE_CONTRACT_WINDOW_BDAYS business days each session is therefore read from the front
-contract's own symbol (e.g. ZSX26.CBT), and only final bars are kept (`final_through`: a bar
-dated today is never final).
+contract's own symbol (e.g. ZSX26.CBT), only final bars are kept (`final_through`: a bar
+dated today is never final), and the newest session is replaced by its settlement from the
+contract's quote or held back (`confirm_newest_settlement`).
 
 The checks follow rossi-diego/soybean-crush-margin (src/data_loader.py): a download only
 replaces the cache when its prices are finite and positive, contain no unit jump, keep most
@@ -31,8 +32,8 @@ from soyforecast.config import (
     SOY_TICKER,
 )
 from soyforecast.errors import InputDataError
-from soyforecast.features.contracts import front_contract
-from soyforecast.freshness import SourceLog, final_through, previous_weekday, trade_date
+from soyforecast.features.contracts import price_contract
+from soyforecast.freshness import SourceLog, final_through, previous_session, trade_date
 from soyforecast.ingest._cache import atomic_write_parquet, write_snapshot
 from soyforecast.logs import get_logger
 
@@ -68,13 +69,35 @@ Quote = tuple[float | None, datetime | None]
 
 
 def _quote_yahoo(symbol: str) -> Quote:
-    """(regularMarketPreviousClose, regularMarketTime) of a contract from Yahoo's quote."""
+    """(previous close, time of the last trade) of a contract from Yahoo's chart metadata.
+
+    With a one-day range, the chart's `chartPreviousClose` is the previous session's
+    settlement (it matched `.info`'s regularMarketPreviousClose and the settled bar on every
+    probe), from the same chart endpoint as the daily bars and without the quoteSummary call
+    that needs a crumb. Never `fast_info`: it is built from the daily bars.
+    """
     import yfinance as yf
 
-    info = yf.Ticker(symbol).info
-    prev, when = info.get("regularMarketPreviousClose"), info.get("regularMarketTime")
-    stamp = datetime.fromtimestamp(int(when), tz=UTC) if when else None
-    return (float(prev) if prev is not None else None), stamp
+    ticker = yf.Ticker(symbol)
+    ticker.history(period="1d", interval="1d", auto_adjust=False)
+    meta = ticker.history_metadata or {}
+    prev, when = meta.get("chartPreviousClose"), meta.get("regularMarketTime")
+    return (float(prev) if prev is not None else None), _as_utc(when)
+
+
+def _as_utc(when: object) -> datetime | None:
+    """A quote time as an aware UTC datetime: yfinance returns a Timestamp, the raw API epoch s."""
+    if when is None or when == "":
+        return None
+    if isinstance(when, int | float):
+        return datetime.fromtimestamp(int(when), tz=UTC)
+    ts = (
+        pd.Timestamp(str(when))
+        if not isinstance(when, pd.Timestamp | datetime)
+        else pd.Timestamp(when)
+    )
+    ts = ts.tz_localize(UTC) if ts.tzinfo is None else ts.tz_convert(UTC)
+    return ts.to_pydatetime()
 
 
 def confirm_newest_settlement(
@@ -85,15 +108,18 @@ def confirm_newest_settlement(
 ) -> tuple[pd.Series, dict[pd.Timestamp, float]]:
     """Replace the newest session's bar with its settlement, or hold that session back.
 
-    Yahoo's daily bar for a session is not its settlement the morning after (it can hold the
-    last trade or overnight prints). The contract's quote carries the settlement as
-    `regularMarketPreviousClose` while the next session trades: from 19:00 CT that evening
-    until 19:00 CT the next weekday. The newest session is kept only if it is already stored
-    as final in the cache, or if the quote's own time falls in the session right after it (so
-    its previous close is that session's settlement), which then replaces the bar.
+    Yahoo's daily bar for a session is not always its settlement (Friday's and a pre-holiday
+    session's keep the last trade). The contract's quote carries the settlement as the previous
+    close while the next session trades. The newest session is kept only if it is already
+    stored as final in the cache, or if the quote's last trade is in the session now trading
+    (`trade_date(now)`) and that session directly follows the newest one (`previous_session`,
+    so holidays are skipped); its previous close then replaces the bar. Requiring the session
+    now trading rules out a stale quote: in the evening, before a thin contract trades in the
+    new session, the previous close has already rolled but the quote time has not.
 
     Returns the series and the settlements confirmed by this call ({} if none), which the
-    caller stores so later runs prefer them over the session's bar.
+    caller stores so later runs prefer them over the session's bar. When the quote itself could
+    not be read, the returned series carries `attrs["quote_unavailable"]` (the run alerts).
     """
     if series.empty:
         return series, {}
@@ -102,25 +128,20 @@ def confirm_newest_settlement(
         series = series.copy()
         series.loc[newest] = float(trusted.loc[newest])
         return series, {}
-    front = front_contract(newest)
-    code = front["code"]
-    if newest.date().isoformat() == front["last_trade"] and trade_date(now) > newest.date():
-        # The contract expired that day: no later session will carry its settlement in a
-        # quote, and no overnight trading follows to move its bar, so the bar is taken as final.
-        log.info("prices.last_trading_day_bar", date=str(newest.date()), contract=code)
-        return series, {newest: float(series.loc[newest])}
+    code = price_contract(newest)["code"]
     try:
         settle, stamp = quote(contract_symbol(code))
-    except Exception as exc:  # network, crumb, rate limit
+    except Exception as exc:  # network, rate limit, delisted symbol
         settle, stamp = None, None
         log.warning("prices.quote_failed", contract=code, error=str(exc))
+    usable = settle is not None and bool(np.isfinite(settle)) and settle > 0 and stamp is not None
     quote_session = trade_date(stamp) if stamp is not None else None
     if (
-        settle is not None
-        and np.isfinite(settle)
-        and settle > 0
+        usable
+        and settle is not None
         and quote_session is not None
-        and previous_weekday(quote_session) == newest.date()
+        and quote_session == trade_date(now)
+        and previous_session(quote_session) == newest.date()
     ):
         bar = float(series.loc[newest])
         if abs(bar - settle) > 0.001:
@@ -130,14 +151,20 @@ def confirm_newest_settlement(
         series = series.copy()
         series.loc[newest] = settle
         return series, {newest: float(settle)}
+    reason = "no settlement quote for this session yet" if usable else "quote unavailable"
     log.warning(
         "prices.newest_held_back",
         date=str(newest.date()),
         contract=code,
         quote_session=str(quote_session),
-        reason="no settlement quote for this session yet",
+        reason=reason,
     )
-    return series.drop(newest), {}
+    held = series.drop(newest)
+    if not usable:
+        held.attrs["quote_unavailable"] = (
+            f"{contract_symbol(code)} quote unavailable: {newest.date()} held back"
+        )
+    return held, {}
 
 
 def contract_symbol(code: str) -> str:
@@ -196,7 +223,7 @@ def stitch_front_contracts(
     settled = settled if settled is not None else pd.Series(dtype="float64")
 
     candidate_days = pd.bdate_range(window_start, cutoff)
-    codes = sorted({front_contract(d)["code"] for d in candidate_days})
+    codes = sorted({price_contract(d)["code"] for d in candidate_days})
     start = window_start.date().isoformat()
     by_code = {c: _safe_download(downloader, contract_symbol(c), start) for c in codes}
 
@@ -210,7 +237,7 @@ def stitch_front_contracts(
     mismatches = 0
     missing: str | None = None
     for d in days:
-        code = front_contract(d)["code"]
+        code = price_contract(d)["code"]
         own = by_code[code]
         if d in settled.index:
             taken[d] = float(settled.loc[d])
@@ -333,6 +360,9 @@ def fetch_soy_prices(
     new = stitch_front_contracts(base, downloader, now, cached, settled) if not base.empty else base
     missing = new.attrs.get("front_contract_missing")
     new, confirmed = confirm_newest_settlement(new, quote, now, cached)
+    # Both are alertable: a missing contract bar, or a quote that could not be read at all
+    # (as opposed to one that does not carry the newest settlement yet).
+    missing = missing or new.attrs.get("quote_unavailable")
     # A newest session held back (or a missing front-contract bar) leaves the series short of
     # final_through: nothing new is published, the source status says why, and the stale gate
     # alerts if it lasts more than STALE_CLOSE_BDAYS.
@@ -370,8 +400,8 @@ def fetch_soy_prices(
     write_snapshot(path)
     if sources is not None:
         if missing:
-            # The newest sessions could not be read from their own contract: what is published
-            # ends at the cached sessions, so this is reported as a cache fallback (alerts).
+            # The newest sessions could not be read from their own contract or confirmed from
+            # its quote: this is reported as a cache fallback, which alerts.
             sources.record("prices", "cache", new.index.max(), missing)
         else:
             sources.record("prices", "live", new.index.max(), behind)

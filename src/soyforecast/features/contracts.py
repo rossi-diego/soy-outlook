@@ -63,6 +63,17 @@ def front_contract(when: pd.Timestamp) -> dict[str, Any]:
     return _first_listed(when, lambda y, m, w: last_trading_day(y, m) >= w)
 
 
+def price_contract(when: pd.Timestamp) -> dict[str, Any]:
+    """The contract whose settlement is the published close on `when`.
+
+    The front contract, except on its last trading day: the expiring contract is then in
+    delivery and thinly traded, and Yahoo carries no settlement for it (its quote has no
+    previous close once it expires and its symbol is soon delisted), so the published series
+    rolls to the next contract that day.
+    """
+    return _first_listed(when, lambda y, m, w: last_trading_day(y, m) > w)
+
+
 def crosses_roll(origin: pd.Timestamp, target: pd.Timestamp) -> bool:
     """True when the continuous front month rolls to another contract inside the window."""
     return bool(front_contract(origin)["code"] != front_contract(target)["code"])
