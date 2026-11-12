@@ -228,7 +228,7 @@ FEATURES: tuple[str, ...] = (
 
 # Data freshness (v2.1, P23). These change how the published data is labelled and gated,
 # never a forecast. Only final daily bars are published: a session's settlement is taken the
-# morning after (freshness.final_through), so the refresh runs at 16:00 UTC Mon-Fri.
+# morning after (freshness.final_through), so the refresh runs hourly-ish from 12:17 to 17:17 UTC Mon-Fri.
 CBOT_TZ = "America/Chicago"
 # Yahoo's continuous ZS=F may quote a different contract than its history on recent days (it
 # moves to the liquid next contract before the front expires) and rewrites those bars later.

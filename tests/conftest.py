@@ -22,7 +22,7 @@ def _no_settlement_quote(request, monkeypatch):
     the network: the newest-session settlement step is a no-op unless a test opts in."""
     if request.node.get_closest_marker("settlement") is None:
         monkeypatch.setattr(
-            "soyforecast.ingest.prices.confirm_newest_settlement", lambda s, *a, **k: (s, {})
+            "soyforecast.ingest.prices.confirm_newest_settlement", lambda s, *a, **k: (s, [])
         )
 
 

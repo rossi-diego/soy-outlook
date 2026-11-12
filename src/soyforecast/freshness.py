@@ -179,6 +179,40 @@ def trade_date(now: datetime | None = None) -> date:
     return day
 
 
+# The quote's previous close is read only before this Chicago time on a session's own date:
+# the settlement is struck at about 13:15 CT (earlier on half days, which close at 12:05), and
+# what the previous close shows from then until the next session opens is not relied on.
+QUOTE_CUTOFF_LOCAL = time(12, 0)
+
+
+def trading_session(now: datetime | None = None) -> date | None:
+    """The session trading at `now`, if its quote's previous close can be relied on.
+
+    From 19:00 CT the evening before (when the next day is a session) until
+    QUOTE_CUTOFF_LOCAL on the session's date; None otherwise (afternoons, weekends from Friday
+    afternoon, the eve of a holiday and the holiday itself).
+    """
+    local = chicago_now(now)
+    if local.time() >= SESSION_OPEN_LOCAL:
+        day = local.date() + timedelta(days=1)
+    elif local.time() < QUOTE_CUTOFF_LOCAL:
+        day = local.date()
+    else:
+        return None
+    return day if is_session(day) else None
+
+
+def bar_is_settlement(day: date) -> bool:
+    """True when Yahoo's daily bar for a final session `day` equals its settlement.
+
+    Yahoo rewrites a session's bar to the settlement when the next session's overnight trading
+    moves to its own date (23:00 CT), which only happens when the next calendar day is a
+    session: Monday to Thursday, except the eve of a holiday. Friday's and a pre-holiday
+    session's bars keep the last trade (measured: 9 of 10 Fridays).
+    """
+    return is_session(day + timedelta(days=1))
+
+
 def close_to_publish(as_of_close: str | None, now: datetime | None = None) -> bool:
     """Close guard: True when a final session is newer than the published close.
 

@@ -173,7 +173,7 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
             <li>USDA WASDE: obra do governo dos EUA, domínio público, via o histórico do WASDE Tracker.</li>
             <li>PTAX do Banco Central do Brasil (série SGS 1): dados abertos públicos do BCB.</li>
             <li>
-              Futuros de soja da CBOT: ajustes diários do contrato mais próximo até o último dia de negociação, do Yahoo
+              Futuros de soja da CBOT: ajustes diários do contrato mais próximo, passando ao seguinte no seu último dia de negociação, do Yahoo
               Finance (dados com atraso, originados na CME Group). O histórico vem do contínuo ZS=F; as sessões recentes vêm do
               próprio contrato (por exemplo ZSF27), e cada fechamento só é publicado na manhã seguinte, quando o ajuste é final.
               Usados para pesquisa sob os termos deles; o histórico bruto de preços não é redistribuído no repositório.
@@ -346,7 +346,7 @@ export default function MethodologyView({ meta }: { meta: Meta }) {
           <li>USDA WASDE: US government work, public domain, via the WASDE Tracker history.</li>
           <li>Banco Central do Brasil PTAX (SGS series 1): public open data from the BCB.</li>
           <li>
-            CBOT soybean futures: daily settlements of the nearest contract until its last trading day, from Yahoo Finance
+            CBOT soybean futures: daily settlements of the nearest contract, rolling to the next one on its last trading day, from Yahoo Finance
             (delayed data originating from CME Group). History comes from the continuous ZS=F; recent sessions come from the
             contract itself (for example ZSF27), and each close is published only the morning after, once the settlement is
             final. Used for research under their terms; the raw price history is not redistributed in the repository.

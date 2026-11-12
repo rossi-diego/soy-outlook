@@ -21,11 +21,13 @@ from soyforecast.cli import app
 from soyforecast.features.contracts import front_contract, price_contract
 from soyforecast.freshness import (
     SourceLog,
+    bar_is_settlement,
     close_to_publish,
     final_through,
     is_session,
     previous_session,
     trade_date,
+    trading_session,
 )
 from soyforecast.ingest.prices import (
     CACHE_FILE,
@@ -132,6 +134,10 @@ def _yahoo(zs_f: pd.Series, contracts: dict[str, pd.Series]):
     return download
 
 
+def _stitch(*a, **k) -> pd.Series:
+    return stitch_front_contracts(*a, **k)[0]
+
+
 def _incident_market():
     """2026-11: ZS=F history is X26 but its newest bars quote F27 (as Yahoo showed on the 11th)."""
     days = pd.bdate_range("2026-07-01", "2026-11-11")
@@ -147,7 +153,7 @@ def _incident_market():
 
 def test_recent_sessions_come_from_the_front_contract_not_zs_f():
     zs_f, contracts = _incident_market()
-    got = stitch_front_contracts(zs_f, _yahoo(zs_f, contracts), utc("2026-11-11T16:00"))
+    got = _stitch(zs_f, _yahoo(zs_f, contracts), utc("2026-11-11T16:00"))
     assert got.index.max() == pd.Timestamp("2026-11-10")
     # X26 is the front until its last trading day (13 Nov): its settlements, not F27's.
     assert got.loc["2026-11-06"] == 1189.0
@@ -162,9 +168,7 @@ def test_the_series_rolls_to_the_next_contract_on_the_last_trading_day():
     x26 = pd.Series(1100.0, index=days[days <= "2026-11-13"])
     f27 = pd.Series(1110.0, index=days)
     zs_f = pd.Series(1000.0, index=days)  # deliberately wrong everywhere
-    got = stitch_front_contracts(
-        zs_f, _yahoo(zs_f, {"X26": x26, "F27": f27}), utc("2026-11-20T16:00")
-    )
+    got = _stitch(zs_f, _yahoo(zs_f, {"X26": x26, "F27": f27}), utc("2026-11-20T16:00"))
     assert got.loc["2026-11-12"] == 1100.0  # X26 until the day before its last trading day
     assert got.loc["2026-11-13"] == 1110.0  # X26 expires on the 13th: F27 already
     assert got.loc["2026-11-16"] == 1110.0
@@ -178,7 +182,7 @@ def test_an_expired_contract_delisted_by_yahoo_does_not_stall_the_series():
     zs_f = pd.Series(1000.0, index=days)
     trusted = pd.Series(1100.0, index=days[days <= "2026-11-12"])
     for run in ("2026-11-17T16:00", "2026-11-24T16:00"):
-        got = stitch_front_contracts(zs_f, _yahoo(zs_f, {"F27": f27}), utc(run), trusted)
+        got = _stitch(zs_f, _yahoo(zs_f, {"F27": f27}), utc(run), trusted)
         assert got.index.max() == pd.Timestamp(final_through(utc(run)))
         assert got.loc["2026-11-12"] == 1100.0 and got.loc["2026-11-13"] == 1210.0
 
@@ -192,9 +196,7 @@ def test_price_contract_rolls_on_the_last_trading_day_front_contract_after_it():
 def test_a_recent_session_without_its_contract_ends_the_series_before_it():
     zs_f, contracts = _incident_market()
     x26 = contracts["X26"].drop(pd.Timestamp("2026-11-09"))  # Yahoo lost one X26 bar
-    got = stitch_front_contracts(
-        zs_f, _yahoo(zs_f, {**contracts, "X26": x26}), utc("2026-11-11T16:00")
-    )
+    got = _stitch(zs_f, _yahoo(zs_f, {**contracts, "X26": x26}), utc("2026-11-11T16:00"))
     assert got.index.max() == pd.Timestamp("2026-11-06")  # never ZS=F's 1192.5 for the 9th
 
 
@@ -202,7 +204,7 @@ def test_an_expired_contract_gone_from_yahoo_is_replaced_by_the_trusted_cache():
     zs_f, contracts = _incident_market()
     trusted = contracts["X26"][contracts["X26"].index <= "2026-11-10"]
     gone = {"F27": contracts["F27"]}  # X26 delisted
-    got = stitch_front_contracts(zs_f, _yahoo(zs_f, gone), utc("2026-11-11T16:00"), trusted)
+    got = _stitch(zs_f, _yahoo(zs_f, gone), utc("2026-11-11T16:00"), trusted)
     assert got.loc["2026-11-09"] == 1182.25 and got.index.max() == pd.Timestamp("2026-11-10")
 
 
@@ -432,125 +434,179 @@ def _quote(settle, stamp):
     return q
 
 
+def _confirm(s: pd.Series, q, now: str):
+    """Settle `s` as if its newest session were the only one this run added."""
+    return confirm_newest_settlement(s, [s.index.max()], q, utc(now))
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        ("2026-11-12T16:00", "2026-11-12"),  # Thu 10:00 CST
+        ("2026-11-12T12:00", "2026-11-12"),  # Thu 06:00 CST, overnight session
+        ("2026-11-12T17:59", "2026-11-12"),  # 11:59 CST
+        ("2026-11-12T18:00", None),  # 12:00 CST: settlement time approaching
+        ("2026-11-12T20:00", None),  # 14:00 CST: afternoon, not relied on
+        ("2026-11-13T01:00", "2026-11-13"),  # Thu 19:00 CST opens Friday
+        ("2026-11-14T01:30", None),  # Fri 19:30 CST: no session until Sunday evening
+        ("2026-11-16T01:30", "2026-11-16"),  # Sun 19:30 CST opens Monday
+        ("2026-11-26T16:00", None),  # Thanksgiving
+        ("2026-11-26T01:30", None),  # Wed 19:30 CST before it
+        ("2026-11-27T16:00", "2026-11-27"),  # the Friday after
+        ("2026-07-01T16:00", "2026-07-01"),  # 11:00 CDT
+        ("2026-07-01T17:00", None),  # 12:00 CDT
+    ],
+)
+def test_trading_session_is_when_the_previous_close_can_be_relied_on(now, expected):
+    got = trading_session(utc(now))
+    assert (got.isoformat() if got else None) == expected
+
+
+@pytest.mark.parametrize(
+    ("day", "settles"),
+    [
+        ("2026-11-12", True),  # Thursday
+        ("2026-11-13", False),  # Friday
+        ("2026-11-25", False),  # eve of Thanksgiving
+        ("2026-11-27", False),
+        ("2026-04-02", False),  # eve of Good Friday
+        ("2027-01-15", False),  # Friday before MLK Day
+        ("2027-01-19", True),
+    ],
+)
+def test_bar_is_settlement_monday_to_thursday_except_the_eve_of_a_holiday(day, settles):
+    assert bar_is_settlement(date.fromisoformat(day)) is settles
+
+
 @pytest.mark.settlement
 def test_newest_bar_is_replaced_by_the_settlement_the_morning_after():
     s = _series_through("2026-11-11")
     s.loc["2026-11-11"] = 1229.75  # the bar Yahoo showed at 19:30 CST: an overnight print
     q = _quote(1230.75, "2026-11-12T15:55")  # Thursday's session is trading
-    got, _ = confirm_newest_settlement(s, q, utc("2026-11-12T16:00"))
-    assert got.loc["2026-11-11"] == 1230.75
-    assert q.seen == ["ZSX26.CBT"]  # X26 is the front until its last trading day, 13 Nov
+    got, issues = _confirm(s, q, "2026-11-12T16:00")
+    assert got.loc["2026-11-11"] == 1230.75 and issues == []
+    assert q.seen == ["ZSX26.CBT"]  # X26 until the day before its last trading day, 13 Nov
     assert got.loc["2026-11-10"] == 1200.0
+
+
+@pytest.mark.settlement
+def test_a_monday_to_thursday_bar_needs_no_quote():
+    s = _series_through("2026-11-11")
+    s.loc["2026-11-11"] = 1229.0  # after 23:00 CT the bar is the settlement
+    for q, now in (
+        (_quote(None, None), "2026-11-12T16:00"),
+        (_quote(1.0, None), "2026-11-12T20:00"),
+    ):
+        got, issues = _confirm(s, q, now)
+        assert got.loc["2026-11-11"] == 1229.0 and issues == []
 
 
 @pytest.mark.settlement
 def test_monday_confirms_friday_and_saturday_cannot():
     s = _series_through("2026-11-20")  # an ordinary Friday (F27 is the front)
-    monday, _ = confirm_newest_settlement(
-        s, _quote(1210.0, "2026-11-23T15:50"), utc("2026-11-23T16:00")
-    )
+    monday, _ = _confirm(s, _quote(1210.0, "2026-11-23T15:50"), "2026-11-23T16:00")
     assert monday.loc["2026-11-20"] == 1210.0
-    # On Saturday the quote still describes Friday's session, so its previous close is Thursday's.
-    saturday, _ = confirm_newest_settlement(
-        s, _quote(1205.0, "2026-11-20T19:20"), utc("2026-11-21T16:00")
-    )
-    assert saturday.index.max() == pd.Timestamp("2026-11-19")
+    # On Saturday no session trades: the quote is not even read.
+    q = _quote(1205.0, "2026-11-20T19:20")
+    saturday, issues = _confirm(s, q, "2026-11-21T16:00")
+    assert saturday.index.max() == pd.Timestamp("2026-11-19") and q.seen == [] and issues == []
 
 
 @pytest.mark.settlement
 @pytest.mark.parametrize(
-    ("settle", "stamp", "now", "why"),
+    ("settle", "stamp", "now", "alerts", "why"),
     [
-        (None, None, "2026-11-12T16:00", "quote unavailable"),
-        (1230.75, "2026-11-11T19:20", "2026-11-12T16:00", "stale quote from the previous session"),
-        (
-            1231.0,
-            "2026-11-12T01:55",
-            "2026-11-12T02:00",
-            "run delayed past 19:00 CT: quote is a day ahead",
-        ),
-        (float("nan"), "2026-11-12T15:55", "2026-11-12T16:00", "non-finite settlement"),
+        (None, None, "2026-11-23T16:00", True, "quote unavailable"),
+        (1210.0, "2026-11-20T19:15", "2026-11-23T16:00", False, "no trade in Monday's session yet"),
+        (1210.0, "2026-11-23T19:30", "2026-11-23T20:00", False, "Monday afternoon: not read"),
+        (1211.0, "2026-11-24T01:55", "2026-11-24T02:00", False, "Monday evening: Tuesday's quote"),
+        (float("nan"), "2026-11-23T15:55", "2026-11-23T16:00", True, "non-finite settlement"),
     ],
 )
-def test_newest_session_is_held_back_without_a_matching_settlement(settle, stamp, now, why):
-    s = _series_through("2026-11-11" if now >= "2026-11-12T06" else "2026-11-10")
-    got, _ = confirm_newest_settlement(s, _quote(settle, stamp), utc(now))
-    assert got.index.max() == s.index[-2], why
+def test_a_friday_is_held_back_without_a_matching_settlement(settle, stamp, now, alerts, why):
+    s = _series_through("2026-11-20")
+    got, issues = _confirm(s, _quote(settle, stamp), now)
+    assert got.index.max() == pd.Timestamp("2026-11-19"), why
+    assert bool(issues) is alerts, why
 
 
 @pytest.mark.settlement
-def test_a_session_already_stored_as_final_needs_no_quote():
-    s = _series_through("2026-11-11")
-    trusted = s.copy()
-    trusted.loc["2026-11-11"] = 1230.75
-    q = _quote(None, None)
-    got, _ = confirm_newest_settlement(s, q, utc("2026-11-12T20:00"), trusted)
-    assert got.loc["2026-11-11"] == 1230.75 and q.seen == []
-
-
-@pytest.mark.settlement
-def test_fetch_end_to_end_publishes_the_settlement_not_the_overnight_print(tmp_path):
-    zs_f, contracts = _incident_market()
-    contracts["X26"].loc["2026-11-11"] = 1229.25  # bar during the overnight session
-    q = _quote(1229.0, "2026-11-12T15:55")  # X26 settled 1229.00 on the 11th
-    got = fetch_soy_prices(
-        tmp_path, downloader=_yahoo(zs_f, contracts), now=utc("2026-11-12T16:00"), quote=q
-    )
-    assert got.index.max() == pd.Timestamp("2026-11-11") and got.loc["2026-11-11"] == 1229.0
-    assert got.loc["2026-11-09"] == 1182.25
-
-
-@pytest.mark.settlement
-def test_an_evening_quote_not_yet_traded_in_the_new_session_is_not_used():
-    """Wed 20:30 CST, thin contract: the previous close has rolled to Wednesday's settlement,
-    but the last trade is still Wednesday 13:19. Taken as Tuesday's it would be a day off."""
-    s = _series_through("2026-11-10")
-    got, _ = confirm_newest_settlement(
-        s, _quote(1229.0, "2026-11-11T19:19"), utc("2026-11-12T02:30")
-    )
-    assert got.index.max() == pd.Timestamp("2026-11-09")
-    # The same stale quote time on Thursday morning is not used either.
-    got, _ = confirm_newest_settlement(
-        s, _quote(1229.0, "2026-11-11T19:19"), utc("2026-11-12T16:00")
-    )
-    assert got.index.max() == pd.Timestamp("2026-11-09")
+def test_a_thin_contract_quote_not_yet_traded_in_the_new_session_is_not_used():
+    """Mon 20:30 CST: the previous close may have rolled to Monday's settlement while the last
+    trade is still Monday 13:19. Taken as Friday's it would be a session off."""
+    s = _series_through("2026-11-20")
+    got, _ = _confirm(s, _quote(1229.0, "2026-11-23T19:19"), "2026-11-24T02:30")
+    assert got.index.max() == pd.Timestamp("2026-11-19")
+    # The same stale quote time on Tuesday morning is not used either.
+    got, _ = _confirm(s, _quote(1229.0, "2026-11-23T19:19"), "2026-11-24T16:00")
+    assert got.index.max() == pd.Timestamp("2026-11-19")
 
 
 @pytest.mark.settlement
 def test_thanksgiving_week():
     s = _series_through("2026-11-25")
     s.loc["2026-11-25"] = 1205.0  # pre-holiday bar: the last trade
-    # Thanksgiving (no run publishes anything new): the quote is still Wednesday's.
-    thu, _ = confirm_newest_settlement(
-        s, _quote(1200.0, "2026-11-25T19:15"), utc("2026-11-26T16:00")
-    )
-    assert thu.index.max() == pd.Timestamp("2026-11-24")
+    # Thanksgiving: no session trades, nothing new.
+    thu, issues = _confirm(s, _quote(1200.0, "2026-11-25T19:15"), "2026-11-26T16:00")
+    assert thu.index.max() == pd.Timestamp("2026-11-24") and issues == []
     # Friday: its session follows Wednesday's, so the previous close is Wednesday's settlement.
-    fri, confirmed = confirm_newest_settlement(
-        s, _quote(1206.25, "2026-11-27T15:40"), utc("2026-11-27T16:00")
-    )
-    assert fri.loc["2026-11-25"] == 1206.25
-    assert confirmed == {pd.Timestamp("2026-11-25"): 1206.25}
+    fri, issues = _confirm(s, _quote(1206.25, "2026-11-27T15:40"), "2026-11-27T16:00")
+    assert fri.loc["2026-11-25"] == 1206.25 and issues == []
 
 
 @pytest.mark.settlement
 def test_tuesday_after_a_monday_holiday_confirms_friday():
     s = _series_through("2027-01-15")
-    got, _ = confirm_newest_settlement(
-        s, _quote(1190.5, "2027-01-19T15:30"), utc("2027-01-19T16:00")
-    )
+    got, _ = _confirm(s, _quote(1190.5, "2027-01-19T15:30"), "2027-01-19T16:00")
     assert got.loc["2027-01-15"] == 1190.5
+
+
+@pytest.mark.settlement
+def test_a_contracts_last_trading_day_is_confirmed_from_the_next_contract():
+    """X26's last trading day is Fri 2026-11-13: the close that day is F27's settlement."""
+    s = _series_through("2026-11-13")
+    q = _quote(1214.0, "2026-11-16T15:30")
+    got, issues = _confirm(s, q, "2026-11-16T16:00")
+    assert got.loc["2026-11-13"] == 1214.0 and issues == []
+    assert q.seen == ["ZSF27.CBT"]
+    held, issues = _confirm(s, _quote(None, None), "2026-11-16T16:00")
+    assert held.index.max() == pd.Timestamp("2026-11-12")
+    assert "quote unavailable" in issues[0][1]
+
+
+@pytest.mark.settlement
+def test_a_missed_friday_is_published_from_its_bar_with_an_alert():
+    """Tuesday's run adds Friday and Monday: Friday's settlement was only in Monday's quote."""
+    s = _series_through("2026-11-23")
+    got, issues = confirm_newest_settlement(
+        s,
+        [pd.Timestamp("2026-11-20"), pd.Timestamp("2026-11-23")],
+        _quote(None, None),
+        utc("2026-11-24T16:00"),
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-23")  # Monday's bar is its settlement
+    assert [str(d.date()) for d, _ in issues] == ["2026-11-20"]
+
+
+def _market(last: str, friday_bar: float | None = None):
+    """ZS=F and F27 through `last` at 1200; X26 until its expiry at 1100."""
+    days = pd.bdate_range("2026-08-03", last)
+    f27 = pd.Series(1200.0, index=days)
+    x26 = pd.Series(1100.0, index=days[days <= "2026-11-13"])
+    zs_f = pd.Series(1200.0, index=days)
+    if friday_bar is not None:
+        f27.loc["2026-11-20"] = friday_bar
+    return zs_f, {"X26": x26, "F27": f27}
 
 
 @pytest.mark.settlement
 def test_friday_settlement_survives_the_following_runs(tmp_path):
     """Friday's bar keeps the last trade for good; Monday's quote settlement must stick."""
-    days = pd.bdate_range("2026-08-03", "2026-11-24")
-    f27 = pd.Series(1200.0, index=days)
-    f27.loc["2026-11-20"] = 1210.0  # Friday's bar: the last trade, never rewritten
-    zs_f = pd.Series(1200.0, index=days)
-    x26 = pd.Series(1100.0, index=days[days <= "2026-11-13"])
-    yahoo = _yahoo(zs_f, {"X26": x26, "F27": f27})
+    zs_f, contracts = _market("2026-11-24", friday_bar=1210.0)
+    yahoo = _yahoo(zs_f, contracts)
+    fetch_soy_prices(  # Friday's run: Thursday
+        tmp_path, downloader=yahoo, now=utc("2026-11-20T16:00"), quote=_quote(None, None)
+    )
     mon = fetch_soy_prices(
         tmp_path,
         downloader=yahoo,
@@ -566,19 +622,143 @@ def test_friday_settlement_survives_the_following_runs(tmp_path):
 
 
 @pytest.mark.settlement
-def test_an_unreadable_quote_is_reported_as_a_cache_fallback(tmp_path):
+def test_cached_sessions_are_never_replaced_by_later_downloads(tmp_path):
+    """Months later ZS=F still has Friday's last trade; the stored settlement must not move."""
+    zs_f, contracts = _market("2026-11-24", friday_bar=1210.0)
+    fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, contracts),
+        now=utc("2026-11-20T16:00"),
+        quote=_quote(None, None),
+    )
+    fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, contracts),
+        now=utc("2026-11-23T16:00"),
+        quote=_quote(1212.25, "2026-11-23T15:30"),
+    )
+    days = pd.bdate_range("2026-08-03", "2027-03-01")
+    zs_f = pd.Series(1200.0, index=days)
+    zs_f.loc["2026-11-20"] = 1210.0
+    h27 = pd.Series(1300.0, index=days)
+    yahoo = _yahoo(zs_f, {"F27": pd.Series(1200.0, index=days[days <= "2027-01-14"]), "H27": h27})
+    for run in pd.bdate_range("2026-11-24", "2027-03-01", freq="5B"):
+        got = fetch_soy_prices(
+            tmp_path, downloader=yahoo, now=utc(f"{run.date()}T16:00"), quote=_quote(None, None)
+        )
+        assert got.loc["2026-11-20"] == 1212.25, run
+
+
+@pytest.mark.settlement
+def test_an_unreadable_quote_on_monday_alerts(tmp_path):
+    zs_f, contracts = _market("2026-11-23")
+    log = SourceLog()
+    yahoo = _yahoo(zs_f, contracts)
+    fetch_soy_prices(
+        tmp_path, downloader=yahoo, now=utc("2026-11-20T16:00"), quote=_quote(None, None)
+    )
+    got = fetch_soy_prices(
+        tmp_path,
+        downloader=yahoo,
+        sources=log,
+        now=utc("2026-11-23T16:00"),
+        quote=_quote(None, None),
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-19")
+    assert log.sources["prices"].status == "cache"
+    assert "quote unavailable" in (log.sources["prices"].detail or "")
+
+
+@pytest.mark.settlement
+def test_a_friday_waiting_for_its_quote_is_reported_without_an_alert(tmp_path):
+    zs_f, contracts = _market("2026-11-23")
+    log = SourceLog()
+    yahoo = _yahoo(zs_f, contracts)
+    fetch_soy_prices(
+        tmp_path, downloader=yahoo, now=utc("2026-11-20T16:00"), quote=_quote(None, None)
+    )
+    got = fetch_soy_prices(
+        tmp_path,
+        downloader=yahoo,
+        sources=log,
+        now=utc("2026-11-23T16:00"),
+        quote=_quote(1200.0, "2026-11-20T19:15"),  # readable, but no trade on Monday yet
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-19")
+    assert log.sources["prices"].status == "live"
+    assert "not confirmed" in (log.sources["prices"].detail or "")
+
+
+@pytest.mark.settlement
+def test_fetch_end_to_end_publishes_the_settlement_not_the_overnight_print(tmp_path):
     zs_f, contracts = _incident_market()
+    contracts["X26"].loc["2026-11-11"] = 1229.25  # bar during the overnight session
+    q = _quote(1229.0, "2026-11-12T15:55")  # X26 settled 1229.00 on the 11th
+    got = fetch_soy_prices(
+        tmp_path, downloader=_yahoo(zs_f, contracts), now=utc("2026-11-12T16:00"), quote=q
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-11") and got.loc["2026-11-11"] == 1229.0
+    assert got.loc["2026-11-09"] == 1182.25
+
+
+@pytest.mark.settlement
+def test_x26_expiry_week_end_to_end(tmp_path):
+    """Thu 11-12 from X26's bar, Fri 11-13 (X26's last day) from F27's quote on Monday, and
+    X26 delisted from Tuesday on: nothing stalls, nothing alerts."""
+    days = pd.bdate_range("2026-08-03", "2026-11-18")
+    x26 = pd.Series(1100.0, index=days[days <= "2026-11-13"])
+    f27 = pd.Series(1200.0, index=days)
+    f27.loc["2026-11-13"] = 1201.0  # Friday's bar: the last trade
+    zs_f = pd.Series(1200.0, index=days)
+    cached = x26[x26.index <= "2026-11-11"].rename("close_c_bu").rename_axis("date")
+    cached.to_frame().to_parquet(tmp_path / CACHE_FILE)  # Thursday's run published Wednesday
+    (tmp_path / CACHE_META).write_text('{"final_through": "2026-11-11"}', encoding="utf-8")
+    log = SourceLog()
+    runs = [
+        ("2026-11-13T16:00", {"X26": x26, "F27": f27}, _quote(None, None)),
+        ("2026-11-16T16:00", {"X26": x26, "F27": f27}, _quote(1201.5, "2026-11-16T15:00")),
+        ("2026-11-17T16:00", {"F27": f27}, _quote(None, None)),
+        ("2026-11-18T16:00", {"F27": f27}, _quote(None, None)),
+    ]
+    for now, listed, q in runs:
+        got = fetch_soy_prices(
+            tmp_path, downloader=_yahoo(zs_f, listed), sources=log, now=utc(now), quote=q
+        )
+        assert got.index.max() == pd.Timestamp(final_through(utc(now))), now
+        assert log.sources["prices"].status == "live", now
+    assert got.loc["2026-11-12"] == 1100.0 and got.loc["2026-11-13"] == 1201.5
+
+
+@pytest.mark.settlement
+def test_cache_lost_after_an_expiry_falls_back_to_zs_f_with_an_alert(tmp_path):
+    days = pd.bdate_range("2026-08-03", "2026-11-18")
+    zs_f = pd.Series(1200.0, index=days)
     log = SourceLog()
     got = fetch_soy_prices(
         tmp_path,
-        downloader=_yahoo(zs_f, contracts),
+        downloader=_yahoo(zs_f, {"F27": pd.Series(1200.0, index=days)}),  # X26 gone
+        sources=log,
+        now=utc("2026-11-18T16:00"),
+        quote=_quote(None, None),
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-17")
+    assert log.sources["prices"].status == "cache" and "ZS=F used" in log.sources["prices"].detail
+
+
+@pytest.mark.settlement
+def test_rebuilding_a_legacy_cache_does_not_alert(tmp_path):
+    zs_f, contracts = _incident_market()
+    zs_f.rename("close_c_bu").to_frame().rename_axis("date").to_parquet(tmp_path / CACHE_FILE)
+    log = SourceLog()
+    got = fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, {"X26": contracts["X26"]}),
         sources=log,
         now=utc("2026-11-11T16:00"),
         quote=_quote(None, None),
     )
-    assert got.index.max() == pd.Timestamp("2026-11-09")
-    assert log.sources["prices"].status == "cache"
-    assert "quote unavailable" in (log.sources["prices"].detail or "")
+    assert got.loc["2026-11-06"] == 1189.0 and got.loc["2026-11-09"] == 1182.25
+    assert log.sources["prices"].status == "live"
 
 
 def test_quote_reads_the_chart_metadata(monkeypatch):
@@ -615,56 +795,11 @@ def test_quote_reads_the_chart_metadata(monkeypatch):
     assert calls[0] == "ZSX26.CBT" and calls[1]["period"] == "1d"
 
 
-@pytest.mark.settlement
-def test_a_confirmed_settlement_beats_the_bar_on_later_runs(tmp_path):
-    """Run 1 confirms the 11th from the quote; run 2 must not swap it for the 11th's bar."""
-    zs_f, contracts = _incident_market()
-    days = pd.bdate_range("2026-07-01", "2026-11-12")
-    x26 = contracts["X26"].reindex(days, fill_value=1100.0)
-    x26.loc["2026-11-11"], x26.loc["2026-11-12"] = 1229.25, 1240.0  # bars, not settlements
-    contracts = {**contracts, "X26": x26}
-    zs_f = zs_f.reindex(days, fill_value=1100.0)
-    yahoo = _yahoo(zs_f, contracts)
-    fetch_soy_prices(
-        tmp_path,
-        downloader=yahoo,
-        now=utc("2026-11-12T16:00"),
-        quote=_quote(1229.0, "2026-11-12T15:55"),
-    )
-    got = fetch_soy_prices(
-        tmp_path,
-        downloader=yahoo,
-        now=utc("2026-11-13T16:00"),
-        quote=_quote(1238.5, "2026-11-13T15:55"),
-    )
-    assert got.loc["2026-11-11"] == 1229.0 and got.loc["2026-11-12"] == 1238.5
-    side = json.loads((tmp_path / CACHE_META).read_text(encoding="utf-8"))
-    assert side["settlements"] == {"2026-11-11": 1229.0, "2026-11-12": 1238.5}
-
-
-@pytest.mark.settlement
-def test_a_held_back_session_is_reported_in_the_source_status(tmp_path):
-    zs_f, contracts = _incident_market()
-    log = SourceLog()
-    got = fetch_soy_prices(
-        tmp_path,
-        downloader=_yahoo(zs_f, contracts),
-        sources=log,
-        now=utc("2026-11-11T16:00"),
-        quote=_quote(1182.0, "2026-11-10T19:15"),  # readable, but still Tuesday's session
-    )
-    assert got.index.max() == pd.Timestamp("2026-11-09")
-    assert log.sources["prices"].status == "live"
-    assert "not confirmed" in (log.sources["prices"].detail or "")
-
-
 def test_a_duplicated_yahoo_row_does_not_crash_the_stitch():
     zs_f, contracts = _incident_market()
     x26 = contracts["X26"]
     dup = pd.concat([x26, x26.iloc[[-2]]])  # yfinance repeating a row
-    got = stitch_front_contracts(
-        zs_f, _yahoo(zs_f, {**contracts, "X26": dup}), utc("2026-11-11T16:00")
-    )
+    got = _stitch(zs_f, _yahoo(zs_f, {**contracts, "X26": dup}), utc("2026-11-11T16:00"))
     assert got.index.is_unique and got.loc["2026-11-10"] == 1224.5
 
 
@@ -692,19 +827,6 @@ def test_final_close_gate_parses_versions(version, held):
 
 
 # ---------------------------------------------------------------- expiry, missing bars, WASDE
-
-
-@pytest.mark.settlement
-def test_a_contracts_last_trading_day_is_confirmed_from_the_next_contract():
-    """X26's last trading day is Fri 2026-11-13: the close that day is F27's settlement."""
-    s = _series_through("2026-11-13")
-    q = _quote(1214.0, "2026-11-16T15:30")
-    got, confirmed = confirm_newest_settlement(s, q, utc("2026-11-16T16:00"))
-    assert got.loc["2026-11-13"] == 1214.0 and confirmed == {pd.Timestamp("2026-11-13"): 1214.0}
-    assert q.seen == ["ZSF27.CBT"]
-    held, _ = confirm_newest_settlement(s, _quote(None, None), utc("2026-11-16T16:00"))
-    assert held.index.max() == pd.Timestamp("2026-11-12")
-    assert "quote unavailable" in held.attrs["quote_unavailable"]
 
 
 @pytest.mark.settlement
@@ -758,3 +880,34 @@ def test_next_wasde_is_the_first_report_the_outlook_does_not_use():
     )
     assert next_report_after(behind) == "2026-11-10"  # out, but not in the numbers yet
     assert next_report_after(current) == "2026-12-10"
+
+
+@pytest.mark.settlement
+def test_rebuilding_a_legacy_cache_after_an_expiry_keeps_the_published_values(tmp_path):
+    days = pd.bdate_range("2026-08-03", "2026-11-18")
+    published = pd.Series(1100.0, index=days[days <= "2026-11-12"])
+    published.rename("close_c_bu").to_frame().rename_axis("date").to_parquet(tmp_path / CACHE_FILE)
+    zs_f = pd.Series(1200.0, index=days)  # F27 prices on X26 days: contract-mixed
+    log = SourceLog()
+    got = fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, {"F27": pd.Series(1200.0, index=days)}),  # X26 gone
+        sources=log,
+        now=utc("2026-11-18T16:00"),
+        quote=_quote(None, None),
+    )
+    assert (got[got.index <= "2026-11-12"] == 1100.0).all()
+    assert got.index.max() == pd.Timestamp("2026-11-17")
+
+
+def test_an_expired_contract_still_listed_with_a_hole_ends_the_series_not_zs_f():
+    days = pd.bdate_range("2026-08-03", "2026-11-18")
+    x26 = pd.Series(1100.0, index=days[days <= "2026-11-12"]).drop(pd.Timestamp("2026-11-10"))
+    f27 = pd.Series(1200.0, index=days)
+    zs_f = pd.Series(1200.0, index=days)
+    trusted = x26[x26.index <= "2026-11-06"]
+    got, _, issues = stitch_front_contracts(
+        zs_f, _yahoo(zs_f, {"X26": x26, "F27": f27}), utc("2026-11-18T16:00"), trusted
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-09")  # never ZS=F's F27 price for the 10th
+    assert issues and "no ZSX26.CBT bar for 2026-11-10" in issues[-1][1]
