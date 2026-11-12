@@ -1,7 +1,8 @@
 """CBOT soybean contract calendar: the reference (hedge) contract per horizon (P10).
 
-The published prices are the Yahoo continuous front month (ZS=F), which quotes the nearest
-contract until its last trading day and then rolls to the next one. These helpers only label
+The published prices are the continuous front month, which quotes the nearest contract until
+its last trading day and then rolls to the next one (Yahoo's ZS=F for history, each front
+contract's own symbol for recent sessions; see `ingest.prices`). These helpers only label
 which listed contract a horizon refers to and whether the series rolls inside the window;
 targets are not rebuilt on specific contracts (roadmap v2.1).
 
@@ -60,6 +61,17 @@ def reference_contract(when: pd.Timestamp) -> dict[str, Any]:
 def front_contract(when: pd.Timestamp) -> dict[str, Any]:
     """The contract the continuous front month quotes on `when` (last trading day >= when)."""
     return _first_listed(when, lambda y, m, w: last_trading_day(y, m) >= w)
+
+
+def price_contract(when: pd.Timestamp) -> dict[str, Any]:
+    """The contract whose settlement is the published close on `when`.
+
+    The front contract, except on its last trading day: the expiring contract is then in
+    delivery and thinly traded, and Yahoo carries no settlement for it (its quote has no
+    previous close once it expires and its symbol is soon delisted), so the published series
+    rolls to the next contract that day.
+    """
+    return _first_listed(when, lambda y, m, w: last_trading_day(y, m) > w)
 
 
 def crosses_roll(origin: pd.Timestamp, target: pd.Timestamp) -> bool:

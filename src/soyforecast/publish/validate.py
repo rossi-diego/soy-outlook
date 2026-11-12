@@ -18,6 +18,7 @@ Four kinds of check, each returning human-readable problems (an empty list passe
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -204,6 +205,26 @@ def check_archived(data: Path, meta: dict[str, Any]) -> list[str]:
     return []
 
 
+# From this version on the pipeline publishes final sessions only (freshness.final_through);
+# earlier data was published the same day and is not held to the rule.
+FINAL_CLOSE_SINCE = (2, 1, 0)
+
+
+def check_final_close(meta: dict[str, Any]) -> list[str]:
+    """The as-of close is a session that had ended in Chicago before the outlook was built."""
+    m = re.match(r"v?(\d+)\.(\d+)(?:\.(\d+))?", str(meta.get("version", "")))
+    version = tuple(int(g or 0) for g in m.groups()) if m else (0, 0, 0)
+    if version < FINAL_CLOSE_SINCE:
+        return []
+    built = chicago_now(datetime.fromisoformat(meta["generated_at"])).date().isoformat()
+    if str(meta["as_of_close"]) >= built:
+        return [
+            f"as_of_close {meta['as_of_close']} was not a final session when built "
+            f"(Chicago date {built})"
+        ]
+    return []
+
+
 def validate(
     data: Path,
     schema_version: int,
@@ -224,6 +245,7 @@ def validate(
             f"as_of_close {meta['as_of_close']} is {report.bdays_old} business days old "
             f"(limit {max_bdays})"
         )
+    report.problems += check_final_close(meta)
     report.problems += check_archived(data, meta)
     if baseline is not None:
         report.problems += check_deltas(data, baseline)

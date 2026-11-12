@@ -5,17 +5,20 @@ name: Data refresh
 
 on:
   schedule:
-    # After the CBOT close (13:20 CT) in both seasons: 19:45 UTC = 13:45 CST / 14:45 CDT.
-    # `soyforecast guard --event close` re-checks the Chicago clock in code, so a delayed or
-    # mis-set cron can never publish before the close.
-    - cron: "45 19 * * 1-5"
-    # Second pass on WASDE days only (guarded): picks up the new report if the WASDE Tracker
-    # published it after the first run.
-    - cron: "30 22 * * 1-5"
+    # The morning after each session (Mon-Fri), five tries: 12:17 to 17:17 UTC = 06:17 to
+    # 11:17 CST, 07:17 to 11:17 CDT (17:17 UTC is past the quote cutoff in summer and only
+    # matters in winter, e.g. the day after Thanksgiving, when trading opens at 08:30 CT).
+    # Only final sessions are published
+    # (freshness.final_through: a session dated today never is). A Monday-to-Thursday bar is
+    # then the settlement; a Friday's or pre-holiday session's settlement is only in the next
+    # session's quote, which is read before 12:00 CT (freshness.trading_session), so Monday's
+    # runs publish Friday. The guard makes every run after a successful one a no-op. A WASDE
+    # day's report goes out with that day's close, the morning after.
+    - cron: "17 12,14,15,16,17 * * 1-5"
   workflow_dispatch:
     inputs:
       force:
-        description: "Skip the close guard (the pipeline still drops unsettled sessions)"
+        description: "Skip the close guard (the pipeline still publishes final sessions only)"
         type: boolean
         default: false
       allow_stale:
@@ -71,13 +74,11 @@ jobs:
           uv sync --locked --no-dev
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Guard (CBOT close in Chicago, or WASDE day for the second pass)
+      - name: Guard (a final session newer than the published close)
         id: guard
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then
-            soyforecast --json-logs guard --event wasde --meta web/public/data/meta.json
           else
             soyforecast --json-logs guard --event close --meta web/public/data/meta.json
           fi

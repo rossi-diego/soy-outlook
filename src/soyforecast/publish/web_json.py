@@ -103,9 +103,26 @@ def _r(x: float, d: int = 2) -> float | None:
     return None if x is None or not np.isfinite(x) else round(float(x), d)
 
 
+def next_report_after(a: Artefacts) -> str | None:
+    """The next WASDE after the report the outlook uses.
+
+    Usually the manifest's next release. Between a release and the publication of that day's
+    close (the morning after), the newest report is already in the pinned history but not in
+    the outlook: then it is that report, so the site says it is out and not in the numbers.
+    """
+    release = pd.Timestamp(a.live["release_date"])
+    later = pd.to_datetime(a.vintages["release_date"])
+    later = later[later > release]
+    if len(later):
+        return str(later.min().date())
+    nxt = a.wasde_manifest.get("next_release")
+    return str(nxt) if nxt else None
+
+
 def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
     anchor = pd.Timestamp(a.live["anchor_date"])
     release = pd.Timestamp(a.live["release_date"])
+    next_wasde = next_report_after(a)
     now = now or datetime.now(UTC)
     return {
         "schema_version": SCHEMA_VERSION,
@@ -117,12 +134,10 @@ def build_meta(a: Artefacts, now: datetime | None = None) -> dict[str, Any]:
         # latest close, this many days after the report (P15).
         "days_since_report": int((anchor - release).days),
         "origin_note": "Ranges are calibrated on forecasts made at the close of WASDE release days.",
-        "next_wasde": a.wasde_manifest.get("next_release"),
+        "next_wasde": next_wasde,
         # Where each input came from and how old it is (P23): the site's stale banner and
         # the refresh workflow's validation gate read this block.
-        "freshness": freshness_block(
-            anchor, now, a.wasde_manifest.get("next_release"), a.sources, a.offline
-        ),
+        "freshness": freshness_block(anchor, now, next_wasde, a.sources, a.offline),
         "wasde_source": {
             "tag": a.wasde_manifest.get("release_tag"),
             "sha256": a.wasde_manifest.get("sha256"),

@@ -97,16 +97,16 @@ def guard(
 ) -> None:
     """Decide whether a refresh should run now (writes should_run to GITHUB_OUTPUT).
 
-    close: a settled CBOT session is newer than the published close (catches up after a
-    delayed or missed run, never runs before the close). wasde: today is the release day.
+    close: a final session (freshness.final_through) is newer than the published close; a
+    delayed or missed run catches up. wasde: today is the release day (kept for manual use).
     """
     import json
 
     from soyforecast.freshness import (
         chicago_now,
         close_to_publish,
+        final_through,
         is_wasde_day,
-        settled_through,
     )
 
     if event not in ("close", "wasde"):
@@ -120,7 +120,7 @@ def guard(
         "guard",
         trigger=event,
         chicago=chicago_now().isoformat(timespec="minutes"),
-        settled_through=settled_through().isoformat(),
+        final_through=final_through().isoformat(),
         published=published.get("as_of_close"),
         run=should_run,
     )

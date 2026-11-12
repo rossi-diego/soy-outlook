@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
-import pytest
 from typer.testing import CliRunner
 
 from soyforecast import fixtures
@@ -16,7 +15,6 @@ from soyforecast.cli import app
 from soyforecast.freshness import (
     SourceLog,
     business_days_between,
-    cbot_closed_today,
     freshness_block,
     is_wasde_day,
 )
@@ -29,29 +27,6 @@ FIXTURES = Path(__file__).parent / "fixtures" / "bronze"
 
 
 # ---------------------------------------------------------------- close guard and freshness
-
-
-@pytest.mark.parametrize(
-    ("utc", "expected"),
-    [
-        # The scheduled cron (19:45 UTC) is after the 13:20 CT close in both seasons.
-        ("2026-01-14T19:45", True),  # CST: 13:45 local
-        ("2026-07-15T19:45", True),  # CDT: 14:45 local
-        # A run that fires early (or a misconfigured cron) is skipped in either season.
-        ("2026-01-14T19:15", False),  # CST: 13:15 local, before the guard
-        ("2026-07-15T18:15", False),  # CDT: 13:15 local
-        ("2026-07-15T18:30", True),  # CDT: 13:30 local, exactly at the guard
-        # Weekends never run, even when UTC is still Friday evening in Chicago terms.
-        ("2026-11-07T19:45", False),  # Saturday
-        ("2026-11-07T02:00", True),  # Friday 20:00 CST (UTC already Saturday)
-        # DST switch days keep working: 2026-03-09 (Mon after spring forward), 2026-11-02.
-        ("2026-03-09T19:45", True),
-        ("2026-11-02T19:45", True),
-    ],
-)
-def test_close_guard_is_dst_safe(utc, expected):
-    now = datetime.fromisoformat(utc).replace(tzinfo=UTC)
-    assert cbot_closed_today(now) is expected
 
 
 def test_business_days_between_counts_weekdays_after_start():

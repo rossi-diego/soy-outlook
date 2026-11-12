@@ -54,6 +54,8 @@ def build_dataset(vintages: pd.DataFrame, prices: pd.Series) -> pd.DataFrame:
     rows = []
     for month, v in vintages.iterrows():
         origin = pd.Timestamp(v["release_date"])
+        if origin > last_close:
+            continue  # released after the newest final close: its release-day close is unknown
         anchor = close_on_or_before(prices, origin)
         if anchor is None:
             continue

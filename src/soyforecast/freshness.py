@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
+from functools import lru_cache
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 
-from soyforecast.config import CBOT_TZ, CLOSE_GUARD_LOCAL, STALE_CLOSE_BDAYS
+from soyforecast.config import CBOT_TZ, STALE_CLOSE_BDAYS
 
 # live    - downloaded in this run and accepted by the checks;
 # offline - the cache was used on purpose (--offline or a local file);
@@ -71,44 +72,156 @@ def chicago_now(now: datetime | None = None) -> datetime:
     return now.astimezone(ZoneInfo(CBOT_TZ))
 
 
-def cbot_closed_today(now: datetime | None = None) -> bool:
-    """True on a Chicago weekday once the local clock has passed the close guard.
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    first = date(year, month, 1)
+    return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (n - 1))
 
-    Exchange holidays are not modelled: on those days the run finds no new close and the
-    validation gate leaves the published data as it is.
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    last = date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)
+    return last - timedelta(days=(last.weekday() - weekday) % 7)
+
+
+def _easter(year: int) -> date:
+    """Gregorian Easter Sunday (anonymous Gregorian algorithm)."""
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    m = (32 + 2 * e + 2 * i - h - k) % 7
+    n = (a + 11 * h + 22 * m) // 451
+    month, day = divmod(h + m - 7 * n + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _observed(day: date) -> date:
+    """A fixed-date holiday on a weekend is observed on the nearest weekday."""
+    if day.weekday() == 5:
+        return day - timedelta(days=1)
+    if day.weekday() == 6:
+        return day + timedelta(days=1)
+    return day
+
+
+@lru_cache(maxsize=64)
+def cbot_holidays(year: int) -> frozenset[date]:
+    """Weekdays the CBOT grain markets are closed for a full day (no session, no Yahoo bar).
+
+    The standing US exchange holidays: New Year's Day (not moved back into the previous year
+    when it falls on a Saturday), Martin Luther King Jr. Day, Presidents' Day, Good Friday,
+    Memorial Day, Juneteenth (from 2022), Independence Day, Labor Day, Thanksgiving and
+    Christmas. Checked against every ZS=F bar since 2007; one-off closures (a state funeral,
+    a hurricane) are not modelled and only delay a publication by one run.
     """
-    local = chicago_now(now)
-    return local.weekday() < 5 and local.time() >= time(*CLOSE_GUARD_LOCAL)
+    days = {
+        _nth_weekday(year, 1, 0, 3),
+        _nth_weekday(year, 2, 0, 3),
+        _easter(year) - timedelta(days=2),
+        _last_weekday(year, 5, 0),
+        _observed(date(year, 7, 4)),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 11, 3, 4),
+        _observed(date(year, 12, 25)),
+    }
+    if date(year, 1, 1).weekday() != 5:
+        days.add(_observed(date(year, 1, 1)))
+    if year >= 2022:
+        days.add(_observed(date(year, 6, 19)))
+    return frozenset(days)
 
 
-def settled_through(now: datetime | None = None) -> date:
-    """The latest Chicago weekday whose CBOT day session has closed (CLOSE_GUARD_LOCAL passed).
+def is_session(day: date) -> bool:
+    """True when `day` is a CBOT trading day (a weekday that is not an exchange holiday)."""
+    return day.weekday() < 5 and day not in cbot_holidays(day.year)
 
-    Any bar dated after this is an unfinished session. This is a date cut only: Yahoo dates
-    ZS=F bars by the New York calendar day, so from 19:00 CT (Globex reopens) to 23:00 CT the
-    bar dated today also moves with overnight trades, and the newest bar can be the last trade
-    rather than the settlement. Exchange holidays are not modelled; on those days there is
-    simply no bar to take.
-    """
-    local = chicago_now(now)
-    day = local.date()
-    if local.weekday() < 5 and local.time() >= time(*CLOSE_GUARD_LOCAL):
-        return day
+
+def previous_session(day: date) -> date:
+    """The last CBOT trading day before `day`."""
     day -= timedelta(days=1)
-    while day.weekday() >= 5:
+    while not is_session(day):
         day -= timedelta(days=1)
     return day
 
 
-def close_to_publish(as_of_close: str | None, now: datetime | None = None) -> bool:
-    """Close guard: True when a settled session is newer than the published close.
+def final_through(now: datetime | None = None) -> date:
+    """The latest session whose Yahoo daily bar is final: the last session before today in Chicago.
 
-    A catch-up rule rather than "after the close today": a scheduled run that GitHub delays
-    past Chicago midnight still picks up the previous session instead of skipping it.
+    A bar dated today is never final, at any hour. Yahoo dates futures bars by the New York
+    calendar day and keeps rewriting the newest one: before the 13:20 CT close it is the live
+    session, after it the last trade rather than the settlement, and from 19:00 CT (Globex
+    reopens) to 23:00 CT it moves with overnight trades. Every published close is therefore a
+    previous day's settlement, taken the morning after. Exchange holidays (`cbot_holidays`) are
+    skipped: the day after Thanksgiving, the newest final session is the Wednesday.
+    """
+    return previous_session(chicago_now(now).date())
+
+
+# CBOT grains trade a day session that closes at 13:20 CT and an overnight session that opens at
+# 19:00 CT for the next trade date (Sunday 19:00 opens Monday's).
+SESSION_OPEN_LOCAL = time(19, 0)
+
+
+def trade_date(now: datetime | None = None) -> date:
+    """The trade date of the latest session that has opened (Chicago).
+
+    19:00 CT Sunday to Thursday opens the next weekday's session; from Friday 19:00 to Sunday
+    19:00 the latest session is still Friday's. A date that is not a session (a weekend, an
+    exchange holiday) maps back to the last session before it.
+    """
+    local = chicago_now(now)
+    day = local.date()
+    if local.time() >= SESSION_OPEN_LOCAL and local.weekday() in (6, 0, 1, 2, 3):
+        day += timedelta(days=1)
+    while not is_session(day):
+        day -= timedelta(days=1)
+    return day
+
+
+# The quote's previous close is read only before this Chicago time on a session's own date:
+# the settlement is struck at about 13:15 CT (earlier on half days, which close at 12:05), and
+# what the previous close shows from then until the next session opens is not relied on.
+QUOTE_CUTOFF_LOCAL = time(12, 0)
+
+
+def trading_session(now: datetime | None = None) -> date | None:
+    """The session trading at `now`, if its quote's previous close can be relied on.
+
+    From 19:00 CT the evening before (when the next day is a session) until
+    QUOTE_CUTOFF_LOCAL on the session's date; None otherwise (afternoons, weekends from Friday
+    afternoon, the eve of a holiday and the holiday itself).
+    """
+    local = chicago_now(now)
+    if local.time() >= SESSION_OPEN_LOCAL:
+        day = local.date() + timedelta(days=1)
+    elif local.time() < QUOTE_CUTOFF_LOCAL:
+        day = local.date()
+    else:
+        return None
+    return day if is_session(day) else None
+
+
+def bar_is_settlement(day: date) -> bool:
+    """True when Yahoo's daily bar for a final session `day` equals its settlement.
+
+    Yahoo rewrites a session's bar to the settlement when the next session's overnight trading
+    moves to its own date (23:00 CT), which only happens when the next calendar day is a
+    session: Monday to Thursday, except the eve of a holiday. Friday's and a pre-holiday
+    session's bars keep the last trade (measured: 9 of 10 Fridays).
+    """
+    return is_session(day + timedelta(days=1))
+
+
+def close_to_publish(as_of_close: str | None, now: datetime | None = None) -> bool:
+    """Close guard: True when a final session is newer than the published close.
+
+    A catch-up rule rather than a time window: a run that GitHub delays by hours, or one
+    started by hand, publishes the newest final session and nothing else.
     """
     if not as_of_close:
         return True
-    return settled_through(now).isoformat() > str(as_of_close)[:10]
+    return final_through(now).isoformat() > str(as_of_close)[:10]
 
 
 def is_wasde_day(next_release: str | None, now: datetime | None = None) -> bool:

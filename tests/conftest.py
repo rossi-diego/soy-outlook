@@ -11,8 +11,19 @@ import pytest
 from soyforecast import fixtures
 
 FIXTURES = Path(__file__).parent / "fixtures" / "bronze"
-# Built on the day of the fixtures' last close, as the scheduled refresh would be.
-FIXTURE_NOW = datetime(2026, 11, 6, 21, tzinfo=UTC)
+# Built the morning after the fixtures' last close (Friday), as the scheduled refresh would be:
+# Saturday 16:00 UTC, when Friday's settlement is final (freshness.final_through).
+FIXTURE_NOW = datetime(2026, 11, 7, 16, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def _no_settlement_quote(request, monkeypatch):
+    """Price-ingest tests run on synthetic dates no live quote can confirm, and must not touch
+    the network: the newest-session settlement step is a no-op unless a test opts in."""
+    if request.node.get_closest_marker("settlement") is None:
+        monkeypatch.setattr(
+            "soyforecast.ingest.prices.confirm_newest_settlement", lambda s, *a, **k: (s, [])
+        )
 
 
 @pytest.fixture(scope="session")
