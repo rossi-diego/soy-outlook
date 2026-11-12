@@ -82,7 +82,7 @@ def confirm_newest_settlement(
     quote: Callable[[str], Quote],
     now: datetime | None = None,
     trusted: pd.Series | None = None,
-) -> pd.Series:
+) -> tuple[pd.Series, dict[pd.Timestamp, float]]:
     """Replace the newest session's bar with its settlement, or hold that session back.
 
     Yahoo's daily bar for a session is not its settlement the morning after (it can hold the
@@ -91,15 +91,24 @@ def confirm_newest_settlement(
     until 19:00 CT the next weekday. The newest session is kept only if it is already stored
     as final in the cache, or if the quote's own time falls in the session right after it (so
     its previous close is that session's settlement), which then replaces the bar.
+
+    Returns the series and the settlements confirmed by this call ({} if none), which the
+    caller stores so later runs prefer them over the session's bar.
     """
     if series.empty:
-        return series
+        return series, {}
     newest = series.index.max()
     if trusted is not None and newest in trusted.index:
         series = series.copy()
         series.loc[newest] = float(trusted.loc[newest])
-        return series
-    code = front_contract(newest)["code"]
+        return series, {}
+    front = front_contract(newest)
+    code = front["code"]
+    if newest.date().isoformat() == front["last_trade"] and trade_date(now) > newest.date():
+        # The contract expired that day: no later session will carry its settlement in a
+        # quote, and no overnight trading follows to move its bar, so the bar is taken as final.
+        log.info("prices.last_trading_day_bar", date=str(newest.date()), contract=code)
+        return series, {newest: float(series.loc[newest])}
     try:
         settle, stamp = quote(contract_symbol(code))
     except Exception as exc:  # network, crumb, rate limit
@@ -120,7 +129,7 @@ def confirm_newest_settlement(
             )
         series = series.copy()
         series.loc[newest] = settle
-        return series
+        return series, {newest: float(settle)}
     log.warning(
         "prices.newest_held_back",
         date=str(newest.date()),
@@ -128,7 +137,7 @@ def confirm_newest_settlement(
         quote_session=str(quote_session),
         reason="no settlement quote for this session yet",
     )
-    return series.drop(newest)
+    return series.drop(newest), {}
 
 
 def contract_symbol(code: str) -> str:
@@ -159,7 +168,8 @@ def _safe_download(
     except Exception as exc:  # network, parsing, rate limit, delisted symbol
         log.warning("prices.download_failed", ticker=ticker, error=str(exc))
         return pd.Series(dtype="float64")
-    return s.sort_index().astype("float64").dropna()
+    s = s.sort_index().astype("float64").dropna()
+    return s[~s.index.duplicated(keep="last")]  # yfinance sometimes repeats the last row
 
 
 def stitch_front_contracts(
@@ -167,13 +177,15 @@ def stitch_front_contracts(
     downloader: Callable[[str, str], pd.Series],
     now: datetime | None = None,
     trusted: pd.Series | None = None,
+    settled: pd.Series | None = None,
 ) -> pd.Series:
     """`base` (ZS=F) with its recent sessions replaced by the front contract's own bars.
 
-    For each session in the window, in order of preference: the front contract's bar from its
-    own symbol, a value already stored as final in the cache (`trusted`; an expired contract
-    can disappear from Yahoo), and, only outside the newest PRICE_REQUIRE_CONTRACT_BDAYS
-    sessions, ZS=F itself. A newest-window session with none of the first two ends the series
+    For each session in the window, in order of preference: a settlement confirmed from the
+    quote by an earlier run (`settled`; the bar can keep a last trade or overnight print), the
+    front contract's bar from its own symbol, a value already stored as final in the cache
+    (`trusted`; an expired contract can disappear from Yahoo), and, only outside the newest
+    PRICE_REQUIRE_CONTRACT_BDAYS sessions, ZS=F itself. A newest-window session with none of the first two ends the series
     just before it, so a contract-mixed ZS=F bar is never published.
     """
     cutoff = pd.Timestamp(final_through(now))
@@ -181,6 +193,7 @@ def stitch_front_contracts(
     window_start = cutoff - BDay(PRICE_CONTRACT_WINDOW_BDAYS)
     require_start = cutoff - BDay(PRICE_REQUIRE_CONTRACT_BDAYS - 1)
     trusted = trusted if trusted is not None else pd.Series(dtype="float64")
+    settled = settled if settled is not None else pd.Series(dtype="float64")
 
     candidate_days = pd.bdate_range(window_start, cutoff)
     codes = sorted({front_contract(d)["code"] for d in candidate_days})
@@ -193,12 +206,23 @@ def stitch_front_contracts(
     )
     out = base[base.index < window_start].copy()
     taken: dict[pd.Timestamp, float] = {}
-    counts = {"contract": 0, "cache": 0, "zs_f": 0}
+    counts = {"settlement": 0, "contract": 0, "cache": 0, "zs_f": 0}
     mismatches = 0
+    missing: str | None = None
     for d in days:
         code = front_contract(d)["code"]
         own = by_code[code]
-        if d in own.index:
+        if d in settled.index:
+            taken[d] = float(settled.loc[d])
+            counts["settlement"] += 1
+            if d in own.index and abs(float(own.loc[d]) - taken[d]) > 0.001:
+                log.info(
+                    "prices.bar_differs_from_settlement",
+                    date=str(d.date()),
+                    bar=float(own.loc[d]),
+                    settle=taken[d],
+                )
+        elif d in own.index:
             taken[d] = float(own.loc[d])
             counts["contract"] += 1
             if d in base.index and d < require_start and abs(base.loc[d] - own.loc[d]) > 0.01:
@@ -211,8 +235,10 @@ def stitch_front_contracts(
             counts["zs_f"] += 1
         else:
             log.warning("prices.front_contract_missing", date=str(d.date()), contract=code)
+            missing = f"no {contract_symbol(code)} bar for {d.date()}"
             break
     stitched = pd.concat([out, pd.Series(taken, dtype="float64")]).sort_index()
+    stitched.attrs["front_contract_missing"] = missing
     log.info(
         "prices.front_contracts",
         contracts=codes,
@@ -258,14 +284,26 @@ def read_trusted_cache(bronze: Path, now: datetime | None = None) -> pd.Series |
     if not path.exists():
         return None
     cached = pd.read_parquet(path)["close_c_bu"].sort_index()
+    cached = cached[~cached.index.duplicated(keep="last")]
     meta = bronze / CACHE_META
     if meta.exists():
         stored = pd.Timestamp(json.loads(meta.read_text(encoding="utf-8"))["final_through"])
         cached = cached[cached.index <= stored]
     elif len(cached):
         cached = cached.iloc[:-PRICE_REQUIRE_CONTRACT_BDAYS]
-        log.warning("prices.legacy_cache_trimmed", last=str(cached.index.max().date()))
+        if len(cached):
+            log.warning("prices.legacy_cache_trimmed", last=str(cached.index.max().date()))
     return drop_unfinal(cached, now)
+
+
+def read_settlements(bronze: Path) -> pd.Series:
+    """Settlements confirmed from the quote by earlier runs (from the cache sidecar)."""
+    meta = bronze / CACHE_META
+    if not meta.exists():
+        return pd.Series(dtype="float64")
+    stored = json.loads(meta.read_text(encoding="utf-8")).get("settlements", {})
+    s = pd.Series({pd.Timestamp(k): float(v) for k, v in stored.items()}, dtype="float64")
+    return s.sort_index()
 
 
 def fetch_soy_prices(
@@ -290,9 +328,20 @@ def fetch_soy_prices(
             sources.record("prices", "offline", offline_prices.index.max())
         return offline_prices
     cached = read_trusted_cache(bronze, now)
+    settled = read_settlements(bronze)
     base = drop_unfinal(_safe_download(downloader, SOY_TICKER, START), now)
-    new = stitch_front_contracts(base, downloader, now, cached) if not base.empty else base
-    new = confirm_newest_settlement(new, quote, now, cached)
+    new = stitch_front_contracts(base, downloader, now, cached, settled) if not base.empty else base
+    missing = new.attrs.get("front_contract_missing")
+    new, confirmed = confirm_newest_settlement(new, quote, now, cached)
+    # A newest session held back (or a missing front-contract bar) leaves the series short of
+    # final_through: nothing new is published, the source status says why, and the stale gate
+    # alerts if it lasts more than STALE_CLOSE_BDAYS.
+    behind = None
+    if not new.empty and new.index.max().date() < final_through(now):
+        behind = (
+            f"ends {new.index.max().date()}, final sessions through {final_through(now)}: "
+            "newest session not confirmed yet"
+        )
     problems = price_problems(new, cached)
     if problems:
         if cached is None or cached.empty:
@@ -304,12 +353,28 @@ def fetch_soy_prices(
     new = new.rename("close_c_bu")
     new.index.name = "date"
     atomic_write_parquet(new.to_frame(), path)
-    (bronze / CACHE_META).write_text(
-        json.dumps({"final_through": final_through(now).isoformat()}), encoding="utf-8"
-    )
+    keep_from = new.index.max() - BDay(PRICE_CONTRACT_WINDOW_BDAYS)
+    settlements: dict[pd.Timestamp, float] = {
+        pd.Timestamp(str(d)): float(v) for d, v in settled.items()
+    }
+    settlements.update(confirmed)
+    sidecar = {
+        "final_through": final_through(now).isoformat(),
+        "settlements": {
+            pd.Timestamp(d).date().isoformat(): v
+            for d, v in sorted(settlements.items())
+            if pd.Timestamp(d) >= keep_from
+        },
+    }
+    (bronze / CACHE_META).write_text(json.dumps(sidecar), encoding="utf-8")
     write_snapshot(path)
     if sources is not None:
-        sources.record("prices", "live", new.index.max())
+        if missing:
+            # The newest sessions could not be read from their own contract: what is published
+            # ends at the cached sessions, so this is reported as a cache fallback (alerts).
+            sources.record("prices", "cache", new.index.max(), missing)
+        else:
+            sources.record("prices", "live", new.index.max(), behind)
     log.info(
         "prices.ready",
         rows=len(new),

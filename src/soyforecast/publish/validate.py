@@ -18,6 +18,7 @@ Four kinds of check, each returning human-readable problems (an empty list passe
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -211,7 +212,8 @@ FINAL_CLOSE_SINCE = (2, 1, 0)
 
 def check_final_close(meta: dict[str, Any]) -> list[str]:
     """The as-of close is a session that had ended in Chicago before the outlook was built."""
-    version = tuple(int(x) for x in str(meta.get("version", "0")).split(".")[:3] if x.isdigit())
+    m = re.match(r"v?(\d+)\.(\d+)(?:\.(\d+))?", str(meta.get("version", "")))
+    version = tuple(int(g or 0) for g in m.groups()) if m else (0, 0, 0)
     if version < FINAL_CLOSE_SINCE:
         return []
     built = chicago_now(datetime.fromisoformat(meta["generated_at"])).date().isoformat()

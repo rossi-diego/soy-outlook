@@ -246,9 +246,9 @@ def revised_close_snapshots(
     Yahoo can show a provisional value for a session (the last trade, an overnight print, or
     another contract) and settle it later; the outlook archived from it then rests on a price
     the series no longer has. Each such outlook gets a revision at the final close: the newest
-    record with p0 replaced and every number rescaled by the same ratio. That is exact for the
-    published ranges (log offsets around p0 under the no-change champion) and keeps a model's
-    own predicted move unchanged otherwise. The scored tally still uses revision 1. The
+    record with p0 replaced and every number rescaled by the same ratio, i.e. the archived
+    ranges (log offsets around p0 under the no-change champion) moved to the corrected close,
+    with the calibration they were published with, not recomputed on later data. The scored tally still uses revision 1. The
     outlook being published now (`current_as_of`) is left to `write_snapshot`, which compares
     it with its own record.
     """

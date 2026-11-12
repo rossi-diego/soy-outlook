@@ -170,8 +170,8 @@ function PublishedVsOutcome({ archive, k }: { archive: ArchiveIndex; k: number }
                         <span
                           className="ml-1.5 rounded-full border border-line px-1.5 text-[0.7rem] font-medium text-ink-2"
                           title={t(
-                            `${e.revision_reason === "close revised" ? "The data vendor revised the close" : "The outlook was republished with other numbers"}; the earlier record (${e.revises}) stays as it was and is the one scored.`,
-                            `${e.revision_reason === "close revised" ? "O fornecedor revisou o fechamento" : "A perspectiva foi republicada com outros números"}; o registro anterior (${e.revises}) fica como estava e é o pontuado.`,
+                            `${e.revision_reason === "close revised" ? "The close was corrected to the final settlement, with the same ranges around it" : "The outlook was republished with other numbers"}; the earlier record (${e.revises}) stays as it was and is the one scored.`,
+                            `${e.revision_reason === "close revised" ? "O fechamento foi corrigido para o ajuste final, com as mesmas faixas em volta" : "A perspectiva foi republicada com outros números"}; o registro anterior (${e.revises}) fica como estava e é o pontuado.`,
                           )}
                         >
                           {t(`rev. ${e.revision}, ${e.revision_reason === "close revised" ? "close revised" : "republished"}`, `rev. ${e.revision}, ${e.revision_reason === "close revised" ? "fechamento revisado" : "republicada"}`)}
