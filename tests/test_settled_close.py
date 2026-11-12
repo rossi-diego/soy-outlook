@@ -911,3 +911,54 @@ def test_an_expired_contract_still_listed_with_a_hole_ends_the_series_not_zs_f()
     )
     assert got.index.max() == pd.Timestamp("2026-11-09")  # never ZS=F's F27 price for the 10th
     assert issues and "no ZSX26.CBT bar for 2026-11-10" in issues[-1][1]
+
+
+@pytest.mark.settlement
+def test_a_partial_rebuild_never_shrinks_the_stored_cache(tmp_path):
+    zs_f, contracts = _incident_market()
+    zs_f.rename("close_c_bu").to_frame().rename_axis("date").to_parquet(tmp_path / CACHE_FILE)
+    log = SourceLog()
+    got = fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, {"F27": contracts["F27"]}),  # ZSX26.CBT download fails
+        sources=log,
+        now=utc("2026-11-11T16:00"),
+        quote=_quote(None, None),
+    )
+    assert got.index.max() < pd.Timestamp("2026-09-14")  # ends before the first X26 session
+    assert log.sources["prices"].status == "cache"
+    assert not (tmp_path / CACHE_META).exists()  # the legacy cache is left for the next run
+    stored = pd.read_parquet(tmp_path / CACHE_FILE)["close_c_bu"]
+    assert stored.index.max() == zs_f.index.max()
+    healthy = fetch_soy_prices(
+        tmp_path,
+        downloader=_yahoo(zs_f, contracts),
+        sources=log,
+        now=utc("2026-11-11T16:00"),
+        quote=_quote(None, None),
+    )
+    assert healthy.loc["2026-11-09"] == 1182.25 and log.sources["prices"].status == "live"
+
+
+def test_a_session_missing_from_every_source_is_reported_not_skipped_silently():
+    days = pd.bdate_range("2026-08-03", "2026-12-04").drop(pd.Timestamp("2026-12-02"))
+    f27 = pd.Series(1200.0, index=days)
+    trusted = f27[f27.index <= "2026-11-27"]
+    got, _, issues = stitch_front_contracts(
+        f27, _yahoo(f27, {"F27": f27}), utc("2026-12-07T16:00"), trusted
+    )
+    assert got.index.max() == pd.Timestamp("2026-12-04")
+    assert [m for _, m in issues] == ["no bar from any source for 2026-12-02: skipped"]
+
+
+def test_on_the_monday_after_an_expiry_a_delisted_contract_counts_as_gone():
+    """Mon 11-16: the cutoff is X26's last trading day; Yahoo may already 404 for X26."""
+    days = pd.bdate_range("2026-08-03", "2026-11-16")
+    f27 = pd.Series(1200.0, index=days)
+    zs_f = pd.Series(1201.0, index=days)
+    trusted = pd.Series(1100.0, index=days[days <= "2026-11-10"])
+    got, _, issues = stitch_front_contracts(
+        zs_f, _yahoo(zs_f, {"F27": f27}), utc("2026-11-16T16:00"), trusted
+    )
+    assert got.index.max() == pd.Timestamp("2026-11-13")
+    assert got.loc["2026-11-12"] == 1201.0 and "ZS=F used" in issues[0][1]

@@ -37,6 +37,7 @@ from soyforecast.freshness import (
     SourceLog,
     bar_is_settlement,
     final_through,
+    is_session,
     previous_session,
     trade_date,
     trading_session,
@@ -108,6 +109,9 @@ def _as_utc(when: object) -> datetime | None:
 
 
 Issue = tuple[pd.Timestamp, str]
+# The one issue a legacy-cache rebuild may raise on sessions it had already published: their
+# Friday settlements are gone from Yahoo, so the bar is the best value left (logged only).
+UNCONFIRMED = "settlement not confirmed in time"
 
 
 def confirm_newest_settlement(
@@ -138,7 +142,7 @@ def confirm_newest_settlement(
     issues: list[Issue] = []
     for d in new_days[:-1]:
         if not bar_is_settlement(d.date()):
-            issues.append((d, f"{d.date()} settlement not confirmed in time: last trade used"))
+            issues.append((d, f"{d.date()} {UNCONFIRMED}: last trade used"))
             log.warning("prices.unconfirmed_session", date=str(d.date()))
     newest = new_days[-1]
     code = price_contract(newest)["code"]
@@ -256,10 +260,14 @@ def stitch_front_contracts(
     codes = sorted({price_contract(d)["code"] for d in pd.bdate_range(fill_start, cutoff)})
     start = fill_start.date().isoformat()
     by_code = {c: _safe_download(downloader, contract_symbol(c), start) for c in codes}
-    days = sorted(
-        set(base.index[base.index >= fill_start])
-        | {d for s in by_code.values() for d in s.index if fill_start <= d <= cutoff}
-    )
+    seen = set(base.index[base.index >= fill_start]) | {
+        d for s in by_code.values() for d in s.index if fill_start <= d <= cutoff
+    }
+    # Every calendar session up to the newest date any source has, plus any other date a
+    # download has: a session missing from every source is reported, not skipped silently.
+    calendar = pd.bdate_range(fill_start, max(seen)) if seen else pd.DatetimeIndex([])
+    days = sorted(seen | {d for d in calendar if is_session(d.date())})
+    cutoff_iso = cutoff.date().isoformat()
     taken: dict[pd.Timestamp, float] = {}
     issues: list[Issue] = []
     counts = {"contract": 0, "published": 0, "zs_f": 0, "zs_f_expired": 0}
@@ -267,23 +275,43 @@ def stitch_front_contracts(
         contract = price_contract(d)
         code = contract["code"]
         own = by_code[code]
+        # Yahoo can drop a contract from its last trading day on.
+        gone = own.empty and contract["last_trade"] <= cutoff_iso
+        was_published = published is not None and d in published.index
+        recent = d >= require_start
         if d in own.index:
             taken[d] = float(own.loc[d])
             counts["contract"] += 1
-        elif published is not None and d in published.index:
-            # rebuilding a legacy cache: keep what was published when the contract is gone
-            taken[d] = float(published.loc[d])
+        elif own.empty and not gone:
+            issues.append(
+                (d, f"{contract_symbol(code)} download failed: series ends before {d.date()}")
+            )
+            log.warning("prices.contract_download_failed", date=str(d.date()), contract=code)
+            break
+        elif d not in base.index and not was_published:
+            issues.append((d, f"no bar from any source for {d.date()}: skipped"))
+            log.warning("prices.session_missing_everywhere", date=str(d.date()))
+        elif gone and was_published:
+            # rebuilding a legacy cache: keep what was published for a contract Yahoo dropped
+            taken[d] = float(published.loc[d])  # type: ignore[union-attr]
             counts["published"] += 1
-        elif d in base.index and d < require_start:
-            taken[d] = float(base.loc[d])
-            counts["zs_f"] += 1
-        elif contract["last_trade"] < cutoff.date().isoformat() and own.empty and d in base.index:
+            if recent:
+                issues.append(
+                    (d, f"{contract_symbol(code)} gone: published value kept for {d.date()}")
+                )
+        elif gone:
+            # ZS=F, as for all history before the window; on a recent session it may quote
+            # another contract, so that alerts
             taken[d] = float(base.loc[d])
             counts["zs_f_expired"] += 1
-            issues.append(
-                (d, f"{contract_symbol(code)} expired and gone: ZS=F used for {d.date()}")
-            )
-            log.warning("prices.expired_contract_zs_f", date=str(d.date()), contract=code)
+            if recent:
+                issues.append(
+                    (d, f"{contract_symbol(code)} expired and gone: ZS=F used for {d.date()}")
+                )
+                log.warning("prices.expired_contract_zs_f", date=str(d.date()), contract=code)
+        elif not recent and d in base.index:
+            taken[d] = float(base.loc[d])  # an old hole in a listed contract's history
+            counts["zs_f"] += 1
         else:
             issues.append((d, f"no {contract_symbol(code)} bar for {d.date()}"))
             log.warning("prices.front_contract_missing", date=str(d.date()), contract=code)
@@ -379,6 +407,7 @@ def fetch_soy_prices(
         return offline_prices
     now = now or datetime.now(UTC)  # one clock for the whole run
     raw = _read_cache(bronze)
+    raw = drop_unfinal(raw, now) if raw is not None else None  # a legacy cache's moving bar
     cached = read_trusted_cache(bronze, now)
     base = drop_unfinal(_safe_download(downloader, SOY_TICKER, START), now)
     issues: list[Issue] = []
@@ -388,10 +417,10 @@ def fetch_soy_prices(
         new, new_days, issues = stitch_front_contracts(base, downloader, now, cached, raw)
         new, more = confirm_newest_settlement(new, new_days, quote, now)
         issues += more
-    # Issues on sessions already published before (a legacy cache being rebuilt) are logged
-    # only; issues on sessions new to this run alert (the prices source becomes "cache").
+    # Every issue alerts (the prices source becomes "cache"), except a missing Friday
+    # settlement on a session a legacy cache had already published (nothing better is left).
     known = raw.index.max() if raw is not None and len(raw) else None
-    alerts = [msg for d, msg in issues if known is None or d > known]
+    alerts = [m for d, m in issues if not (UNCONFIRMED in m and known is not None and d <= known)]
     behind = None
     if not new.empty and new.index.max().date() < final_through(now):
         behind = (
@@ -408,10 +437,16 @@ def fetch_soy_prices(
         return cached
     new = new.rename("close_c_bu")
     new.index.name = "date"
-    atomic_write_parquet(new.to_frame(), path)
-    sidecar = {"final_through": min(new.index.max().date(), final_through(now)).isoformat()}
-    (bronze / CACHE_META).write_text(json.dumps(sidecar), encoding="utf-8")
-    write_snapshot(path)
+    if known is not None and new.index.max() < known:
+        # A partial run (a download failed mid-rebuild) never shrinks the stored series: the
+        # cache stays as it is for the next run, and this run alerts.
+        alerts.append(f"series ends {new.index.max().date()}, before the cache: cache kept")
+        log.warning("prices.cache_kept", ends=str(new.index.max().date()), cache=str(known.date()))
+    else:
+        atomic_write_parquet(new.to_frame(), path)
+        sidecar = {"final_through": min(new.index.max().date(), final_through(now)).isoformat()}
+        (bronze / CACHE_META).write_text(json.dumps(sidecar), encoding="utf-8")
+        write_snapshot(path)
     if sources is not None:
         if alerts:
             sources.record("prices", "cache", new.index.max(), "; ".join(alerts))
