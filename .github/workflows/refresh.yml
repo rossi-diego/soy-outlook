@@ -5,16 +5,19 @@ name: Data refresh
 
 on:
   schedule:
-    # The morning after each session (Mon-Fri), five tries: 12:17 to 17:17 UTC = 06:17 to
-    # 11:17 CST, 07:17 to 11:17 CDT (17:17 UTC is past the quote cutoff in summer and only
-    # matters in winter, e.g. the day after Thanksgiving, when trading opens at 08:30 CT).
+    # Ten tries per weekday (UTC), from the evening before each session to its morning: 01:17
+    # to 17:17 UTC = 19:17 the evening before to 11:17 CST (20:17 to 12:17 CDT; 17:17 UTC is
+    # past the quote cutoff in summer and only matters in winter, e.g. the day after
+    # Thanksgiving, when trading opens at 08:30 CT). GitHub fires scheduled runs late and skips
+    # some (2026-11-12 and 11-13: one run each, at 19:45-19:57 UTC instead of 12:17), so the
+    # tries start early enough that one delayed by hours still reads Monday's quote.
     # Only final sessions are published
     # (freshness.final_through: a session dated today never is). A Monday-to-Thursday bar is
     # then the settlement; a Friday's or pre-holiday session's settlement is only in the next
     # session's quote, which is read before 12:00 CT (freshness.trading_session), so Monday's
     # runs publish Friday. The guard makes every run after a successful one a no-op. A WASDE
     # day's report goes out with that day's close, the morning after.
-    - cron: "17 12,14,15,16,17 * * 1-5"
+    - cron: "17 1,3,5,7,9,11,13,15,16,17 * * 1-5"
   workflow_dispatch:
     inputs:
       force:
