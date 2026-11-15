@@ -962,3 +962,28 @@ def test_on_the_monday_after_an_expiry_a_delisted_contract_counts_as_gone():
     )
     assert got.index.max() == pd.Timestamp("2026-11-13")
     assert got.loc["2026-11-12"] == 1201.0 and "ZS=F used" in issues[0][1]
+
+
+def _refresh_cron_hours() -> list[int]:
+    import re
+    from pathlib import Path
+
+    wf = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "refresh.yml"
+    m = re.search(r'cron: "17 ([0-9,]+) \* \* 1-5"', wf.read_text(encoding="utf-8"))
+    assert m, "refresh.yml cron changed shape"
+    return [int(h) for h in m.group(1).split(",")]
+
+
+@pytest.mark.parametrize("monday", [date(2026, 11, 16), date(2027, 6, 14)])  # CST and CDT
+def test_schedule_gives_monday_quote_many_tries(monday: date) -> None:
+    """GitHub fired one scheduled run per day, ~7.5 h late (2026-11-12/13): Friday's settlement
+    is only in Monday's quote, so many tries must land in that window, early ones included."""
+    hours = _refresh_cron_hours()
+    in_window = [
+        h
+        for h in hours
+        if trading_session(datetime(monday.year, monday.month, monday.day, h, 17, tzinfo=UTC))
+        == monday
+    ]
+    assert len(in_window) >= 8
+    assert min(in_window) <= 3  # a run delayed by 8 h still lands before the cutoff
